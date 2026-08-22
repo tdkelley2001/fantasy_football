@@ -14,6 +14,7 @@ BASE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
 TIMEOUT_SECONDS = 30
 REQUEST_PAUSE_SECONDS = 0.10
 PLAYER_LIMIT = 2000
+AVAILABLE_PLAYER_STATUSES = {"FREEAGENT", "WAIVERS"}
 
 
 def as_int(value: Any, default: int | None = None) -> int | None:
@@ -112,6 +113,111 @@ def find_player_nodes(obj: Any) -> Iterable[dict[str, Any]]:
     elif isinstance(obj, list):
         for value in obj:
             yield from find_player_nodes(value)
+
+
+def normalize_available_players(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Normalize ESPN's available-player pool response."""
+    players: dict[int, dict[str, Any]] = {}
+
+    for raw in payload.get("players", []):
+        if not isinstance(raw, dict):
+            continue
+
+        pool_entry = raw.get("playerPoolEntry")
+        if not isinstance(pool_entry, dict):
+            pool_entry = raw
+
+        player = pool_entry.get("player")
+        if not isinstance(player, dict):
+            player = raw.get("player")
+        if not isinstance(player, dict) and "id" in raw:
+            player = raw
+        if not isinstance(player, dict):
+            continue
+
+        player_id = as_int(player.get("id"))
+        if player_id is None:
+            continue
+
+        status = (
+            pool_entry.get("status")
+            or raw.get("status")
+            or "AVAILABLE"
+        )
+        if (
+            status != "AVAILABLE"
+            and status not in AVAILABLE_PLAYER_STATUSES
+        ):
+            continue
+
+        ownership = player.get("ownership")
+        if not isinstance(ownership, dict):
+            ownership = {}
+
+        players[player_id] = {
+            "team_id": None,
+            "team_name": None,
+            "player_id": player_id,
+            "player_name": player.get("fullName"),
+            "default_position_id": as_int(
+                player.get("defaultPositionId")
+            ),
+            "pro_team_id": as_int(player.get("proTeamId")),
+            "eligible_slots": [
+                slot_id
+                for raw_slot in player.get("eligibleSlots", [])
+                if (slot_id := as_int(raw_slot)) is not None
+            ],
+            "current_lineup_slot_id": None,
+            "injury_status": player.get("injuryStatus"),
+            "acquisition_type": None,
+            "player_status": status,
+            "availability_status": status,
+            "percent_owned": as_float(
+                ownership.get("percentOwned")
+            ),
+            "percent_started": as_float(
+                ownership.get("percentStarted")
+            ),
+        }
+
+    result = list(players.values())
+    result.sort(
+        key=lambda row: (
+            -row["percent_owned"],
+            row["player_name"] or "",
+            row["player_id"],
+        )
+    )
+    return result
+
+
+def pull_available_players(
+    client: EspnClient,
+    *,
+    scoring_period_id: int,
+) -> list[dict[str, Any]]:
+    """Pull every player ESPN currently marks as free agent or waivers."""
+    fantasy_filter = {
+        "players": {
+            "filterStatus": {
+                "value": sorted(AVAILABLE_PLAYER_STATUSES),
+            },
+            "limit": PLAYER_LIMIT,
+            "sortPercOwned": {
+                "sortPriority": 1,
+                "sortAsc": False,
+            },
+        }
+    }
+    payload = client.get_league(
+        "kona_player_info",
+        scoring_period_id=scoring_period_id,
+        fantasy_filter=fantasy_filter,
+    )
+    return normalize_available_players(payload)
 
 
 def pull_weekly_player_projections(

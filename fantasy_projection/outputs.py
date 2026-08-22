@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .config import Config
 from .pipeline import ProjectionResult
+
+
+def timestamped_run_dir(
+    output_root: Path,
+    run_name: str,
+    *,
+    now: datetime | None = None,
+) -> Path:
+    """Return a locally timestamped folder for one run."""
+    moment = now or datetime.now().astimezone()
+    timestamp = moment.strftime("%y%m%d_%H%M%S")
+    return output_root / f"{run_name}_{timestamp}"
 
 
 def write_csv(

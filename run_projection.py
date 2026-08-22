@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import sys
 
 import requests
@@ -8,6 +9,7 @@ from fantasy_projection.config import load_config
 from fantasy_projection.outputs import (
     print_summary,
     save_outputs,
+    timestamped_run_dir,
 )
 from fantasy_projection.pipeline import run_projection
 
@@ -21,7 +23,7 @@ def main() -> int:
             f"season {config.season}"
         )
         print(
-            f"Output directory: {config.output_dir}"
+            f"Output root: {config.output_dir}"
         )
         print(
             "Private-league cookies supplied: "
@@ -30,13 +32,19 @@ def main() -> int:
         print()
 
         result = run_projection(config)
-        save_outputs(config, result)
+        output_dir = timestamped_run_dir(
+            config.output_dir, "projection"
+        )
+        save_outputs(
+            replace(config, output_dir=output_dir),
+            result,
+        )
         print_summary(result)
 
         print()
         print(
             f"Saved outputs to: "
-            f"{config.output_dir.resolve()}"
+            f"{output_dir.resolve()}"
         )
         return 0
 

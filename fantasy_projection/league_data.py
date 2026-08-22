@@ -101,6 +101,13 @@ def normalize_rosters(
                         "acquisitionType"
                     ),
                     "player_status": pool_entry.get("status"),
+                    "droppable": player.get("droppable", True),
+                    "lineup_locked": bool(
+                        pool_entry.get("lineupLocked", False)
+                    ),
+                    "roster_locked": bool(
+                        pool_entry.get("rosterLocked", False)
+                    ),
                 }
             )
 

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
+from statistics import median
 from typing import Any, Iterable
 
 from tqdm import tqdm
 
-from .config import Config
 from .lineup import optimize_lineup
 from .pipeline import ProjectionResult
 from .postseason import project_postseason
@@ -16,17 +16,12 @@ from .regular_season import (
 )
 from .trade_config import TradeConfig
 
-
-# ESPN defaultPositionId values.
-EXCLUDED_DEFAULT_POSITION_IDS = {16, 17}  # D/ST, K
 EPSILON = 1e-9
 
 
 @dataclass
 class TradeSearchResult:
     all_evaluations: list[dict[str, Any]]
-    top_trades: list[dict[str, Any]]
-    weekly_impacts: list[dict[str, Any]]
     search_summary: list[dict[str, Any]]
 
 
@@ -62,15 +57,9 @@ def _player_map(
 def _tradable_player_ids(
     team_id: int,
     roster_ids: dict[int, set[int]],
-    players: dict[int, dict[str, Any]],
 ) -> list[int]:
-    ids = [
-        player_id
-        for player_id in roster_ids.get(team_id, set())
-        if players[player_id].get("default_position_id")
-        not in EXCLUDED_DEFAULT_POSITION_IDS
-    ]
-    return sorted(ids)
+    """Return every rostered player, including kickers and D/ST."""
+    return sorted(roster_ids.get(team_id, set()))
 
 
 def _packages(
@@ -204,7 +193,12 @@ def _team_metrics(
 def _scenario_metrics(
     baseline: ProjectionResult,
     replacement_weekly_scores: dict[tuple[int, int], float],
-) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+) -> tuple[
+    dict[int, dict[str, Any]],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     """Reproject standings/postseason using already-computed lineup scores."""
     weekly = []
     for row in baseline.weekly_team_projections:
@@ -225,11 +219,13 @@ def _scenario_metrics(
         regular_matchups,
         baseline.settings_payload,
     )
-    _, final_standings, postseason_summary = project_postseason(
-        standings,
-        baseline.teams,
-        weekly,
-        baseline.settings_payload,
+    postseason_matchups, final_standings, postseason_summary = (
+        project_postseason(
+            standings,
+            baseline.teams,
+            weekly,
+            baseline.settings_payload,
+        )
     )
 
     reg_lookup = {row["team_id"]: row for row in standings}
@@ -249,28 +245,185 @@ def _scenario_metrics(
             "final_place": final_lookup[team_id]["final_place"],
         }
 
-    return metrics, postseason_summary
+    return (
+        metrics,
+        postseason_summary,
+        regular_matchups,
+        postseason_matchups,
+    )
 
 
 def _classify_trade(
     my_gain: float,
     partner_gain: float,
-    threshold: float,
 ) -> str:
     my_positive = my_gain > EPSILON
     partner_positive = partner_gain > EPSILON
-    my_above = my_gain > threshold
-    partner_above = partner_gain > threshold
 
-    if my_above and partner_above:
-        return "BOTH_ABOVE_THRESHOLD"
     if my_positive and partner_positive:
-        return "BOTH_POSITIVE_BELOW_THRESHOLD"
+        return "BOTH_POSITIVE"
     if my_positive and not partner_positive:
         return "MY_TEAM_ONLY"
     if partner_positive and not my_positive:
         return "PARTNER_ONLY"
     return "NEITHER_POSITIVE"
+
+
+def _weekly_lineup_metrics(
+    prefix: str,
+    before: tuple[float, ...],
+    after: tuple[float, ...],
+    weeks: tuple[int, ...],
+) -> dict[str, Any]:
+    deltas = tuple(
+        0.0 if abs(new - old) <= EPSILON else new - old
+        for old, new in zip(before, after, strict=True)
+    )
+    best_index = max(range(len(deltas)), key=deltas.__getitem__)
+    worst_index = min(range(len(deltas)), key=deltas.__getitem__)
+    before_total = _sum_scores(before)
+    after_total = _sum_scores(after)
+    total_gain = after_total - before_total
+    if abs(total_gain) <= EPSILON:
+        total_gain = 0.0
+
+    return {
+        f"{prefix}_current_week_lineup_points_before": before[0],
+        f"{prefix}_current_week_lineup_points_after": after[0],
+        f"{prefix}_current_week_lineup_gain": deltas[0],
+        f"{prefix}_avg_remaining_season_lineup_points_before": (
+            before_total / len(before)
+        ),
+        f"{prefix}_avg_remaining_season_lineup_points_after": (
+            after_total / len(after)
+        ),
+        f"{prefix}_avg_remaining_season_lineup_gain": (
+            total_gain / len(deltas)
+        ),
+        f"{prefix}_total_remaining_season_lineup_points_before": (
+            before_total
+        ),
+        f"{prefix}_total_remaining_season_lineup_points_after": after_total,
+        f"{prefix}_total_remaining_season_lineup_gain": total_gain,
+        f"{prefix}_median_weekly_lineup_gain": float(median(deltas)),
+        f"{prefix}_positive_weeks": sum(x > EPSILON for x in deltas),
+        f"{prefix}_negative_weeks": sum(x < -EPSILON for x in deltas),
+        f"{prefix}_neutral_weeks": sum(abs(x) <= EPSILON for x in deltas),
+        f"{prefix}_best_week": weeks[best_index],
+        f"{prefix}_best_week_gain": deltas[best_index],
+        f"{prefix}_worst_week": weeks[worst_index],
+        f"{prefix}_worst_week_gain": deltas[worst_index],
+    }
+
+
+def _phase_lineup_metrics(
+    prefix: str,
+    phase: str,
+    before: tuple[float, ...],
+    after: tuple[float, ...],
+    all_weeks: tuple[int, ...],
+    phase_weeks: tuple[int, ...],
+) -> dict[str, float]:
+    before_values = tuple(
+        before[all_weeks.index(week)] for week in phase_weeks
+    )
+    after_values = tuple(
+        after[all_weeks.index(week)] for week in phase_weeks
+    )
+    before_total = _sum_scores(before_values)
+    after_total = _sum_scores(after_values)
+    total_gain = after_total - before_total
+    if abs(total_gain) <= EPSILON:
+        total_gain = 0.0
+    count = len(phase_weeks)
+    return {
+        f"{prefix}_{phase}_avg_weekly_lineup_points_before": (
+            before_total / count if count else 0.0
+        ),
+        f"{prefix}_{phase}_avg_weekly_lineup_points_after": (
+            after_total / count if count else 0.0
+        ),
+        f"{prefix}_{phase}_avg_weekly_lineup_gain": (
+            total_gain / count if count else 0.0
+        ),
+        f"{prefix}_{phase}_total_lineup_points_before": before_total,
+        f"{prefix}_{phase}_total_lineup_points_after": after_total,
+        f"{prefix}_{phase}_total_lineup_gain": total_gain,
+    }
+
+
+def _playoff_path(
+    team_id: int,
+    matchups: list[dict[str, Any]],
+) -> str:
+    games = []
+    for row in matchups:
+        if team_id not in {row["team_a_id"], row["team_b_id"]}:
+            continue
+        if row["team_a_id"] == team_id:
+            opponent = row["team_b"]
+        else:
+            opponent = row["team_a"]
+        outcome = (
+            "WIN" if row["winner_team_id"] == team_id else "LOSS"
+        )
+        games.append(
+            (
+                int(row["round"]),
+                int(row["matchup"]),
+                f'{row["bracket"]} R{row["round"]} '
+                f'{row["round_name"]} vs {opponent} ({outcome})',
+            )
+        )
+
+    games.sort()
+    return " | ".join(game[2] for game in games) or "NO_PLAYOFF_GAME"
+
+
+def _projected_game_flip_metrics(
+    prefix: str,
+    team_id: int,
+    before: list[dict[str, Any]],
+    after: list[dict[str, Any]],
+) -> dict[str, Any]:
+    def result(row: dict[str, Any]) -> str:
+        winner = row["winner_team_id"]
+        if winner is None:
+            return "TIE"
+        return "WIN" if winner == team_id else "LOSS"
+
+    after_by_period = {
+        row["matchup_period"]: row
+        for row in after
+        if row["result_type"] == "PROJECTED"
+        and team_id in {row["home_team_id"], row["away_team_id"]}
+    }
+    flips = []
+    for row in before:
+        if row["result_type"] != "PROJECTED":
+            continue
+        if team_id not in {row["home_team_id"], row["away_team_id"]}:
+            continue
+        old_result = result(row)
+        new_result = result(after_by_period[row["matchup_period"]])
+        if old_result != new_result:
+            flips.append(
+                (row["matchup_period"], old_result, new_result)
+            )
+
+    return {
+        f"{prefix}_projected_game_flips": len(flips),
+        f"{prefix}_projected_wins_gained_from_flips": sum(
+            old != "WIN" and new == "WIN" for _, old, new in flips
+        ),
+        f"{prefix}_projected_wins_lost_from_flips": sum(
+            old == "WIN" and new != "WIN" for _, old, new in flips
+        ),
+        f"{prefix}_projected_game_flip_details": " | ".join(
+            f"Period {period}: {old}_TO_{new}"
+            for period, old, new in flips
+        ),
+    }
 
 
 def _base_export_record(
@@ -312,7 +465,6 @@ def _evaluate_all_trades_for_type(
     postseason_weeks: tuple[int, ...],
 ) -> tuple[
     list[dict[str, Any]],
-    list[dict[str, Any]],
     dict[str, Any],
 ]:
     """Evaluate every legal package combination for one trade size.
@@ -328,11 +480,9 @@ def _evaluate_all_trades_for_type(
     baseline_weekly = _baseline_team_scores(baseline)
     baseline_metrics = _team_metrics(baseline)
 
-    my_base = frozenset(roster_ids[my_team_id])
     my_tradable = _tradable_player_ids(
         my_team_id,
         roster_ids,
-        players,
     )
     my_packages = _packages(my_tradable, trade_size)
 
@@ -346,7 +496,6 @@ def _evaluate_all_trades_for_type(
         partner_tradable = _tradable_player_ids(
             partner_id,
             roster_ids,
-            players,
         )
         partner_packages = _packages(partner_tradable, trade_size)
         partner_info.append((partner_id, partner_packages))
@@ -439,73 +588,26 @@ def _evaluate_all_trades_for_type(
                     progress.update(1)
                     continue
 
-                my_weekly_delta = tuple(
-                    score - baseline
-                    for score, baseline in zip(
-                        my_scores,
-                        my_baseline_future,
-                        strict=True,
-                    )
+                my_weekly_metrics = _weekly_lineup_metrics(
+                    "my", my_baseline_future, my_scores, future_weeks
                 )
-                partner_weekly_delta = tuple(
-                    score - baseline
-                    for score, baseline in zip(
-                        partner_scores,
-                        partner_baseline_future,
-                        strict=True,
-                    )
+                partner_weekly_metrics = _weekly_lineup_metrics(
+                    "partner",
+                    partner_baseline_future,
+                    partner_scores,
+                    future_weeks,
                 )
-
-                my_total_gain = _sum_scores(my_weekly_delta)
-                partner_total_gain = _sum_scores(
-                    partner_weekly_delta
-                )
-                my_avg_gain = my_total_gain / len(future_weeks)
-                partner_avg_gain = (
-                    partner_total_gain / len(future_weeks)
-                )
-
-                my_reg_gain = sum(
-                    my_weekly_delta[future_weeks.index(week)]
-                    for week in regular_weeks
-                )
-                partner_reg_gain = sum(
-                    partner_weekly_delta[future_weeks.index(week)]
-                    for week in regular_weeks
-                )
-                my_post_gain = sum(
-                    my_weekly_delta[future_weeks.index(week)]
-                    for week in postseason_weeks
-                )
-                partner_post_gain = sum(
-                    partner_weekly_delta[future_weeks.index(week)]
-                    for week in postseason_weeks
-                )
-
-                my_reg_avg = (
-                    my_reg_gain / len(regular_weeks)
-                    if regular_weeks else 0.0
-                )
-                partner_reg_avg = (
-                    partner_reg_gain / len(regular_weeks)
-                    if regular_weeks else 0.0
-                )
-                my_post_avg = (
-                    my_post_gain / len(postseason_weeks)
-                    if postseason_weeks else 0.0
-                )
-                partner_post_avg = (
-                    partner_post_gain / len(postseason_weeks)
-                    if postseason_weeks else 0.0
-                )
-
+                my_avg_gain = my_weekly_metrics[
+                    "my_avg_remaining_season_lineup_gain"
+                ]
+                partner_avg_gain = partner_weekly_metrics[
+                    "partner_avg_remaining_season_lineup_gain"
+                ]
                 mutual_avg_gain = min(my_avg_gain, partner_avg_gain)
                 combined_avg_gain = my_avg_gain + partner_avg_gain
-                threshold = trade_config.min_avg_weekly_gain
                 classification = _classify_trade(
                     my_avg_gain,
                     partner_avg_gain,
-                    threshold,
                 )
 
                 export_record = {
@@ -513,45 +615,56 @@ def _evaluate_all_trades_for_type(
                     "evaluation_status": "VALID",
                     "trade_classification": classification,
                     "invalid_reason": "",
-                    "my_avg_weekly_lineup_gain": my_avg_gain,
-                    "partner_avg_weekly_lineup_gain": partner_avg_gain,
-                    "mutual_avg_weekly_lineup_gain": mutual_avg_gain,
-                    "combined_avg_weekly_lineup_gain": combined_avg_gain,
-                    "my_total_future_lineup_gain": my_total_gain,
-                    "partner_total_future_lineup_gain": partner_total_gain,
-                    "mutual_total_future_lineup_gain": min(
-                        my_total_gain,
-                        partner_total_gain,
+                    "current_scoring_week": future_weeks[0],
+                    "remaining_scoring_weeks": len(future_weeks),
+                    "remaining_regular_season_weeks": len(regular_weeks),
+                    "playoff_window_weeks": len(postseason_weeks),
+                    **my_weekly_metrics,
+                    **partner_weekly_metrics,
+                    **_phase_lineup_metrics(
+                        "my",
+                        "regular_season",
+                        my_baseline_future,
+                        my_scores,
+                        future_weeks,
+                        regular_weeks,
                     ),
-                    "combined_total_future_lineup_gain": (
-                        my_total_gain + partner_total_gain
+                    **_phase_lineup_metrics(
+                        "partner",
+                        "regular_season",
+                        partner_baseline_future,
+                        partner_scores,
+                        future_weeks,
+                        regular_weeks,
                     ),
-                    "my_regular_season_avg_weekly_gain": my_reg_avg,
-                    "partner_regular_season_avg_weekly_gain": partner_reg_avg,
-                    "my_regular_season_total_gain": my_reg_gain,
-                    "partner_regular_season_total_gain": partner_reg_gain,
-                    "my_postseason_avg_weekly_gain": my_post_avg,
-                    "partner_postseason_avg_weekly_gain": partner_post_avg,
-                    "my_postseason_total_gain": my_post_gain,
-                    "partner_postseason_total_gain": partner_post_gain,
+                    **_phase_lineup_metrics(
+                        "my",
+                        "playoff_window",
+                        my_baseline_future,
+                        my_scores,
+                        future_weeks,
+                        postseason_weeks,
+                    ),
+                    **_phase_lineup_metrics(
+                        "partner",
+                        "playoff_window",
+                        partner_baseline_future,
+                        partner_scores,
+                        future_weeks,
+                        postseason_weeks,
+                    ),
+                    "mutual_avg_remaining_season_lineup_gain": (
+                        mutual_avg_gain
+                    ),
+                    "combined_avg_remaining_season_lineup_gain": (
+                        combined_avg_gain
+                    ),
                     "my_positive_gain": my_avg_gain > EPSILON,
                     "partner_positive_gain": partner_avg_gain > EPSILON,
                     "both_positive_gain": (
                         my_avg_gain > EPSILON
                         and partner_avg_gain > EPSILON
                     ),
-                    "my_above_threshold": my_avg_gain > threshold,
-                    "partner_above_threshold": partner_avg_gain > threshold,
-                    "both_above_threshold": (
-                        my_avg_gain > threshold
-                        and partner_avg_gain > threshold
-                    ),
-                    "my_threshold_margin": my_avg_gain - threshold,
-                    "partner_threshold_margin": partner_avg_gain - threshold,
-                    "mutual_threshold_margin": (
-                        mutual_avg_gain - threshold
-                    ),
-                    "scenario_reprojected": False,
                 }
 
                 evaluations.append(export_record)
@@ -566,13 +679,13 @@ def _evaluate_all_trades_for_type(
 
     progress.close()
 
-    # Rank valid trades by the weaker side's gain first. This provides the
-    # closest-to-mutually-beneficial trades even when none clear the threshold.
+    # Rank every valid trade by the weaker side's average gain first. The rank
+    # is informational only; no trade is removed from the output.
     valid_internal.sort(
         key=lambda x: (
-            -x["export"]["mutual_avg_weekly_lineup_gain"],
-            -x["export"]["combined_avg_weekly_lineup_gain"],
-            -x["export"]["my_avg_weekly_lineup_gain"],
+            -x["export"]["mutual_avg_remaining_season_lineup_gain"],
+            -x["export"]["combined_avg_remaining_season_lineup_gain"],
+            -x["export"]["my_avg_remaining_season_lineup_gain"],
             x["export"]["partner_team_id"],
             x["export"]["trade_id"],
         )
@@ -581,20 +694,9 @@ def _evaluate_all_trades_for_type(
     for rank, item in enumerate(valid_internal, start=1):
         item["export"]["rank_by_mutual_gain_within_type"] = rank
 
-    if trade_config.reproject_all:
-        scenario_targets = valid_internal
-    else:
-        scenario_targets = valid_internal[:trade_config.top_n_per_type]
-
-    scenario_desc = (
-        f"Reprojecting all valid {trade_type} trades"
-        if trade_config.reproject_all
-        else f"Reprojecting top {trade_config.top_n_per_type} {trade_type} trades"
-    )
-
     for item in tqdm(
-        scenario_targets,
-        desc=scenario_desc,
+        valid_internal,
+        desc=f"Reprojecting all valid {trade_type} trades",
         unit="trade",
         dynamic_ncols=True,
         leave=True,
@@ -614,10 +716,12 @@ def _evaluate_all_trades_for_type(
             replacements[(my_team_id, week)] = my_score
             replacements[(partner_id, week)] = partner_score
 
-        scenario_metrics, postseason_summary = _scenario_metrics(
-            baseline,
-            replacements,
-        )
+        (
+            scenario_metrics,
+            postseason_summary,
+            scenario_regular_matchups,
+            scenario_postseason_matchups,
+        ) = _scenario_metrics(baseline, replacements)
 
         my_before = baseline_metrics[my_team_id]
         my_after = scenario_metrics[my_team_id]
@@ -626,7 +730,6 @@ def _evaluate_all_trades_for_type(
 
         record.update(
             {
-                "scenario_reprojected": True,
                 "my_projected_wins_before": my_before["wins"],
                 "my_projected_wins_after": my_after["wins"],
                 "my_projected_wins_change": (
@@ -636,6 +739,18 @@ def _evaluate_all_trades_for_type(
                 "partner_projected_wins_after": partner_after["wins"],
                 "partner_projected_wins_change": (
                     partner_after["wins"] - partner_before["wins"]
+                ),
+                **_projected_game_flip_metrics(
+                    "my",
+                    my_team_id,
+                    baseline.regular_season_matchups,
+                    scenario_regular_matchups,
+                ),
+                **_projected_game_flip_metrics(
+                    "partner",
+                    partner_id,
+                    baseline.regular_season_matchups,
+                    scenario_regular_matchups,
                 ),
                 "my_regular_seed_before": my_before["regular_seed"],
                 "my_regular_seed_after": my_after["regular_seed"],
@@ -659,79 +774,32 @@ def _evaluate_all_trades_for_type(
                     partner_before["final_place"]
                     - partner_after["final_place"]
                 ),
+                "my_playoff_path_before": _playoff_path(
+                    my_team_id, baseline.postseason_matchups
+                ),
+                "my_playoff_path_after": _playoff_path(
+                    my_team_id, scenario_postseason_matchups
+                ),
+                "partner_playoff_path_before": _playoff_path(
+                    partner_id, baseline.postseason_matchups
+                ),
+                "partner_playoff_path_after": _playoff_path(
+                    partner_id, scenario_postseason_matchups
+                ),
                 "both_final_places_nonworse": (
                     my_after["final_place"] <= my_before["final_place"]
                     and partner_after["final_place"] <= partner_before["final_place"]
                 ),
+                "projected_champion_before_trade": baseline.summary[
+                    "champion_team"
+                ],
                 "projected_champion_after_trade": postseason_summary[
                     "champion_team"
                 ],
             }
         )
 
-    # Week-by-week output is intentionally limited to top N; emitting it for
-    # every trade would create millions of CSV rows. Aggregate weekly, regular-
-    # season, and postseason metrics are still present for every trade.
-    weekly_impacts: list[dict[str, Any]] = []
-    reg_set = set(regular_weeks)
-    post_set = set(postseason_weeks)
-    for item in valid_internal[:trade_config.top_n_per_type]:
-        record = item["export"]
-        partner_id = record["partner_team_id"]
-
-        for week, my_score, partner_score in zip(
-            future_weeks,
-            item["my_scores"],
-            item["partner_scores"],
-            strict=True,
-        ):
-            phase = (
-                "REGULAR_SEASON"
-                if week in reg_set
-                else "POSTSEASON"
-                if week in post_set
-                else "OTHER"
-            )
-
-            weekly_impacts.append(
-                {
-                    "trade_id": record["trade_id"],
-                    "trade_type": trade_type,
-                    "team_role": "MY_TEAM",
-                    "team_id": my_team_id,
-                    "team_name": names[my_team_id],
-                    "week": week,
-                    "phase": phase,
-                    "baseline_projected_points": baseline_weekly[
-                        (my_team_id, week)
-                    ],
-                    "post_trade_projected_points": my_score,
-                    "projected_points_change": (
-                        my_score - baseline_weekly[(my_team_id, week)]
-                    ),
-                }
-            )
-            weekly_impacts.append(
-                {
-                    "trade_id": record["trade_id"],
-                    "trade_type": trade_type,
-                    "team_role": "PARTNER",
-                    "team_id": partner_id,
-                    "team_name": names[partner_id],
-                    "week": week,
-                    "phase": phase,
-                    "baseline_projected_points": baseline_weekly[
-                        (partner_id, week)
-                    ],
-                    "post_trade_projected_points": partner_score,
-                    "projected_points_change": (
-                        partner_score - baseline_weekly[(partner_id, week)]
-                    ),
-                }
-            )
-
     valid_exports = [item["export"] for item in valid_internal]
-    top_trades = valid_exports[:trade_config.top_n_per_type]
 
     # Put valid trades first in rank order, then invalid lineup combinations.
     invalid_exports = [
@@ -750,39 +818,32 @@ def _evaluate_all_trades_for_type(
         "total_combinations": total_combinations,
         "valid_trades_evaluated": len(valid_exports),
         "invalid_lineup_trades": invalid_count,
-        "both_above_threshold": class_counts.get(
-            "BOTH_ABOVE_THRESHOLD", 0
-        ),
-        "both_positive_below_threshold": class_counts.get(
-            "BOTH_POSITIVE_BELOW_THRESHOLD", 0
-        ),
+        "both_positive": class_counts.get("BOTH_POSITIVE", 0),
         "my_team_only_positive": class_counts.get("MY_TEAM_ONLY", 0),
         "partner_only_positive": class_counts.get("PARTNER_ONLY", 0),
         "neither_positive": class_counts.get("NEITHER_POSITIVE", 0),
-        "top_results_returned": len(top_trades),
-        "scenario_reprojected_count": len(scenario_targets),
-        "reproject_all": trade_config.reproject_all,
-        "best_mutual_avg_weekly_gain": (
-            valid_exports[0]["mutual_avg_weekly_lineup_gain"]
+        "fully_reprojected_trades": len(valid_exports),
+        "best_mutual_avg_remaining_season_lineup_gain": (
+            valid_exports[0][
+                "mutual_avg_remaining_season_lineup_gain"
+            ]
             if valid_exports else None
         ),
     }
 
-    return all_sorted, weekly_impacts, summary
+    return all_sorted, summary
 
 
-def find_mutually_beneficial_trades(
+def evaluate_all_trades(
     *,
     baseline: ProjectionResult,
-    config: Config,
     trade_config: TradeConfig,
 ) -> TradeSearchResult:
     """Evaluate every 1-for-1 and 2-for-2 trade involving MY_TEAM_ID.
 
-    D/ST and kickers are excluded as trade pieces; bench players remain fully
-    eligible. Mutual benefit is now a classification rather than a search
-    filter, which makes the complete trade distribution available for
-    debugging and analysis.
+    Every rostered player is eligible, including bench players, kickers, and
+    D/ST. Every valid trade is fully reprojected through the regular season
+    and postseason; no ranking threshold or top-N filter is applied.
     """
     names = _team_name_map(baseline.teams)
     if trade_config.my_team_id not in names:
@@ -800,6 +861,8 @@ def find_mutually_beneficial_trades(
     final_week = int(baseline.summary["final_scoring_period"])
 
     future_weeks = tuple(range(current_week, final_week + 1))
+    if not future_weeks:
+        raise RuntimeError("No scoring weeks remain to evaluate trades.")
     regular_weeks = tuple(
         week for week in future_weeks if week <= regular_end
     )
@@ -818,26 +881,22 @@ def find_mutually_beneficial_trades(
     ] = {}
 
     all_evaluations: list[dict[str, Any]] = []
-    all_weekly: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
-    all_top: list[dict[str, Any]] = []
 
     print(
         f"Searching trades for {names[trade_config.my_team_id]} "
         f"(team_id={trade_config.my_team_id})."
     )
     print(
-        f"Trade appeal horizon: Weeks {current_week}-{final_week}. "
-        "Mutually beneficial threshold: both sides > "
-        f"{trade_config.min_avg_weekly_gain:.2f} points/week."
+        f"Trade evaluation horizon: Weeks {current_week}-{final_week}."
     )
     print(
-        "All valid 1-for-1 and 2-for-2 trades will be saved, including "
-        "one-sided and negative trades."
+        "All rostered positions are included. Every valid 1-for-1 and "
+        "2-for-2 trade will receive a full standings/playoff projection."
     )
 
     for trade_size in (1, 2):
-        evaluations, weekly, summary = _evaluate_all_trades_for_type(
+        evaluations, summary = _evaluate_all_trades_for_type(
             trade_size=trade_size,
             baseline=baseline,
             trade_config=trade_config,
@@ -850,18 +909,10 @@ def find_mutually_beneficial_trades(
             postseason_weeks=postseason_weeks,
         )
 
-        valid = [
-            row for row in evaluations
-            if row["evaluation_status"] == "VALID"
-        ]
-        all_top.extend(valid[:trade_config.top_n_per_type])
         all_evaluations.extend(evaluations)
-        all_weekly.extend(weekly)
         summaries.append(summary)
 
     return TradeSearchResult(
         all_evaluations=all_evaluations,
-        top_trades=all_top,
-        weekly_impacts=all_weekly,
         search_summary=summaries,
     )

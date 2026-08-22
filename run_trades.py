@@ -5,14 +5,13 @@ import sys
 import requests
 
 from fantasy_projection.config import load_config
-from fantasy_projection.outputs import save_outputs
 from fantasy_projection.pipeline import run_projection
 from fantasy_projection.trade_config import load_trade_config
 from fantasy_projection.trade_outputs import (
     print_trade_summary,
     save_trade_outputs,
 )
-from fantasy_projection.trades import find_mutually_beneficial_trades
+from fantasy_projection.trades import evaluate_all_trades
 
 
 def main() -> int:
@@ -21,11 +20,9 @@ def main() -> int:
         trade_config = load_trade_config()
 
         baseline = run_projection(config)
-        save_outputs(config, baseline)
 
-        result = find_mutually_beneficial_trades(
+        result = evaluate_all_trades(
             baseline=baseline,
-            config=config,
             trade_config=trade_config,
         )
         trade_out = save_trade_outputs(config, result)
