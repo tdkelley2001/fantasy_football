@@ -124,6 +124,18 @@ def test_projection_missing_zero_and_negative_remain_distinct() -> None:
     assert dict(player.projections) == {6: 0.0, 7: -1.5, 8: None}
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_projection_rejects_non_finite_values(value: float) -> None:
+    with pytest.raises(FutureDataAuditError, match="appliedTotal must be finite"):
+        parse_player_cards(
+            {"players": [card_wrap(1, stats=[projection(6, value)])]},
+            requested_ids=[1],
+            pool_by_id={1: PoolPlayer(1, "FREEAGENT", 0)},
+            season=2026,
+            valid_weeks=[6],
+        )
+
+
 @pytest.mark.parametrize(
     ("response", "requested", "message"),
     [
@@ -197,9 +209,31 @@ def pro_schedule(*, conflict: bool = False) -> dict:
 
 
 def test_bye_is_explicit_and_checked_against_schedule() -> None:
-    assert parse_pro_team_byes(pro_schedule(), valid_weeks=[6, 7]) == {1: 7}
+    assert parse_pro_team_byes(
+        pro_schedule(), valid_weeks=[6, 7], expected_team_count=1
+    ) == {1: 7}
     with pytest.raises(FutureDataAuditError, match="conflicts with a scheduled game"):
-        parse_pro_team_byes(pro_schedule(conflict=True), valid_weeks=[6, 7])
+        parse_pro_team_byes(
+            pro_schedule(conflict=True), valid_weeks=[6, 7], expected_team_count=1
+        )
+
+
+def test_bye_schedule_reconciles_explicit_nfl_team_count() -> None:
+    with pytest.raises(FutureDataAuditError, match="1 distinct NFL teams; expected 2"):
+        parse_pro_team_byes(
+            pro_schedule(), valid_weeks=[6, 7], expected_team_count=2
+        )
+
+
+def test_bye_schedule_rejects_duplicate_nfl_team_record() -> None:
+    response = pro_schedule()
+    response["settings"]["proTeams"].append(
+        {"id": 1, "byeWeek": 7, "proGamesByScoringPeriod": {}}
+    )
+    with pytest.raises(FutureDataAuditError, match="duplicates pro team id=1"):
+        parse_pro_team_byes(
+            response, valid_weeks=[6, 7], expected_team_count=1
+        )
 
 
 def schedule_response(missing: bool = False) -> dict:

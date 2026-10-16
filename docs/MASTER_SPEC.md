@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: design baseline | 14 October 2026 | Status: ESPN feasibility audit in progress; M0.1-M0.3 complete*
+*Version: design baseline | 14 October 2026 | Status: ESPN feasibility audit in progress; M0.1-M0.4 complete*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Distinguish intended functionality from verified implementation: none of the algorithms or ESPN field availability described below should be understood as already built or confirmed.
 
@@ -53,6 +53,8 @@ Before depending on API assumptions, build a read-only diagnostic against the ac
 Classify every needed field as confirmed, obtainable by extra request/processing, derivable, unknown, or unavailable; separate critical blockers from noncritical warnings. Reconcile counts and identity constraints, and document every gap and feasible mitigation. This is a bounded evidence-based audit, not the construction of a complete historical data warehouse.
 
 M0.2 verified the bounded connectivity subset against the configured 2026 league using `espn-api` 1.0.1 plus its read-only raw league request. League/team identity, manager IDs, standings records, current roster ownership, player IDs/eligibility, scoring items and raw configured roster slots were available. The live run reconciled 14 teams and 233 uniquely owned rostered players. Negative player IDs are valid for team defenses. The library's derived `position_slot_counts` is unreliable for sparse ESPN slot IDs, so later schema work must use validated raw slot IDs. Full sanitized provenance, validation evidence and deferred questions are recorded in `docs/ESPN_CONNECTIVITY.md`; projections/free agents remain M0.3 and waiver/tiebreak/postseason semantics remain M0.4.
+
+M0.4 verified 16 ordinary roster places plus one separate IR slot, traditional non-FAAB waivers with a complete current priority order and weekly-reset evidence, explicit trade controls, H2H standings fields with `TOTAL_POINTS_SCORED` as the configured first seeding tiebreak, and a six-team non-reseeded championship with two byes and 1/1/2-week rounds. Completed 2024 and 2025 league responses corroborate championship progression and the two-week final. Exact multiple-claim processing, raw `NONE` matchup-tie semantics, and the current eight-team consolation ladder remain unresolved and must be verified or supplied as explicit conflict-checked league configuration before authoritative simulation. Full provenance and the rule matrix are in `docs/ESPN_LEAGUE_RULES_AUDIT.md`.
 
 ### 3.2 Representative historical ESPN data
 
@@ -358,9 +360,9 @@ M0.2 [COMPLETE — 15 October 2026] Implement a read-only ESPN connectivity scri
 
 M0.3 [COMPLETE — 15 October 2026] Audit projected future player-week scores, zero/missing distinction, available-player pool, bye weeks and future schedule; save sanitized sample responses. GATE: PASSED — the live week 6–14 audit paginated the same 1,052-player universe for every week, reconciled all 233 current `ONTEAM` records to M0.2, distinguished 5,913 present projections (including 2,488 explicit zeros) from 3,555 missing values, verified explicit NFL byes, and validated 63 remaining regular-season matchups. Forty-seven credential-free tests passed; unsupported totals and multi-request limitations are documented in `ESPN_FUTURE_DATA_AUDIT.md`.
 
-M0.4 Audit actual league roster/trade/waiver rules, standings tiebreakers and regular/playoff/consolation brackets against ESPN settings and known results. GATE: verified rule matrix, or explicitly flagged manual league-config inputs/blockers.
+M0.4 [COMPLETE — 16 October 2026] Audit actual league roster/trade/waiver rules, standings tiebreakers and regular/playoff/consolation brackets against ESPN settings and known results. GATE: PASSED — live raw settings and completed 2024/2025 evidence verified roster capacity, traditional waivers, trade controls, standings fields, and the six-team championship structure. Multiple-claim ordering, tie semantics, and the current eight-team consolation ladder remain explicit configuration/evidence blockers documented in `docs/ESPN_LEAGUE_RULES_AUDIT.md`; no fallback was introduced.
 
-M0.5 Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. GATE: evidence-backed historical data availability report and unambiguous gaps.
+M0.5 Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. Policy-imputed projection zeros must never be treated as genuine ESPN forecasts during historical calibration. GATE: evidence-backed historical data availability report and unambiguous gaps.
 
 M0.6 Publish data dictionary, exact source paths/IDs, audit script, known errors and go/no-go decision for M1; do not let missing critical rules be silently guessed. GATE: reproducible audit result and an approved list of unresolved limitations.
 
@@ -378,7 +380,7 @@ M1.5 Add reproducible snapshot load/list/inspect commands, stable snapshot ID an
 
 #### M2 — Complete deterministic season-path reference simulator
 
-M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, approved effective projections and available players. Missing raw projections and explicit ESPN zeros both yield an effective zero in V1 but remain distinguishable in evidence and reporting. GATE: toy and real-fixture lineup correctness tests, including ties and missing/zero provenance cases.
+M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, approved effective projections and available players. Missing raw projections and explicit ESPN zeros both yield an effective zero in V1 but remain distinguishable in evidence and reporting. Explicitly fail or report the approved unresolved state when too few positive-projection players exist to form a complete lineup; never invent a fallback or silently select an unavailable player. GATE: toy and real-fixture lineup correctness tests, including ties, shortages, and missing/zero provenance cases.
 
 M2.2 Implement week progression, actual ESPN matchup schedule, points-for/against accumulation, standings, and tie rules. GATE: synthetic schedule results agree with hand-calculated examples.
 
@@ -392,7 +394,7 @@ M2.6 Add provisional probabilistic player-score draws behind a swappable interfa
 
 #### M3 — Empirical forecast uncertainty and high-performance Monte Carlo
 
-M3.1 Build reproducible historical player-week pregame projection versus actual dataset and provenance checks. GATE: leak tests and documented usable sample sizes by week/position/projection level.
+M3.1 Build reproducible historical player-week pregame projection versus actual dataset and provenance checks. Exclude or separately label policy-imputed zeros so they are never calibrated as ESPN forecast observations. GATE: leak tests and documented usable sample sizes by week/position/projection level.
 
 M3.2 Compare pooled/position/projection-conditional empirical, parametric and hybrid error models using temporally held-out scoring and calibration, including tail/zero behavior. GATE: documented selection decision or explicit insufficiency.
 
@@ -454,7 +456,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.4 is the next unstarted work package; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.5 is the next unstarted work package; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -468,7 +470,7 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 [x] Probe future player-week projections, free-agent IDs/ownership, byes, and the remaining regular-season schedule; reconcile player and matchup counts.
 
-[ ] Audit waiver rules, standings tiebreakers, and regular-season/postseason bracket settings in M0.4.
+[x] Audit waiver rules, standings tiebreakers, and regular-season/postseason bracket settings in M0.4; preserve unresolved tie, multiple-claim, and eight-team consolation rules as explicit M1 blockers.
 
 [ ] Examine a limited sample of prior ESPN seasons for player-week actual and projected scores and pregame-vs-restated forecast provenance.
 

@@ -300,7 +300,7 @@ def reconcile_live(
 
         pro_schedule = league.espn_request.get_pro_schedule()
         bye_by_team = parse_pro_team_byes(
-            pro_schedule, valid_weeks=[audited_week]
+            pro_schedule, valid_weeks=[audited_week], expected_team_count=32
         )
         examples, counts, rostered_missing = build_examples(
             raw_players_by_id=raw_by_id,
