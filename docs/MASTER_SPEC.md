@@ -52,6 +52,8 @@ Before depending on API assumptions, build a read-only diagnostic against the ac
 
 Classify every needed field as confirmed, obtainable by extra request/processing, derivable, unknown, or unavailable; separate critical blockers from noncritical warnings. Reconcile counts and identity constraints, and document every gap and feasible mitigation. This is a bounded evidence-based audit, not the construction of a complete historical data warehouse.
 
+M0.2 verified the bounded connectivity subset against the configured 2026 league using `espn-api` 1.0.1 plus its read-only raw league request. League/team identity, manager IDs, standings records, current roster ownership, player IDs/eligibility, scoring items and raw configured roster slots were available. The live run reconciled 14 teams and 233 uniquely owned rostered players. Negative player IDs are valid for team defenses. The library's derived `position_slot_counts` is unreliable for sparse ESPN slot IDs, so later schema work must use validated raw slot IDs. Full sanitized provenance, validation evidence and deferred questions are recorded in `docs/ESPN_CONNECTIVITY.md`; projections/free agents remain M0.3 and waiver/tiebreak/postseason semantics remain M0.4.
+
 ### 3.2 Representative historical ESPN data
 
 Investigate a small sample of previous seasons, especially matched historical player-week projected and actual fantasy points. Verify whether each retrieved historical projection really represents the pregame value available at that time or a later restatement; do not conflate them. Evaluate coverage by season, week, position, and player, including missingness, projection zeros and selection bias. Also inspect historical rosters/ownership, schedules and league-rule changes as feasible. If true as-of projections are missing, record that limitation: do not train an ostensibly historical error distribution using leaked retrospective forecasts. ESPN-only sourcing remains the initial policy; a broader external dataset is a possible validated enhancement, not an automatic fallback.
@@ -352,7 +354,7 @@ Operating rules: Every numbered task has a concrete inspectable artifact, a smal
 
 M0.1 [COMPLETE — 15 October 2026] Create clean Python repository, dependency lockfile, configuration example, test runner, logging and credential loading; verify credentials are excluded from source control. GATE: PASSED — locked install, editable package install, 13 automated tests and the configuration/logging health check passed in a newly created Python 3.12 environment; repository tests verify `.env` is ignored and no local credential file is tracked.
 
-M0.2 Implement a read-only ESPN connectivity script for the user's actual league/season; enumerate teams, player and team IDs, roster ownership, standings, scoring and eligible lineup slots. GATE: reconcile 14 unique teams and ownership without silent assumptions.
+M0.2 [COMPLETE — 15 October 2026] Implement a read-only ESPN connectivity script for the user's actual league/season; enumerate teams, player and team IDs, roster ownership, standings, scoring and eligible lineup slots. GATE: PASSED — the live 2026 diagnostic reconciled 14 expected, ESPN-reported and fetched teams; 233 uniquely owned rostered player IDs; nine configured slot types; and 39 scoring items. All team/player ownership and eligibility invariants passed. The explicit expected count is a required command input, and an observed espn-api sparse-slot parsing defect is bypassed by validated raw ESPN slot IDs rather than an inferred label order.
 
 M0.3 Audit projected future player-week scores, zero/missing distinction, available-player pool, bye weeks and future schedule; save sanitized sample responses. GATE: inventory required fields, response provenance and missing/unsupported cases.
 
@@ -452,7 +454,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.2 is the next unstarted work package; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.3 is the next unstarted work package; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -462,7 +464,7 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 [x] Establish clean repository, Python environment, league_id/season config and secure credential loading.
 
-[ ] Connect a read-only ESPN diagnostic to the actual 2026 league; retrieve team/league/scoring/roster metadata.
+[x] Connect a read-only ESPN diagnostic to the actual 2026 league; retrieve team/league/scoring/roster metadata.
 
 [ ] Probe future player-week projections, free-agent IDs/ownership, waiver rules, regular-season and postseason settings; reconcile all league-critical counts.
 
