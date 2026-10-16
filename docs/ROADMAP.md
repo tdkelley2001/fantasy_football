@@ -52,7 +52,7 @@ M0.6 [COMPLETE — 16 October 2026] Publish data dictionary, exact source paths/
 
 #### M1 — Versioned canonical snapshots and data contracts
 
-M1.1 [COMPLETE — 16 October 2026] Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. GATE: PASSED — immutable flat dataclasses, pure snapshot/capability validation, schema-v1 deterministic JSON, and sanitized fixtures preserve signed IDs, complete forward coverage, raw missing/zero/positive/negative projection semantics, source provenance, alternate roster structures, multiweek periods, NFL bye/game consistency, and unresolved rules. No ingestion, persistence, or simulation was introduced. See `CANONICAL_MODEL.md`.
+M1.1 [COMPLETE — corrected 16 October 2026] Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. GATE: PASSED — immutable flat dataclasses, pure snapshot/capability validation, schema-v1 deterministic JSON, and sanitized fixtures preserve signed IDs, projection semantics, source provenance, alternate roster structures, immutable structured rule evidence, ownership/acquisition consistency, calendar-only periods, concurrent postseason bracket types, incomplete postseason placeholders, NFL bye/game consistency, and unresolved rules. No ingestion, persistence, or simulation was introduced. See `CANONICAL_MODEL.md`.
 
 M1.2 Build explicit ESPN-to-canonical adapter with source provenance and league-specific editable config only for audited missing rules. GATE: adapter unit tests on real sanitized fixtures.
 

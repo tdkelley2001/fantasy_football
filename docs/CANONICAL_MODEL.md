@@ -16,12 +16,12 @@ The implementation is in `src/fantasy_football/canonical/` and uses frozen, slot
 | `Player` | Signed nonzero player ID, default-position ID, eligible raw lineup-slot IDs, current NFL team/injury/acquisition state |
 | `RosterEntry` | The only authoritative ownership relationship: player ID → team ID and occupied lineup-slot ID |
 | `PlayerWeek` | Composite key `(player_id, season, scoring_week)` and the raw/effective projection contract |
-| `MatchupPeriod` | Positive matchup-period ID mapped to one or more ordered scoring weeks and a phase |
-| `FantasyMatchup` | Positive matchup ID, period ID, and zero-to-two known sides; a bye has one known side |
+| `MatchupPeriod` | Positive matchup-period ID mapped to ordered scoring weeks and only a `regular` or `postseason` calendar phase |
+| `FantasyMatchup` | Positive matchup ID, period ID, bracket classification, zero-to-two known sides, and explicit scheduled/bye/partial/placeholder state |
 | `NFLTeam` | Positive NFL-team ID and optional bye week; player NFL-team ID zero is a separate unassigned sentinel |
 | `NFLGame` | Source game ID, scoring week, two NFL-team IDs, and optional UTC kickoff |
 | `SourceReference` | Stable request/reference ID, HTTPS endpoint, raw view, parameters, UTC retrieval time, optional SHA-256 payload digest |
-| `RuleInterpretation` | Raw field/value, optional normalized meaning, evidence status, source, and optional audited manual configuration provenance |
+| `RuleInterpretation` | Raw field/value, optional normalized meaning, evidence status, source, and optional audited manual configuration provenance; values may be JSON scalars or immutable structured JSON |
 | `RuleGap` | Named unresolved gap, reason, affected future capabilities, source, and whether audited manual configuration is permitted |
 
 Default-position IDs and lineup-slot IDs remain separate namespaces even where their integers happen to overlap. Player IDs may be negative; zero is invalid. NFL team ID zero is allowed only on `Player` as the unassigned sentinel and is never interpreted as a bye.
@@ -29,6 +29,8 @@ Default-position IDs and lineup-slot IDs remain separate namespaces even where t
 ## Ownership and current state
 
 `RosterEntry` is the single authoritative ownership table. `Player` contains current acquisition status but no owner. A player without a roster entry is unrostered, though their acquisition status may still be `WAIVERS`, unavailable, or another raw state rather than immediately free.
+
+Recognized current ESPN states are reconciled with that table: `ONTEAM` requires a roster entry, while `FREEAGENT` and `WAIVERS` require no owner. Unknown acquisition enums are retained without guessed semantics and do not invalidate an otherwise coherent snapshot. A populated raw owner on a roster entry must agree with its authoritative team ID.
 
 The snapshot begins from cumulative current standings and current rosters. It explicitly stores `first_simulation_week` and `final_simulation_week`; it does not derive the first safe week from the wall clock. Every included player must have exactly one `PlayerWeek` for every required week in that inclusive range. Completed historical weeks and transaction history are outside the operational snapshot contract.
 
@@ -49,6 +51,14 @@ Allowed evidence states are `understood`, `unverified`, `unsupported`, and `miss
 
 Manual configuration provenance is all-or-nothing: configuration key, approval reference, and audited gap ID must be present together, the gap must exist, and it must permit manual configuration. The canonical snapshot may contain unresolved rules. `require_understood_rules(snapshot, rule_ids)` is the deliberately small boundary a future simulator capability can invoke; it is not a capability-permission framework.
 
+Rule values use ordinary JSON scalars when sufficient. Structured evidence uses frozen `JsonArray` and `JsonObject` records; arrays retain order (for example, ordered tiebreaks), while object keys use canonical increasing order. Nested strings, numbers, Booleans, nulls, arrays, and objects round-trip deterministically. Mutable containers, duplicate or unordered object keys, unsupported values, and nonfinite nested numbers fail validation. Illustrative fixture structures are test evidence only, not verified current-league rules.
+
+## Matchup calendar and bracket entries
+
+`MatchupPeriod` is a calendar relationship, not a bracket classification. It maps scoring weeks to either the regular season or postseason. Championship, consolation, placement, and unresolved bracket entries may coexist in one postseason period through each `FantasyMatchup.bracket_type`; round numbers remain on the corresponding championship or consolation rule records.
+
+`FantasyMatchup.entry_status` distinguishes a scheduled two-team matchup, a one-team bye, a one-known-team partial future pairing, and a zero-known-team placeholder. Regular-season operational periods require complete scheduled pairings for every team. Postseason periods permit explicit partial and placeholder entries so the snapshot never fabricates future participants. Known teams remain unique within a period, and unknown IDs, self-pairings, mismatched status/participant counts, or bracketless postseason entries are contradictions.
+
 ## Validation boundary
 
 `validate_snapshot` is pure, deterministic, and non-mutating. Snapshot-acceptance invariants include:
@@ -62,7 +72,8 @@ Manual configuration provenance is all-or-nothing: configuration key, approval r
 - complete player-week horizon coverage and exact raw/class/effective/source relationships;
 - finite scoring, standings, projection, and override numerics;
 - matchup periods that cover every required scoring week exactly once;
-- complete ordinary regular-season pairing coverage, while allowing postseason structure to remain incomplete;
+- complete ordinary regular-season pairing coverage, while allowing explicitly classified postseason byes, partial entries, and zero-participant placeholders;
+- concurrent championship, consolation, and placement entries in the same postseason period without conflating the calendar with a bracket;
 - dynamically configured postseason round references without assuming a league shape;
 - valid NFL references, at most one game per team/week, and exactly one game-or-bye state per required week;
 - source references for projection and rule evidence; and
@@ -95,7 +106,7 @@ This is an interchange contract only. SQLite tables, compressed raw payload stor
 - positive, explicit-zero, missing, and finite-negative projections over three future weeks;
 - a regular matchup and a two-week championship period;
 - two NFL byes and complete relevant NFL game coverage;
-- unsupported consolation structure and an unverified regular matchup tie rule; and
+- concurrent championship/consolation entries, an unresolved placement placeholder, unsupported structured consolation evidence, ordered structured tiebreak evidence, and an unverified regular matchup tie rule; and
 - request provenance and a raw payload digest placeholder.
 
 An alternate fixture test removes IR and adds multiple flex slots, demonstrating that the validator does not impose the current league's roster template.

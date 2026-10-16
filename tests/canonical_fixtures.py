@@ -9,9 +9,12 @@ from fantasy_football.canonical.model import (
     FantasyMatchup,
     FantasyTeam,
     InterpretationStatus,
+    JsonArray,
+    JsonObject,
     LeagueRules,
     LeagueSnapshot,
     LineupSlotRule,
+    MatchupEntryStatus,
     MatchupPeriod,
     MatchupPhase,
     NFLGame,
@@ -50,8 +53,14 @@ def canonical_snapshot() -> LeagueSnapshot:
     interpretations = (
         RuleInterpretation(
             rule_id="consolation_structure",
-            raw_field="settings.scheduleSettings.consolationLadderDisabled",
-            raw_value=False,
+            raw_field="illustrative.consolationConfiguration",
+            raw_value=JsonObject((
+                ("enabled", True),
+                ("rounds", JsonArray((
+                    JsonObject((("duration", 1), ("round", 1))),
+                    JsonObject((("duration", 2), ("round", 2))),
+                ))),
+            )),
             normalized_value=None,
             status=InterpretationStatus.UNSUPPORTED,
             source_id=source.source_id,
@@ -72,9 +81,17 @@ def canonical_snapshot() -> LeagueSnapshot:
             status=InterpretationStatus.UNVERIFIED,
             source_id=source.source_id,
         ),
+        RuleInterpretation(
+            rule_id="standings_tiebreak_order",
+            raw_field="settings.scheduleSettings.playoffSeedingRule",
+            raw_value=JsonArray(("TOTAL_POINTS_SCORED", "HEAD_TO_HEAD", "RANDOM")),
+            normalized_value=JsonArray(("points_for", "head_to_head", "random")),
+            status=InterpretationStatus.UNDERSTOOD,
+            source_id=source.source_id,
+        ),
     )
     rules = LeagueRules(
-        team_count=2,
+        team_count=4,
         scoring=(ScoringRule(1, 0.04), ScoringRule(2, -2.0)),
         lineup_slots=(
             LineupSlotRule(0, 1, SlotKind.STARTER, "QB"),
@@ -90,12 +107,14 @@ def canonical_snapshot() -> LeagueSnapshot:
         trades=TradeRules(True, datetime(2026, 12, 2, 17, 0, tzinfo=UTC), None, 24, 2),
         standings=StandingsRules("H2H_POINTS", "TOTAL_POINTS_SCORED", "regular_matchup_tie", None),
         championship=ChampionshipRules(True, 2, False, (PostseasonRound(1, 2),), "playoff_tie"),
-        consolation=ConsolationRules(None, 0, (), "consolation_structure"),
+        consolation=ConsolationRules(None, 2, (PostseasonRound(1, 2),), "consolation_structure"),
         interpretations=interpretations,
     )
     teams = (
         FantasyTeam(1, "Alpha", 8, 5, 0, 1300.25, 1200.0, 1, 1, 1, None),
         FantasyTeam(2, "Beta", 7, 6, 0, 1250.0, 1240.5, 2, 2, 2, None),
+        FantasyTeam(3, "Gamma", 6, 7, 0, 1200.0, 1260.0, 3, 3, 3, None),
+        FantasyTeam(4, "Delta", 5, 8, 0, 1150.0, 1300.0, 4, 4, 4, None),
     )
     players = (
         Player(-101, "Defense A", 16, (16, 20), 1, None, "ONTEAM"),
@@ -120,11 +139,14 @@ def canonical_snapshot() -> LeagueSnapshot:
         ))
     periods = (
         MatchupPeriod(1, (15,), MatchupPhase.REGULAR),
-        MatchupPeriod(2, (16, 17), MatchupPhase.CHAMPIONSHIP, 1),
+        MatchupPeriod(2, (16, 17), MatchupPhase.POSTSEASON),
     )
     matchups = (
         FantasyMatchup(1, 1, 1, 2),
         FantasyMatchup(2, 2, 1, 2, "championship"),
+        FantasyMatchup(3, 1, 3, 4),
+        FantasyMatchup(4, 2, 3, 4, "consolation"),
+        FantasyMatchup(5, 2, None, None, "placement", MatchupEntryStatus.PLACEHOLDER),
     )
     nfl_teams = (
         NFLTeam(1, "A", 15), NFLTeam(2, "B", 15), NFLTeam(3, "C", None), NFLTeam(4, "D", None),

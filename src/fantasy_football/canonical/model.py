@@ -12,6 +12,23 @@ SCHEMA_VERSION = 1
 JsonScalar: TypeAlias = str | int | float | bool | None
 
 
+@dataclass(frozen=True, slots=True)
+class JsonArray:
+    """Immutable JSON array used by structured rule evidence."""
+
+    values: tuple[JsonValue, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class JsonObject:
+    """Immutable JSON object with canonically ordered keys."""
+
+    items: tuple[tuple[str, JsonValue], ...]
+
+
+JsonValue: TypeAlias = JsonScalar | JsonArray | JsonObject
+
+
 class ProjectionClass(StrEnum):
     MISSING = "missing"
     EXPLICIT_ZERO = "explicit_zero"
@@ -39,10 +56,14 @@ class SlotKind(StrEnum):
 
 class MatchupPhase(StrEnum):
     REGULAR = "regular"
-    CHAMPIONSHIP = "championship"
-    CONSOLATION = "consolation"
-    PLACEMENT = "placement"
-    UNKNOWN_POSTSEASON = "unknown_postseason"
+    POSTSEASON = "postseason"
+
+
+class MatchupEntryStatus(StrEnum):
+    SCHEDULED = "scheduled"
+    BYE = "bye"
+    PARTIAL = "partial"
+    PLACEHOLDER = "placeholder"
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +80,8 @@ class SourceReference:
 class RuleInterpretation:
     rule_id: str
     raw_field: str
-    raw_value: JsonScalar
-    normalized_value: JsonScalar
+    raw_value: JsonValue
+    normalized_value: JsonValue
     status: InterpretationStatus
     source_id: str
     manual_config_key: str | None = None
@@ -222,7 +243,6 @@ class MatchupPeriod:
     matchup_period_id: int
     scoring_weeks: tuple[int, ...]
     phase: MatchupPhase
-    round_number: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,7 +252,7 @@ class FantasyMatchup:
     home_team_id: int | None
     away_team_id: int | None
     bracket_type: str | None = None
-    is_bye: bool = False
+    entry_status: MatchupEntryStatus = MatchupEntryStatus.SCHEDULED
 
 
 @dataclass(frozen=True, slots=True)
