@@ -293,6 +293,8 @@ def summarize_sample(records: Sequence[HistoricalPlayerWeek], *, season: int, we
             magnitudes["missing"] += 1
         elif record.projection == 0:
             magnitudes["zero"] += 1
+        elif record.projection < 0:
+            magnitudes["negative"] += 1
         elif record.projection < 5:
             magnitudes["low_positive_lt_5"] += 1
         elif record.projection < 15:

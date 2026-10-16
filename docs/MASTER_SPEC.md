@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: design baseline | 14 October 2026 | Status: ESPN feasibility audit in progress; M0.1-M0.4 complete*
+*Version: M0 feasibility handoff | 16 October 2026 | Status: M0 complete; M1 pending architecture review*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Distinguish intended functionality from verified implementation: none of the algorithms or ESPN field availability described below should be understood as already built or confirmed.
 
@@ -62,6 +62,8 @@ Investigate a small sample of previous seasons, especially matched historical pl
 
 M0.5 sampled ESPN weeks 1, 8, 14, and 17 in both 2024 and 2025. The raw season endpoints returned 8,760 player-weeks, 7,489 projection values, 5,214 actual values, and 5,000 structurally matched pairs. Weekly projections are raw `statSourceId=1`, `statSplitTypeId=1` records; actuals use source 0 with the same weekly split. Missing values and 4,294 explicit projection zeros were preserved separately, and no operational effective-zero policy was applied. No investigated record exposed authenticated creation, revision, or original as-of timing. Repeated retrieval and a second ESPN view established only present-day response consistency. Consequently every returned projection remains historical-with-pregame-provenance-unverified, with zero verified-pregame observations. Forecast-horizon vintages are unsupported by the investigated source, and current historical scoring results can carry retroactive-change risk. M3 must not promote this material to a genuine pregame calibration sample without independent timestamped corroboration; prospective immutable ESPN snapshots are the recommended ESPN-only path if separately approved. Detailed evidence is in `docs/ESPN_HISTORICAL_PROJECTION_AUDIT.md`.
 
+Post-M0.5 approval: these unverified historical projection/actual pairs may be used for explicitly provisional exploratory calibration, but they must retain their evidence label and must never be described as authenticated pregame observations. Provisional Monte Carlo probability estimates are permitted before empirical forecast calibration is independently validated, provided every output distinguishes structural/model correctness, provisional statistical calibration, and empirically validated statistical calibration. M0.6 does not select a distribution family, fit parameters, or define statistical promotion thresholds. Scheduled prospective collection, a historical forecast warehouse, third-party projections, and forecast-horizon research are deferred enhancements rather than prerequisites to M1 or V1.
+
 ### 3.3 Canonical league snapshot
 
 Include team and player identities; complete real current rosters/lineup capacity and positional eligibility; an unrostered ESPN player pool and ownership map; current settled standings and PF; future schedule; regular-season and postseason format; current waiver order/rules; each player’s projection for each future week; status/byes/missingness; league scoring settings and source timestamps. Maintain no more than one owner per player per simulation path. Missing future projections remain explicitly distinct from confirmed ESPN zeros in canonical data. Store the nullable raw projection, a `missing` / `explicit_zero` / `present` status, the derived effective projection, and its source. Under the approved V1 policy, a missing raw projection produces `effective_projection=0` with source `missing_projection_policy`; an explicit ESPN zero produces the same effective value with source `espn`. Never overwrite the raw missing value or misattribute an imputation to ESPN. Evidence and methodology are recorded in `docs/MISSING_PROJECTION_POLICY.md`.
@@ -89,6 +91,8 @@ League-level fallback configuration (agreed): Any league-level setting unavailab
 ### 4.1 Means and conditional availability
 
 For each unstarted fantasy week, use the latest available ESPN player-specific weekly fantasy point projection as the mean input, with no independent momentum or injury-adjusted forecast of expected points. In V1, a positive effective projection means eligible/available for that week and an effective projection of zero means unavailable. A missing raw projection retains its explicit `missing` quality status but, under the approved conservative policy, derives an effective zero; a confirmed ESPN zero retains `explicit_zero`. Reassess week by week. ESPN designation alone does not override this heuristic in V1. Do not use simulated realized points or later developments to decide the pre-week lineup or whether a waiver claim should occur. Do not introduce a positional-average, injury-return, replacement-level, or other projection fallback for missing values.
+
+V1 uses the ESPN projection available at snapshot retrieval for every future player-week and does not forecast subsequent revisions to ESPN's published number. Treat the expected adjustment from a future ESPN revision as zero solely as an approved simplifying assumption, not as an empirically validated random-walk property. Apply no forecast-horizon-dependent expected-point adjustment or variance multiplier in V1. Preserve the snapshot time so later runs remain reproducible even if ESPN changes its projection.
 
 ### 4.2 Outcome distribution research
 
@@ -330,7 +334,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 ### 12.1 Milestone sequence and status
 
-#### M0 — ESPN feasibility and historical-data audit [IN PROGRESS]. Diagnostic script, documented actual API/endpoint coverage, historical pregame projection provenance, complete league settings/waiver/bracket inventory, known blockers. PASS: each critical field verified or explicitly addressed with a defensible path; material gaps and uncertainty written down.
+#### M0 — ESPN feasibility and historical-data audit [COMPLETE]. Diagnostic scripts, documented actual API/endpoint coverage, historical projection provenance, complete league settings/waiver/bracket inventory, data dictionary, known gaps, and M1 handoff. PASS: each critical field is verified or explicitly addressed with a defensible path; material gaps and uncertainty are documented. M1 recommendation: GO WITH EXPLICIT UNRESOLVED METADATA.
 
 #### M1 — Canonical snapshots and validation [NOT STARTED]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, SQLite/Parquet, fixture tests. PASS: deterministic snapshot round-trip, no data corruption on failed refresh, complete identifiable league state and usable future inputs.
 
@@ -364,9 +368,9 @@ M0.3 [COMPLETE — 15 October 2026] Audit projected future player-week scores, z
 
 M0.4 [COMPLETE — 16 October 2026] Audit actual league roster/trade/waiver rules, standings tiebreakers and regular/playoff/consolation brackets against ESPN settings and known results. GATE: PASSED — live raw settings are discovered without a league template, capability support is classified separately from structural validity, and completed 2024/2025 records reproduce bracket relationships and score aggregation. Multiple-claim ordering, tie semantics, and the current eight-team consolation ladder remain explicit configuration/evidence blockers documented in `docs/ESPN_LEAGUE_RULES_AUDIT.md`; no fallback was introduced.
 
-M0.5 Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. Policy-imputed projection zeros must never be treated as genuine ESPN forecasts during historical calibration. GATE: evidence-backed historical data availability report and unambiguous gaps.
+M0.5 [COMPLETE — 16 October 2026] Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. The bounded audit found retrievable pairs but no authenticated pregame timing; policy-imputed zeros were never treated as forecasts. GATE: PASSED with explicit provenance limitation.
 
-M0.6 Publish data dictionary, exact source paths/IDs, audit script, known errors and go/no-go decision for M1; do not let missing critical rules be silently guessed. GATE: reproducible audit result and an approved list of unresolved limitations.
+M0.6 [COMPLETE — 16 October 2026] Publish the field-level ESPN data dictionary, exact source/ID mappings, validation tiers, reproducible evidence manifest, rule-gap register, approved post-M0.5 policies, and M1 readiness decision. GATE: PASSED — M1 is GO WITH EXPLICIT UNRESOLVED METADATA; capability-specific M2/M4/M5 gaps remain non-defaulted and statistical calibration remains explicitly provisional.
 
 #### M1 — Versioned canonical snapshots and data contracts
 
@@ -396,7 +400,7 @@ M2.6 Add provisional probabilistic player-score draws behind a swappable interfa
 
 #### M3 — Empirical forecast uncertainty and high-performance Monte Carlo
 
-M3.1 Build reproducible historical player-week pregame projection versus actual dataset and provenance checks. Exclude or separately label policy-imputed zeros so they are never calibrated as ESPN forecast observations. GATE: leak tests and documented usable sample sizes by week/position/projection level.
+M3.1 Build a reproducible historical player-week projection-versus-actual research dataset with provenance checks. Unverified historical ESPN pairs may support explicitly provisional exploration but must not be called authenticated pregame observations. Exclude or separately label policy-imputed zeros so they are never calibrated as ESPN forecasts. GATE: leak tests, evidence labels, and documented usable sample sizes by week/position/projection level.
 
 M3.2 Compare pooled/position/projection-conditional empirical, parametric and hybrid error models using temporally held-out scoring and calibration, including tail/zero behavior. GATE: documented selection decision or explicit insufficiency.
 
@@ -458,7 +462,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.6 is the next unstarted work package; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is complete. M1 is the next milestone but remains not started pending deliberate architecture review; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -476,7 +480,7 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 [x] Examine a limited sample of prior ESPN seasons for player-week actual and projected scores and pregame-vs-restated forecast provenance; preserve the finding that returned projections lack authenticated pregame timing.
 
-[ ] Publish a data dictionary, machine-readable coverage checks, sanitized examples and go/no-go gaps; only then finalize M1 canonical input schema.
+[x] Publish the ESPN data dictionary, reproducible verification manifest, validation/capability tiers, rule-gap register, and M1 go/no-go handoff without implementing the canonical schema.
 
 ### 12.4 Primary risks and mitigation
 
