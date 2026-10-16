@@ -60,7 +60,7 @@ Investigate a small sample of previous seasons, especially matched historical pl
 
 ### 3.3 Canonical league snapshot
 
-Include team and player identities; complete real current rosters/lineup capacity and positional eligibility; an unrostered ESPN player pool and ownership map; current settled standings and PF; future schedule; regular-season and postseason format; current waiver order/rules; each player’s projection for each future week; status/byes/missingness; league scoring settings and source timestamps. Maintain no more than one owner per player per simulation path. Missing future projections are explicitly distinct from a confirmed projection of zero; initial missing-projection handling is provisionally ineligible pending an empirical prevalence/sensitivity audit.
+Include team and player identities; complete real current rosters/lineup capacity and positional eligibility; an unrostered ESPN player pool and ownership map; current settled standings and PF; future schedule; regular-season and postseason format; current waiver order/rules; each player’s projection for each future week; status/byes/missingness; league scoring settings and source timestamps. Maintain no more than one owner per player per simulation path. Missing future projections remain explicitly distinct from confirmed ESPN zeros in canonical data. Store the nullable raw projection, a `missing` / `explicit_zero` / `present` status, the derived effective projection, and its source. Under the approved V1 policy, a missing raw projection produces `effective_projection=0` with source `missing_projection_policy`; an explicit ESPN zero produces the same effective value with source `espn`. Never overwrite the raw missing value or misattribute an imputation to ESPN. Evidence and methodology are recorded in `docs/MISSING_PROJECTION_POLICY.md`.
 
 ### 3.4 Snapshot publication and staleness
 
@@ -84,7 +84,7 @@ League-level fallback configuration (agreed): Any league-level setting unavailab
 
 ### 4.1 Means and conditional availability
 
-For each unstarted fantasy week, use the latest available ESPN player-specific weekly fantasy point projection as the mean input, with no independent momentum or injury-adjusted forecast of expected points. In V1, projection >0 means eligible/available for that week, exactly 0 means unavailable, and missing has its own explicit quality status (provisionally ineligible, subject to investigation). Reassess week by week. ESPN designation alone does not override this heuristic in V1. Do not use simulated realized points or later developments to decide the pre-week lineup or whether a waiver claim should occur.
+For each unstarted fantasy week, use the latest available ESPN player-specific weekly fantasy point projection as the mean input, with no independent momentum or injury-adjusted forecast of expected points. In V1, a positive effective projection means eligible/available for that week and an effective projection of zero means unavailable. A missing raw projection retains its explicit `missing` quality status but, under the approved conservative policy, derives an effective zero; a confirmed ESPN zero retains `explicit_zero`. Reassess week by week. ESPN designation alone does not override this heuristic in V1. Do not use simulated realized points or later developments to decide the pre-week lineup or whether a waiver claim should occur. Do not introduce a positional-average, injury-return, replacement-level, or other projection fallback for missing values.
 
 ### 4.2 Outcome distribution research
 
@@ -366,7 +366,7 @@ M0.6 Publish data dictionary, exact source paths/IDs, audit script, known errors
 
 #### M1 — Versioned canonical snapshots and data contracts
 
-M1.1 Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. GATE: example JSON/typed fixture passes validation.
+M1.1 Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. Player-week projections must preserve nullable raw values and missing/explicit-zero/present status separately from the approved derived effective value and source. GATE: example JSON/typed fixture passes validation, including raw-missing/effective-zero and raw-explicit-zero/effective-zero cases.
 
 M1.2 Build explicit ESPN-to-canonical adapter with source provenance and league-specific editable config only for audited missing rules. GATE: adapter unit tests on real sanitized fixtures.
 
@@ -378,7 +378,7 @@ M1.5 Add reproducible snapshot load/list/inspect commands, stable snapshot ID an
 
 #### M2 — Complete deterministic season-path reference simulator
 
-M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, projections and available players. GATE: toy and real-fixture lineup correctness tests, including ties and missing/zero cases.
+M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, approved effective projections and available players. Missing raw projections and explicit ESPN zeros both yield an effective zero in V1 but remain distinguishable in evidence and reporting. GATE: toy and real-fixture lineup correctness tests, including ties and missing/zero provenance cases.
 
 M2.2 Implement week progression, actual ESPN matchup schedule, points-for/against accumulation, standings, and tie rules. GATE: synthetic schedule results agree with hand-calculated examples.
 

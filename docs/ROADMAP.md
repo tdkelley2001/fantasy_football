@@ -52,7 +52,7 @@ M0.6 Publish data dictionary, exact source paths/IDs, audit script, known errors
 
 #### M1 — Versioned canonical snapshots and data contracts
 
-M1.1 Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. GATE: example JSON/typed fixture passes validation.
+M1.1 Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. Player-week projections must preserve nullable raw values and missing/explicit-zero/present status separately from the approved derived effective value and source. GATE: example JSON/typed fixture passes validation, including raw-missing/effective-zero and raw-explicit-zero/effective-zero cases.
 
 M1.2 Build explicit ESPN-to-canonical adapter with source provenance and league-specific editable config only for audited missing rules. GATE: adapter unit tests on real sanitized fixtures.
 
@@ -64,7 +64,7 @@ M1.5 Add reproducible snapshot load/list/inspect commands, stable snapshot ID an
 
 #### M2 — Complete deterministic season-path reference simulator
 
-M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, projections and available players. GATE: toy and real-fixture lineup correctness tests, including ties and missing/zero cases.
+M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, approved effective projections and available players. Missing raw projections and explicit ESPN zeros both yield an effective zero in V1 but remain distinguishable in evidence and reporting. GATE: toy and real-fixture lineup correctness tests, including ties and missing/zero provenance cases.
 
 M2.2 Implement week progression, actual ESPN matchup schedule, points-for/against accumulation, standings, and tie rules. GATE: synthetic schedule results agree with hand-calculated examples.
 
