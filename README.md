@@ -55,6 +55,14 @@ M0.3 adds a sanitized aggregate audit of the complete paginated player pool, wee
 
 Add `--json` for aggregate coverage and retrieval context. The diagnostic remains read-only and preserves missing projections separately from explicit zeros.
 
+For a manual ESPN UI comparison, print one named missing, explicit-zero, and positive example for the next fantasy week (or pass `--week` explicitly):
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.projection_ui_reconciliation
+```
+
+This output contains player names, player IDs, and fantasy team IDs. It is intended for local review only and must not be committed.
+
 ## Upcoming work package
 
 After M0.3 review, M0.4 is next: actual roster, trade, waiver, standings-tiebreak, playoff, and consolation rules.

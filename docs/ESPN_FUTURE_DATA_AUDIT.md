@@ -117,3 +117,11 @@ Unresolved limitations:
 - M1 must preserve raw projection precision and keep missing, zero, and bye distinct.
 - M0.4 must determine waiver, tiebreak, playoff, and consolation rules.
 - M0.5 must establish historical as-of projection availability; M0.3 proves only current live access.
+
+## UI-reconciliation follow-up
+
+On 16 October 2026, a separate read-only console diagnostic selected named week 7 examples for manual comparison in ESPN. Names, IDs, and fantasy ownership were printed locally and were not committed.
+
+The follow-up reproduced the M0.3 week 7 totals exactly: 395 missing, 293 explicit zero, 364 positive, and no negative projections. The 657 present records equal the documented 293 zero plus 364 positive records. Exactly one missing record was currently rostered, so the diagnostic selected it as requested. No discrepancy with M0.3 classification was found.
+
+The follow-up also confirmed that raw `defaultPositionId` uses a different ID namespace from lineup-slot IDs. Its console formatter therefore uses an explicit fail-fast default-position mapping rather than `espn-api`'s `POSITION_MAP`, which maps lineup slots. Manual confirmation of what ESPN's interface displays remains a user review step; the diagnostic does not treat UI text as API evidence until compared.
