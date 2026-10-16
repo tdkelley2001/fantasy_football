@@ -4,13 +4,14 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, the ESPN data and feasibility audit, is in progress. M0.1 and M0.2 are **COMPLETE**; M0.3 and all later work packages remain **NOT STARTED**. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.3 are **COMPLETE**; M0.4 and all later work packages remain **NOT STARTED**. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
 - [Master specification](docs/MASTER_SPEC.md) — the complete approved model specification and governing requirements.
 - [Development roadmap](docs/ROADMAP.md) — the M0-M7 milestone sequence, individual work packages, dependencies, gates, and current statuses.
 - [M0.2 ESPN connectivity findings](docs/ESPN_CONNECTIVITY.md) — sanitized live-access evidence, field provenance, validation results, and deferred questions.
+- [M0.3 future player-week findings](docs/ESPN_FUTURE_DATA_AUDIT.md) — projection, player-pool, bye, schedule, pagination, and provenance evidence.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -46,9 +47,17 @@ M0.2 provides a read-only diagnostic for league identity, team and player owners
 
 The expected team count is deliberately explicit rather than a hidden league assumption. The command writes a human-readable report and fails on identity, count, ownership, eligibility, standings, scoring, or configured-slot inconsistencies. Add `--json` for the complete machine-readable report, including rostered player IDs. It does not submit transactions or modify ESPN data. Do not commit live reports because they contain league roster details.
 
+M0.3 adds a sanitized aggregate audit of the complete paginated player pool, week-specific projections, byes, and remaining regular-season matchups:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.future_data_audit --expected-team-count 14
+```
+
+Add `--json` for aggregate coverage and retrieval context. The diagnostic remains read-only and preserves missing projections separately from explicit zeros.
+
 ## Upcoming work package
 
-After M0.2 review, M0.3 is next: future player-week projections, zero/missing semantics, the available-player pool, byes, and future schedule.
+After M0.3 review, M0.4 is next: actual roster, trade, waiver, standings-tiebreak, playoff, and consolation rules.
 
 ## Historical implementation
 

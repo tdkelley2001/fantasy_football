@@ -1,0 +1,46 @@
+{
+  "players": [
+    {
+      "id": 101,
+      "status": "ONTEAM",
+      "onTeamId": 1,
+      "player": {
+        "id": 101,
+        "defaultPositionId": 1,
+        "eligibleSlots": [0, 20],
+        "proTeamId": 3,
+        "injuryStatus": "ACTIVE",
+        "stats": [
+          {
+            "seasonId": 2026,
+            "scoringPeriodId": 7,
+            "statSourceId": 1,
+            "statSplitTypeId": 1,
+            "appliedTotal": 12.25
+          }
+        ]
+      }
+    },
+    {
+      "id": 202,
+      "status": "FREEAGENT",
+      "onTeamId": 0,
+      "player": {
+        "id": 202,
+        "defaultPositionId": 2,
+        "eligibleSlots": [2, 3, 23],
+        "proTeamId": 7,
+        "injuryStatus": null,
+        "stats": [
+          {
+            "seasonId": 2026,
+            "scoringPeriodId": 7,
+            "statSourceId": 1,
+            "statSplitTypeId": 1,
+            "appliedTotal": 0
+          }
+        ]
+      }
+    }
+  ]
+}
