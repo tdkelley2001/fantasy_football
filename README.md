@@ -12,6 +12,7 @@ M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.3 are *
 - [Development roadmap](docs/ROADMAP.md) — the M0-M7 milestone sequence, individual work packages, dependencies, gates, and current statuses.
 - [M0.2 ESPN connectivity findings](docs/ESPN_CONNECTIVITY.md) — sanitized live-access evidence, field provenance, validation results, and deferred questions.
 - [M0.3 future player-week findings](docs/ESPN_FUTURE_DATA_AUDIT.md) — projection, player-pool, bye, schedule, pagination, and provenance evidence.
+- [Missing projection policy](docs/MISSING_PROJECTION_POLICY.md) — approved raw-versus-effective representation, week 6 evidence, methodology, and limitations.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -54,6 +55,14 @@ M0.3 adds a sanitized aggregate audit of the complete paginated player pool, wee
 ```
 
 Add `--json` for aggregate coverage and retrieval context. The diagnostic remains read-only and preserves missing projections separately from explicit zeros.
+
+For a manual ESPN UI comparison, print one named missing, explicit-zero, and positive example for the next fantasy week (or pass `--week` explicitly):
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.projection_ui_reconciliation
+```
+
+This output contains player names, player IDs, and fantasy team IDs. It is intended for local review only and must not be committed.
 
 ## Upcoming work package
 
