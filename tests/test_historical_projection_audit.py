@@ -171,6 +171,35 @@ def test_summary_reports_hindsight_signal_without_claiming_leakage_free() -> Non
     assert summary.hindsight_exact_tracking_signal == "potential_hindsight_contamination"
 
 
+def test_summary_classifies_negative_projection_separately_from_low_positive() -> None:
+    records = parse_historical_player_page(
+        response(
+            player(1, [stat(1, -2.5), stat(0, 3.0)]),
+            player(2, [stat(1, 2.5), stat(0, 1.0)]),
+        ),
+        season=2025,
+        week=8,
+    )
+    summary = summarize_sample(
+        records,
+        season=2025,
+        week=8,
+        regular_season_end=14,
+        retrieved_at_utc="2026-10-16T00:00:00+00:00",
+        endpoint="https://example.invalid",
+        scoring_signature_value="abc",
+        scoring_item_count=2,
+        page_size=250,
+        page_lengths=(2,),
+        repeat_first_page_stable=True,
+    )
+
+    assert summary.counts_by_projection_magnitude == {
+        "low_positive_lt_5": 1,
+        "negative": 1,
+    }
+
+
 def test_playercard_comparison_handles_multiweek_response() -> None:
     week_1 = parse_historical_player_page(response(player(1, [stat(1, 5.0, week=1), stat(0, 6.0, week=1)])), season=2025, week=1)
     week_8 = parse_historical_player_page(response(player(1, [stat(1, 7.0), stat(0, 8.0)])), season=2025, week=8)

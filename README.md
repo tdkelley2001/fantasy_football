@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.5 are **COMPLETE**; M0.6 and all later work packages remain **NOT STARTED**. M0.5 found retrievable historical projection/actual records but no authenticated pregame timestamps or forecast vintages. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0, the ESPN data and feasibility audit, is **COMPLETE**. M1 and every later work package remain **NOT STARTED** pending deliberate architecture review. The M1 recommendation is **GO WITH EXPLICIT UNRESOLVED METADATA**: current data and rules support canonical snapshot work, while simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -15,6 +15,8 @@ M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.5 are *
 - [Missing projection policy](docs/MISSING_PROJECTION_POLICY.md) — approved raw-versus-effective representation, week 6 evidence, methodology, and limitations.
 - [M0.4 league-rules audit](docs/ESPN_LEAGUE_RULES_AUDIT.md) — roster/IR, waiver, trade, standings, championship, consolation, provenance, and explicit configuration gaps.
 - [M0.5 historical projection audit](docs/ESPN_HISTORICAL_PROJECTION_AUDIT.md) — bounded historical coverage, projection/actual matching, as-of integrity, leakage risks, and M3 feasibility.
+- [ESPN data dictionary](docs/ESPN_DATA_DICTIONARY.md) — proposed M1 logical fields, raw paths, identifier namespaces, transformations, evidence, and validation tiers.
+- [M0 feasibility and M1 handoff](docs/M0_FEASIBILITY_AND_M1_HANDOFF.md) — readiness matrix, rule-gap register, approved forecast/calibration policies, and the M1 recommendation.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -82,9 +84,18 @@ M0.5 adds a bounded historical projection/actual diagnostic. Historical season/w
 
 Add `--json` for the sanitized aggregate report. The command never imputes missing projections and never treats a returned historical projection as verified pregame merely because ESPN labels it projected. Live output should not be committed.
 
+M0.6 provides a credential-free evidence manifest and reproduction guide. It lists existing diagnostics but deliberately does not execute live ESPN requests:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.m0_verification
+.\.venv\Scripts\python.exe -m fantasy_football.m0_verification --check-config --json
+```
+
+`--check-config` validates local configuration only. The report always states whether live verification occurred, lists the credential requirements for each diagnostic, and preserves unresolved rules.
+
 ## Upcoming work package
 
-After M0.5 review, M0.6 is next: consolidate ESPN feasibility evidence and make the explicit M1 go/no-go decision. M0.4's unresolved tie, multiple-waiver-claim, and eight-team consolation rules, plus M0.5's lack of authenticated historical pregame projections, remain explicit decision inputs.
+The next interaction is an M0.6 findings review and deliberate M1 architecture discussion. Do not begin M1 automatically. M1 must decide concrete canonical entity boundaries, immutable snapshot serialization, staged refresh/publication, persistence layout, provenance representation, and capability-readiness metadata.
 
 ## Historical implementation
 

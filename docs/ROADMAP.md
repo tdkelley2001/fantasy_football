@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0 is **IN PROGRESS**. M0.1 through M0.5 are **COMPLETE**; M0.6 and every M1-M7 work package are **NOT STARTED**. M7 remains a deferred milestone. No legacy implementation is credited toward these statuses.
+M0 is **COMPLETE**. M0.1 through M0.6 are **COMPLETE**; every M1-M7 work package is **NOT STARTED**. M1 is approved for architecture discussion and subsequent explicitly authorized implementation. M7 remains deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -12,7 +12,7 @@ Dependencies are sequential within each milestone and across the M0 → M7 miles
 
 ### 12.1 Milestone sequence and status
 
-#### M0 — ESPN feasibility and historical-data audit [IN PROGRESS]. Diagnostic script, documented actual API/endpoint coverage, historical pregame projection provenance, complete league settings/waiver/bracket inventory, known blockers. PASS: each critical field verified or explicitly addressed with a defensible path; material gaps and uncertainty written down.
+#### M0 — ESPN feasibility and historical-data audit [COMPLETE]. Diagnostic scripts, documented actual API/endpoint coverage, historical projection provenance, complete league settings/waiver/bracket inventory, data dictionary, known gaps, and M1 handoff. PASS: each critical field is verified or explicitly addressed with a defensible path; material gaps and uncertainty are documented. M1 recommendation: GO WITH EXPLICIT UNRESOLVED METADATA.
 
 #### M1 — Canonical snapshots and validation [NOT STARTED]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, SQLite/Parquet, fixture tests. PASS: deterministic snapshot round-trip, no data corruption on failed refresh, complete identifiable league state and usable future inputs.
 
@@ -48,7 +48,7 @@ M0.4 [COMPLETE — 16 October 2026] Audit actual league roster/trade/waiver rule
 
 M0.5 [COMPLETE — 16 October 2026] Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. GATE: PASSED — the bounded 2024/2025 audit sampled weeks 1, 8, 14, and 17 and validated 8,760 player-weeks, including 7,489 returned projections and 5,000 projection/actual pairs. No investigated record supplied authenticated as-of or revision timing, so all returned historical projections remain pregame-provenance unverified and none qualifies as a verified-pregame calibration observation. Same-session and cross-view consistency checks do not change that classification. Policy-imputed zeros were never introduced. Sixteen focused tests and the complete repository suite passed. See `ESPN_HISTORICAL_PROJECTION_AUDIT.md`.
 
-M0.6 Publish data dictionary, exact source paths/IDs, audit script, known errors and go/no-go decision for M1; do not let missing critical rules be silently guessed. GATE: reproducible audit result and an approved list of unresolved limitations.
+M0.6 [COMPLETE — 16 October 2026] Publish data dictionary, exact source paths/IDs, validation inventory, reproducible audit manifest, known gaps, approved forecast/calibration policies, and go/no-go decision for M1. GATE: PASSED — `ESPN_DATA_DICTIONARY.md` defines proposed M1 inputs without implementing a schema; `M0_FEASIBILITY_AND_M1_HANDOFF.md` assigns snapshot versus capability-specific severity and recommends GO WITH EXPLICIT UNRESOLVED METADATA. The manifest explicitly distinguishes recorded evidence from newly executed live verification. M0.5 negative projections now have a separate magnitude category. The complete credential-free suite passed 103 tests.
 
 #### M1 — Versioned canonical snapshots and data contracts
 
@@ -78,7 +78,7 @@ M2.6 Add provisional probabilistic player-score draws behind a swappable interfa
 
 #### M3 — Empirical forecast uncertainty and high-performance Monte Carlo
 
-M3.1 Build reproducible historical player-week pregame projection versus actual dataset and provenance checks. Exclude or separately label policy-imputed zeros so they are never calibrated as ESPN forecast observations. GATE: leak tests and documented usable sample sizes by week/position/projection level.
+M3.1 Build a reproducible historical player-week projection-versus-actual research dataset with provenance checks. Unverified historical ESPN pairs may support explicitly provisional exploration but must not be called authenticated pregame observations. Exclude or separately label policy-imputed zeros so they are never calibrated as ESPN forecasts. GATE: leak tests, evidence labels, and documented usable sample sizes by week/position/projection level.
 
 M3.2 Compare pooled/position/projection-conditional empirical, parametric and hybrid error models using temporally held-out scoring and calibration, including tail/zero behavior. GATE: documented selection decision or explicit insufficiency.
 
@@ -140,7 +140,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.6 is the next unstarted work package; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is complete. M1 is next but remains not started pending deliberate architecture review; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -158,7 +158,7 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 [x] Examine a limited sample of prior ESPN seasons for player-week actual and projected scores and pregame-vs-restated forecast provenance; preserve the finding that returned projections lack authenticated pregame timing.
 
-[ ] Publish a data dictionary, machine-readable coverage checks, sanitized examples and go/no-go gaps; only then finalize M1 canonical input schema.
+[x] Publish the ESPN data dictionary, reproducible verification manifest, validation/capability tiers, rule-gap register, and M1 go/no-go handoff without implementing the canonical schema.
 
 ### 12.4 Primary risks and mitigation
 

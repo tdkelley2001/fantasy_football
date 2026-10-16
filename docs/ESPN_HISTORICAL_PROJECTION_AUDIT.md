@@ -43,6 +43,8 @@ There were 2,190 unique player-season identities. Of the missing-projection reco
 
 Projection magnitudes across all samples were 396 high values (at least 15), 1,494 medium values (5 to under 15), 1,305 low positive values (under 5), 4,294 explicit zeros, and 1,271 missing values. These descriptive bins are audit summaries, not approved modeling thresholds.
 
+M0.6 follow-up: the magnitude summarizer now assigns finite negative projections to an explicit `negative` category rather than the `low_positive_lt_5` category. The original live samples contained zero negative projections, so no aggregate above changed. The original M0.5 completion record remains 16 focused tests; the correction added one regression test and is included in the later M0.6 full-suite count.
+
 The marked difference between 2024 projection coverage and later 2025 weeks is observed endpoint behavior, not evidence of a change at the original forecast date. It demonstrates material season/week selection effects that a calibration dataset would need to explain.
 
 ## Endpoints, views, and raw fields
@@ -147,6 +149,8 @@ Questions carried to M0.6:
 3. May unverified historical projections be used only for explicitly labeled sensitivity work, or should they be excluded entirely from model selection?
 4. What minimum prospective sample, horizon cadence, and held-out period would justify M3 promotion?
 5. How should M0.4's unresolved transaction, tie, and current consolation rules combine with this calibration limitation in the M1 go/no-go decision?
+
+M0.6 resolution: the project may proceed through M1 and V1 without scheduled prospective collection. Unverified historical pairs may support explicitly provisional exploratory calibration and probability estimates, with their evidence limitation visible in outputs. No distribution, promotion threshold, or horizon adjustment is approved here. Existing timestamped artifacts and prospective collection remain optional future evidence. M0.4 rule gaps are capability-specific: they can be retained in M1 metadata but block only the authoritative simulator behaviors that depend on them. See `M0_FEASIBILITY_AND_M1_HANDOFF.md`.
 
 ## Reproduction
 
