@@ -89,7 +89,7 @@ M1 design decisions still requiring deliberate architecture review are:
 - concrete immutable entity boundaries, key types, and versioned serialization;
 - raw payload retention/digest strategy and sanitized inspect output;
 - staged refresh consistency-window policy and atomic publication mechanism;
-- SQLite/Parquet division, migrations, retention, and snapshot identifiers;
+- authoritative SQLite layout, migrations, retention, compressed raw payloads, and snapshot identifiers;
 - representation of evidence class, interpretation status, rule gaps, and explicit manual configuration;
 - supported-versus-preserved enum policy in typed interfaces; and
 - effective-projection and availability semantics for a finite negative raw ESPN projection; and
