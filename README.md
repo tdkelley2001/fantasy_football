@@ -68,10 +68,10 @@ This output contains player names, player IDs, and fantasy team IDs. It is inten
 M0.4 adds a sanitized rules and postseason diagnostic. Historical seasons are explicit evidence inputs, not hidden defaults:
 
 ```powershell
-.\.venv\Scripts\python.exe -m fantasy_football.league_rules_audit --expected-team-count 14 --expected-playoff-team-count 6 --historical-season 2024 --historical-season 2025
+.\.venv\Scripts\python.exe -m fantasy_football.league_rules_audit --expected-team-count 14 --historical-season 2024 --historical-season 2025
 ```
 
-Add `--json` for the structured sanitized inventory. The command is read-only and reports unresolved rules rather than inventing them.
+Add `--json` for the structured sanitized inventory. `--expected-team-count` is an optional identity check, not a supported-league template. Roster slots, playoff qualifiers, byes, round durations, and consolation settings are discovered dynamically. The command is read-only and reports unresolved rules rather than inventing them.
 
 ## Upcoming work package
 

@@ -1,4 +1,4 @@
-"""Read-only M0.4 audit of ESPN league rules and postseason evidence."""
+"""Read-only M0.4 discovery of ESPN league rules and postseason evidence."""
 
 from __future__ import annotations
 
@@ -7,22 +7,26 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
 import logging
+import math
+from numbers import Real
 from typing import Any, Mapping, Sequence
 
 from espn_api.football import League
+from espn_api.football.constant import POSITION_MAP
 from espn_api.requests.espn_requests import ESPNAccessDenied, ESPNInvalidLeague, ESPNUnknownError
 from requests import RequestException
 
 from fantasy_football.config import Settings, SettingsError, load_settings
 from fantasy_football.logging_config import configure_logging
 
-
 LOGGER = logging.getLogger(__name__)
 VIEWS = ("mTeam", "mRoster", "mMatchup", "mSettings", "mStandings")
+UNDERSTOOD_ACQUISITION_TYPES = {"WAIVERS_TRADITIONAL", "WAIVERS_CONTINUOUS", "WAIVERS_FREE_AGENT_BUDGET", "FREE_AGENTS_ONLY"}
+UNDERSTOOD_SEEDING_RULES = {"TOTAL_POINTS_SCORED", "HEAD_TO_HEAD_RECORD"}
 
 
 class LeagueRulesAuditError(RuntimeError):
-    """Raised when rule evidence is absent, malformed, or contradictory."""
+    """Raised only when source data is malformed or internally contradictory."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +43,7 @@ class RulesAuditReport:
     standings: dict[str, object]
     championship: dict[str, object]
     consolation: dict[str, object]
+    capabilities: tuple[dict[str, str], ...]
     historical_evidence: tuple[dict[str, object], ...]
     verified_live: tuple[str, ...]
     verified_by_tests: tuple[str, ...]
@@ -70,131 +75,163 @@ def _int(value: Any, field: str, *, minimum: int | None = None) -> int:
     return value
 
 
+def _number(value: Any, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
+        raise LeagueRulesAuditError(f"{field} must be a finite number; observed {value!r}")
+    return float(value)
+
+
 def _bool(value: Any, field: str) -> bool:
     if not isinstance(value, bool):
         raise LeagueRulesAuditError(f"{field} must be boolean; observed {value!r}")
     return value
 
 
-def _enum(value: Any, field: str, allowed: set[str]) -> str:
-    if not isinstance(value, str) or value not in allowed:
-        raise LeagueRulesAuditError(f"{field} has unsupported enum value {value!r}")
-    return value
+def _text(value: Any, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise LeagueRulesAuditError(f"{field} must be non-empty text; observed {value!r}")
+    return value.strip()
 
 
-def audit_roster(raw: Mapping[str, Any], *, expected_team_count: int) -> dict[str, object]:
-    settings = _mapping(_mapping(raw.get("settings"), "settings").get("rosterSettings"), "rosterSettings")
-    counts_raw = _mapping(settings.get("lineupSlotCounts"), "rosterSettings.lineupSlotCounts")
-    counts: dict[int, int] = {}
-    for key, value in counts_raw.items():
+def _raw_settings(raw: Mapping[str, Any], name: str) -> Mapping[str, Any]:
+    return _mapping(_mapping(raw.get("settings"), "settings").get(name), f"settings.{name}")
+
+
+def _teams(raw: Mapping[str, Any], expected_team_count: int | None = None) -> tuple[list[Mapping[str, Any]], set[int]]:
+    result: list[Mapping[str, Any]] = []
+    ids: set[int] = set()
+    for index, value in enumerate(_list(raw.get("teams"), "teams")):
+        team = _mapping(value, f"teams[{index}]")
+        team_id = _int(team.get("id"), f"teams[{index}].id", minimum=1)
+        if team_id in ids:
+            raise LeagueRulesAuditError(f"duplicate fantasy team ID {team_id}")
+        ids.add(team_id)
+        result.append(team)
+    if not result:
+        raise LeagueRulesAuditError("teams must not be empty")
+    if expected_team_count is not None and len(result) != expected_team_count:
+        raise LeagueRulesAuditError(f"identity check observed {len(result)} teams; explicitly expected {expected_team_count}")
+    return result, ids
+
+
+def _slot_counts(settings: Mapping[str, Any]) -> dict[int, int]:
+    result: dict[int, int] = {}
+    for key, value in _mapping(settings.get("lineupSlotCounts"), "rosterSettings.lineupSlotCounts").items():
         try:
             slot_id = int(key)
         except (TypeError, ValueError) as exc:
             raise LeagueRulesAuditError(f"invalid raw lineup slot ID {key!r}") from exc
+        if slot_id < 0 or str(slot_id) != str(key):
+            raise LeagueRulesAuditError(f"invalid raw lineup slot ID {key!r}")
         count = _int(value, f"lineupSlotCounts[{slot_id}]", minimum=0)
         if count:
-            counts[slot_id] = count
-    required = {0: 1, 2: 2, 4: 2, 6: 1, 16: 1, 17: 1, 20: 7, 21: 1, 23: 1}
-    if counts != required:
-        raise LeagueRulesAuditError(f"configured lineup slots conflict with expected league rules: {counts!r}")
-    teams = _list(raw.get("teams"), "teams")
-    if len(teams) != expected_team_count:
-        raise LeagueRulesAuditError(f"observed {len(teams)} teams; expected {expected_team_count}")
+            result[slot_id] = count
+    if not result:
+        raise LeagueRulesAuditError("lineupSlotCounts contains no positive capacity")
+    return result
+
+
+def audit_roster(raw: Mapping[str, Any], *, expected_team_count: int | None = None) -> dict[str, object]:
+    settings = _raw_settings(raw, "rosterSettings")
+    counts = _slot_counts(settings)
+    teams, _ = _teams(raw, expected_team_count)
+    bench_capacity = counts.get(20, 0)
+    ir_capacity = counts.get(21, 0)
+    starter_capacity = sum(count for slot, count in counts.items() if slot not in {20, 21})
+    ordinary_capacity = starter_capacity + bench_capacity
+    total_capacity = sum(counts.values())
     total_sizes: list[int] = []
     ordinary_sizes: list[int] = []
     ir_occupants = 0
     ir_status_counts: dict[str, int] = {}
-    seen_team_ids: set[int] = set()
-    for index, item in enumerate(teams):
-        team = _mapping(item, f"teams[{index}]")
-        team_id = _int(team.get("id"), f"teams[{index}].id", minimum=1)
-        if team_id in seen_team_ids:
-            raise LeagueRulesAuditError(f"duplicate fantasy team ID {team_id}")
-        seen_team_ids.add(team_id)
+    for team in teams:
+        team_id = _int(team.get("id"), "team.id", minimum=1)
         entries = _list(_mapping(team.get("roster"), f"team {team_id}.roster").get("entries"), f"team {team_id}.roster.entries")
-        ir_count = 0
-        for entry_index, entry_raw in enumerate(entries):
-            entry = _mapping(entry_raw, f"team {team_id}.entry[{entry_index}]")
-            slot = _int(entry.get("lineupSlotId"), f"team {team_id}.entry[{entry_index}].lineupSlotId", minimum=0)
+        occupied: dict[int, int] = {}
+        for index, value in enumerate(entries):
+            entry = _mapping(value, f"team {team_id}.entry[{index}]")
+            slot = _int(entry.get("lineupSlotId"), f"team {team_id}.entry[{index}].lineupSlotId", minimum=0)
+            if slot not in counts:
+                raise LeagueRulesAuditError(f"team {team_id} uses slot {slot} with no configured positive capacity")
+            occupied[slot] = occupied.get(slot, 0) + 1
+            if occupied[slot] > counts[slot]:
+                raise LeagueRulesAuditError(f"team {team_id} has {occupied[slot]} occupants in slot {slot}; configured capacity is {counts[slot]}")
             if slot == 21:
-                ir_count += 1
-                player = _mapping(
-                    _mapping(entry.get("playerPoolEntry"), f"team {team_id} IR playerPoolEntry").get("player"),
-                    f"team {team_id} IR player",
-                )
-                status = player.get("injuryStatus")
-                if not isinstance(status, str) or not status:
-                    raise LeagueRulesAuditError(f"team {team_id} IR occupant lacks injuryStatus")
-                eligible = _list(player.get("eligibleSlots"), f"team {team_id} IR eligibleSlots")
-                if 21 not in eligible:
+                player = _mapping(_mapping(entry.get("playerPoolEntry"), f"team {team_id} IR playerPoolEntry").get("player"), f"team {team_id} IR player")
+                status = _text(player.get("injuryStatus"), f"team {team_id} IR injuryStatus")
+                if 21 not in _list(player.get("eligibleSlots"), f"team {team_id} IR eligibleSlots"):
                     raise LeagueRulesAuditError(f"team {team_id} IR occupant is not eligible for raw slot 21")
+                ir_occupants += 1
                 ir_status_counts[status] = ir_status_counts.get(status, 0) + 1
-        if ir_count > required[21]:
-            raise LeagueRulesAuditError(f"team {team_id} has {ir_count} IR occupants; configured capacity is 1")
+        ordinary = len(entries) - occupied.get(21, 0)
+        if ordinary > ordinary_capacity or len(entries) > total_capacity:
+            raise LeagueRulesAuditError(f"team {team_id} roster exceeds configured capacity")
         total_sizes.append(len(entries))
-        ordinary_sizes.append(len(entries) - ir_count)
-        ir_occupants += ir_count
-    ordinary_capacity = sum(value for slot, value in counts.items() if slot != 21)
-    total_capacity = sum(counts.values())
-    if any(size > ordinary_capacity for size in ordinary_sizes) or any(size > total_capacity for size in total_sizes):
-        raise LeagueRulesAuditError("current roster entries exceed configured capacity")
-    limits_raw = _mapping(settings.get("positionLimits"), "rosterSettings.positionLimits")
-    position_limits = {str(key): _int(value, f"positionLimits[{key}]") for key, value in limits_raw.items()}
+        ordinary_sizes.append(ordinary)
+    limits_raw = _mapping(settings.get("positionLimits", {}), "rosterSettings.positionLimits")
     return {
-        "raw_lineup_slot_counts": {str(k): v for k, v in counts.items()},
-        "starting_slots": 9,
-        "bench_capacity": counts[20],
-        "ir_capacity": counts[21],
+        "raw_lineup_slot_counts": {str(key): value for key, value in sorted(counts.items())},
+        "slot_labels": {str(key): POSITION_MAP.get(key) for key in sorted(counts)},
+        "unknown_slot_ids": [key for key in sorted(counts) if key not in POSITION_MAP],
+        "starter_capacity": starter_capacity,
+        "bench_capacity": bench_capacity,
+        "ir_capacity": ir_capacity,
         "ordinary_capacity": ordinary_capacity,
-        "total_capacity_with_ir": total_capacity,
+        "total_capacity": total_capacity,
         "observed_roster_size_range": [min(total_sizes), max(total_sizes)],
         "observed_ordinary_size_range": [min(ordinary_sizes), max(ordinary_sizes)],
         "occupied_ir_slots": ir_occupants,
         "ir_occupant_status_counts": ir_status_counts,
         "ordinary_vacancies": sum(ordinary_capacity - size for size in ordinary_sizes),
-        "position_limits_by_raw_default_position_id": position_limits,
+        "position_limits_by_raw_default_position_id": {str(key): _int(value, f"positionLimits[{key}]") for key, value in limits_raw.items()},
         "bench_unlimited_flag": _bool(settings.get("isBenchUnlimited"), "isBenchUnlimited"),
         "undroppable_list_enabled": _bool(settings.get("isUsingUndroppableList"), "isUsingUndroppableList"),
-        "lineup_lock_type": _enum(settings.get("lineupLocktimeType"), "lineupLocktimeType", {"INDIVIDUAL_GAME"}),
-        "roster_lock_type": _enum(settings.get("rosterLocktimeType"), "rosterLocktimeType", {"INDIVIDUAL_GAME"}),
+        "lineup_lock_type_raw": _text(settings.get("lineupLocktimeType"), "lineupLocktimeType"),
+        "roster_lock_type_raw": _text(settings.get("rosterLocktimeType"), "rosterLocktimeType"),
         "move_limit": _int(settings.get("moveLimit"), "moveLimit"),
     }
 
 
-def audit_waivers(raw: Mapping[str, Any], *, expected_team_count: int) -> dict[str, object]:
-    settings = _mapping(_mapping(raw.get("settings"), "settings").get("acquisitionSettings"), "acquisitionSettings")
-    waiver_type = _enum(settings.get("acquisitionType"), "acquisitionType", {"WAIVERS_TRADITIONAL"})
-    days = _list(settings.get("waiverProcessDays"), "waiverProcessDays")
-    if not days or any(not isinstance(day, str) or not day for day in days):
-        raise LeagueRulesAuditError("waiverProcessDays must contain named days")
-    ranks: list[int] = []
-    for index, item in enumerate(_list(raw.get("teams"), "teams")):
-        team = _mapping(item, f"teams[{index}]")
-        ranks.append(_int(team.get("waiverRank"), f"teams[{index}].waiverRank", minimum=1))
-    if sorted(ranks) != list(range(1, expected_team_count + 1)):
-        raise LeagueRulesAuditError(f"waiver ranks must be a unique 1..{expected_team_count} permutation; observed {sorted(ranks)}")
+def audit_waivers(raw: Mapping[str, Any], *, expected_team_count: int | None = None) -> dict[str, object]:
+    settings = _raw_settings(raw, "acquisitionSettings")
+    teams, _ = _teams(raw, expected_team_count)
+    acquisition_type = _text(settings.get("acquisitionType"), "acquisitionType")
+    ranks_present = ["waiverRank" in team for team in teams]
+    if any(ranks_present) and not all(ranks_present):
+        raise LeagueRulesAuditError("waiverRank is present for only some teams")
+    priority_valid: bool | None = None
+    if all(ranks_present):
+        ranks = [_int(team.get("waiverRank"), "team.waiverRank", minimum=1) for team in teams]
+        if sorted(ranks) != list(range(1, len(teams) + 1)):
+            raise LeagueRulesAuditError(f"waiver ranks must be a unique 1..{len(teams)} permutation; observed {sorted(ranks)}")
+        priority_valid = True
+    days = _list(settings.get("waiverProcessDays", []), "waiverProcessDays")
+    if any(not isinstance(day, str) or not day.strip() for day in days):
+        raise LeagueRulesAuditError("waiverProcessDays must contain non-empty named days")
     return {
-        "acquisition_type": waiver_type,
+        "acquisition_type_raw": acquisition_type,
+        "interpretation_status": "valid_and_understood" if acquisition_type in UNDERSTOOD_ACQUISITION_TYPES else "valid_but_unverified",
         "uses_faab": _bool(settings.get("isUsingAcquisitionBudget"), "isUsingAcquisitionBudget"),
         "acquisition_budget": _int(settings.get("acquisitionBudget"), "acquisitionBudget", minimum=0),
         "minimum_bid": _int(settings.get("minimumBid"), "minimumBid", minimum=0),
         "season_acquisition_limit": _int(settings.get("acquisitionLimit"), "acquisitionLimit"),
-        "matchup_acquisition_limit": settings.get("matchupAcquisitionLimit"),
+        "matchup_acquisition_limit": _number(settings.get("matchupAcquisitionLimit"), "matchupAcquisitionLimit"),
         "waiver_hours": _int(settings.get("waiverHours"), "waiverHours", minimum=0),
         "waiver_order_reset": _bool(settings.get("waiverOrderReset"), "waiverOrderReset"),
         "process_days": days,
         "process_hour_raw": _int(settings.get("waiverProcessHour"), "waiverProcessHour", minimum=0),
         "transaction_locking_enabled": _bool(settings.get("transactionLockingEnabled"), "transactionLockingEnabled"),
-        "current_priority_is_complete_permutation": True,
+        "current_priority_is_complete_permutation": priority_valid,
     }
 
 
 def audit_trades(raw: Mapping[str, Any]) -> dict[str, object]:
-    settings = _mapping(_mapping(raw.get("settings"), "settings").get("tradeSettings"), "tradeSettings")
+    settings = _raw_settings(raw, "tradeSettings")
+    teams, _ = _teams(raw)
     deadline = _int(settings.get("deadlineDate"), "tradeSettings.deadlineDate", minimum=1)
     observed_trades = 0
-    for index, item in enumerate(_list(raw.get("teams"), "teams")):
-        counter = _mapping(_mapping(item, f"teams[{index}]").get("transactionCounter"), f"teams[{index}].transactionCounter")
+    for index, team in enumerate(teams):
+        counter = _mapping(team.get("transactionCounter"), f"teams[{index}].transactionCounter")
         observed_trades += _int(counter.get("trades"), f"teams[{index}].transactionCounter.trades", minimum=0)
     return {
         "deadline_utc": datetime.fromtimestamp(deadline / 1000, timezone.utc).isoformat(),
@@ -206,145 +243,301 @@ def audit_trades(raw: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
-def audit_schedule(raw: Mapping[str, Any], *, expected_playoff_teams: int) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
-    settings = _mapping(_mapping(raw.get("settings"), "settings").get("scheduleSettings"), "scheduleSettings")
-    playoff_count = _int(settings.get("playoffTeamCount"), "playoffTeamCount", minimum=2)
-    if playoff_count != expected_playoff_teams or playoff_count % 2:
-        raise LeagueRulesAuditError(f"playoffTeamCount={playoff_count}; expected valid count {expected_playoff_teams}")
-    rounds_raw = _mapping(settings.get("playoffMatchupPeriodLengthByRound"), "playoffMatchupPeriodLengthByRound")
-    rounds = {str(key): _int(value, f"round length {key}", minimum=1) for key, value in rounds_raw.items()}
-    expected_rounds = {"1": 1, "2": 1, "3": 2}
-    if rounds != expected_rounds:
-        raise LeagueRulesAuditError(f"unsupported playoff round durations {rounds!r}; expected {expected_rounds!r}")
-    matchup_periods = _mapping(settings.get("matchupPeriods"), "matchupPeriods")
+def _matchup_periods(settings: Mapping[str, Any]) -> dict[int, tuple[int, ...]]:
+    result: dict[int, tuple[int, ...]] = {}
+    used_weeks: set[int] = set()
+    for raw_key, raw_value in _mapping(settings.get("matchupPeriods"), "matchupPeriods").items():
+        try:
+            period = int(raw_key)
+        except (TypeError, ValueError) as exc:
+            raise LeagueRulesAuditError(f"invalid matchup-period ID {raw_key!r}") from exc
+        if period <= 0 or str(period) != str(raw_key) or period in result:
+            raise LeagueRulesAuditError(f"invalid or duplicate matchup-period ID {raw_key!r}")
+        weeks = tuple(_int(week, f"matchupPeriods[{period}] week", minimum=1) for week in _list(raw_value, f"matchupPeriods[{period}]"))
+        if not weeks or len(set(weeks)) != len(weeks):
+            raise LeagueRulesAuditError(f"matchup period {period} has empty or duplicate scoring weeks")
+        overlap = used_weeks.intersection(weeks)
+        if overlap:
+            raise LeagueRulesAuditError(f"scoring weeks occur in multiple matchup periods: {sorted(overlap)}")
+        used_weeks.update(weeks)
+        result[period] = weeks
+    return dict(sorted(result.items()))
+
+
+def audit_schedule(raw: Mapping[str, Any]) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    settings = _raw_settings(raw, "scheduleSettings")
+    teams, _ = _teams(raw)
+    team_count = len(teams)
+    playoff_count = _int(settings.get("playoffTeamCount"), "playoffTeamCount", minimum=0)
+    if playoff_count > team_count:
+        raise LeagueRulesAuditError(f"playoffTeamCount={playoff_count} exceeds team count {team_count}")
+    if playoff_count == 1:
+        raise LeagueRulesAuditError("playoffTeamCount=1 cannot form a championship matchup")
+    rounds: dict[int, int] = {}
+    for key, value in _mapping(settings.get("playoffMatchupPeriodLengthByRound", {}), "playoffMatchupPeriodLengthByRound").items():
+        try:
+            round_id = int(key)
+        except (TypeError, ValueError) as exc:
+            raise LeagueRulesAuditError(f"invalid playoff round ID {key!r}") from exc
+        rounds[round_id] = _int(value, f"round length {key}", minimum=1)
+    if rounds and sorted(rounds) != list(range(1, len(rounds) + 1)):
+        raise LeagueRulesAuditError("playoff round IDs must be contiguous starting at 1")
+    expected_round_count = (playoff_count - 1).bit_length() if playoff_count else 0
+    if len(rounds) != expected_round_count:
+        raise LeagueRulesAuditError(
+            f"playoffTeamCount={playoff_count} requires {expected_round_count} elimination rounds; observed {len(rounds)}"
+        )
+    periods = _matchup_periods(settings)
     regular_end = _int(settings.get("matchupPeriodCount"), "matchupPeriodCount", minimum=1)
-    scoring = _mapping(_mapping(raw.get("settings"), "settings").get("scoringSettings"), "scoringSettings")
-    teams = _list(raw.get("teams"), "teams")
-    seeds = sorted(_int(_mapping(team, "team").get("playoffSeed"), "playoffSeed", minimum=1) for team in teams)
-    if seeds != list(range(1, len(teams) + 1)):
+    postseason_periods = {period: weeks for period, weeks in periods.items() if period > regular_end}
+    if playoff_count and len(rounds) != len(postseason_periods):
+        raise LeagueRulesAuditError(f"{len(rounds)} playoff rounds conflict with {len(postseason_periods)} postseason matchup periods")
+    for (round_id, duration), (_, weeks) in zip(sorted(rounds.items()), sorted(postseason_periods.items())):
+        if duration != len(weeks):
+            raise LeagueRulesAuditError(f"playoff round {round_id} duration {duration} conflicts with {len(weeks)} scoring periods")
+    scoring = _raw_settings(raw, "scoringSettings")
+    scoring_type = _text(scoring.get("scoringType"), "scoringType")
+    seeding_rule = _text(settings.get("playoffSeedingRule"), "playoffSeedingRule")
+    seeds = sorted(_int(team.get("playoffSeed"), "playoffSeed", minimum=1) for team in teams)
+    if seeds != list(range(1, team_count + 1)):
         raise LeagueRulesAuditError("playoff seeds must be a complete unique team permutation")
-    record_rows = 0
-    tied_record_groups: dict[tuple[int, int, int], list[tuple[int, float]]] = {}
-    for index, item in enumerate(teams):
-        team = _mapping(item, f"teams[{index}]")
-        overall = _mapping(_mapping(team.get("record"), f"teams[{index}].record").get("overall"), f"teams[{index}].record.overall")
-        wins = _int(overall.get("wins"), "record.wins", minimum=0)
-        losses = _int(overall.get("losses"), "record.losses", minimum=0)
-        ties = _int(overall.get("ties"), "record.ties", minimum=0)
-        points_for = overall.get("pointsFor")
-        points_against = overall.get("pointsAgainst")
-        if isinstance(points_for, bool) or not isinstance(points_for, (int, float)) or isinstance(points_against, bool) or not isinstance(points_against, (int, float)):
-            raise LeagueRulesAuditError("record pointsFor and pointsAgainst must be numeric")
-        tied_record_groups.setdefault((wins, losses, ties), []).append((_int(team.get("playoffSeed"), "playoffSeed", minimum=1), float(points_for)))
-        record_rows += 1
+    tied_records: dict[tuple[int, int, int], int] = {}
+    for team in teams:
+        overall = _mapping(_mapping(team.get("record"), "team.record").get("overall"), "team.record.overall")
+        key = (_int(overall.get("wins"), "record.wins", minimum=0), _int(overall.get("losses"), "record.losses", minimum=0), _int(overall.get("ties"), "record.ties", minimum=0))
+        _number(overall.get("pointsFor"), "record.pointsFor")
+        _number(overall.get("pointsAgainst"), "record.pointsAgainst")
+        tied_records[key] = tied_records.get(key, 0) + 1
+    next_power = 1 << (playoff_count - 1).bit_length() if playoff_count else 0
+    consolation_flag = settings.get("consolationLadderDisabled")
+    consolation_enabled = None if consolation_flag is None else not _bool(consolation_flag, "consolationLadderDisabled")
+    current_pairings = any(_int(_mapping(value, f"schedule[{index}]").get("matchupPeriodId"), f"schedule[{index}].matchupPeriodId", minimum=1) > regular_end for index, value in enumerate(_list(raw.get("schedule"), "schedule")))
     standings = {
-        "scoring_type": _enum(scoring.get("scoringType"), "scoringType", {"H2H_POINTS"}),
-        "playoff_seeding_rule": _enum(settings.get("playoffSeedingRule"), "playoffSeedingRule", {"TOTAL_POINTS_SCORED"}),
+        "scoring_type_raw": scoring_type,
+        "interpretation_status": "valid_and_understood" if scoring_type == "H2H_POINTS" and seeding_rule in UNDERSTOOD_SEEDING_RULES else "valid_but_unsupported",
+        "playoff_seeding_rule_raw": seeding_rule,
         "matchup_tie_rule_raw": scoring.get("matchupTieRule"),
         "playoff_matchup_tie_rule_raw": scoring.get("playoffMatchupTieRule"),
         "current_seed_permutation_valid": True,
-        "record_rows_with_wins_losses_ties_points_for_against": record_rows,
-        "equal_record_groups": sum(1 for values in tied_record_groups.values() if len(values) > 1),
+        "record_rows_with_wins_losses_ties_points_for_against": team_count,
+        "equal_record_groups": sum(1 for count in tied_records.values() if count > 1),
     }
     championship = {
         "regular_season_end": regular_end,
-        "playoff_start": regular_end + 1,
+        "playoff_start": min(postseason_periods) if postseason_periods else None,
         "qualifier_count": playoff_count,
-        "first_round_byes": 2,
+        "derived_first_round_byes": next_power - playoff_count if playoff_count else 0,
         "reseed": _bool(settings.get("playoffReseed"), "playoffReseed"),
-        "round_lengths": rounds,
-        "matchup_periods": {str(k): v for k, v in matchup_periods.items()},
+        "round_lengths": {str(key): value for key, value in sorted(rounds.items())},
+        "matchup_periods": {str(key): list(value) for key, value in periods.items()},
+        "interpretation_status": "valid_and_understood" if playoff_count == 0 or bool(rounds) else "valid_but_unverified",
     }
     consolation = {
-        "enabled": not _bool(settings.get("consolationLadderDisabled"), "consolationLadderDisabled"),
-        "expected_participant_count": len(teams) - playoff_count,
-        "current_pairings_available": any(
-            _mapping(item, "schedule entry").get("matchupPeriodId", 0) > regular_end
-            for item in _list(raw.get("schedule"), "schedule")
-        ),
+        "enabled": consolation_enabled,
+        "participant_count_if_all_nonqualifiers": team_count - playoff_count,
+        "current_pairings_available": current_pairings,
+        "interpretation_status": "valid_but_unverified" if consolation_enabled is None or consolation_enabled else "valid_and_understood",
     }
     return standings, championship, consolation
 
 
+def _winner(row: Mapping[str, Any], field: str) -> int | None:
+    marker = _text(row.get("winner"), f"{field}.winner")
+    if marker == "UNDECIDED":
+        return None
+    if marker not in {"HOME", "AWAY"}:
+        raise LeagueRulesAuditError(f"{field}.winner has unsupported structural value {marker!r}")
+    return _int(_mapping(row.get(marker.lower()), f"{field}.{marker.lower()}").get("teamId"), f"{field} winner teamId", minimum=1)
+
+
 def summarize_historical_bracket(raw: Mapping[str, Any], season: int) -> dict[str, object]:
-    settings = _mapping(_mapping(raw.get("settings"), "settings").get("scheduleSettings"), "scheduleSettings")
+    settings = _raw_settings(raw, "scheduleSettings")
     regular_end = _int(settings.get("matchupPeriodCount"), "historical matchupPeriodCount", minimum=1)
-    rows: list[Mapping[str, Any]] = []
-    for index, item in enumerate(_list(raw.get("schedule"), "historical schedule")):
-        row = _mapping(item, f"historical schedule entry {index}")
-        period = _int(row.get("matchupPeriodId"), "historical matchupPeriodId", minimum=1)
-        if period > regular_end:
-            rows.append(row)
-    periods = sorted({_int(item.get("matchupPeriodId"), "historical matchupPeriodId", minimum=1) for item in rows})
-    if not rows or not periods:
+    playoff_count = _int(settings.get("playoffTeamCount"), "historical playoffTeamCount", minimum=0)
+    periods = _matchup_periods(settings)
+    teams, team_ids = _teams(raw)
+    seed_by_team = {team["id"]: _int(team.get("playoffSeed"), "historical playoffSeed", minimum=1) for team in teams}
+    if sorted(seed_by_team.values()) != list(range(1, len(teams) + 1)):
+        raise LeagueRulesAuditError("historical playoff seeds are not a complete permutation")
+    final_rank_by_team = {team["id"]: _int(team.get("rankCalculatedFinal"), "historical rankCalculatedFinal", minimum=1) for team in teams}
+    if sorted(final_rank_by_team.values()) != list(range(1, len(teams) + 1)):
+        raise LeagueRulesAuditError("historical final ranks are not a complete permutation")
+    rows_by_period: dict[int, list[dict[str, object]]] = {}
+    seen_row_ids: set[int] = set()
+    aggregate_checks = 0
+    for index, value in enumerate(_list(raw.get("schedule"), "historical schedule")):
+        row = _mapping(value, f"historical schedule[{index}]")
+        period = _int(row.get("matchupPeriodId"), f"historical schedule[{index}].matchupPeriodId", minimum=1)
+        if period <= regular_end:
+            continue
+        row_id = _int(row.get("id"), f"historical schedule[{index}].id", minimum=1)
+        if row_id in seen_row_ids:
+            raise LeagueRulesAuditError(f"historical schedule duplicates row ID {row_id}")
+        seen_row_ids.add(row_id)
+        side_ids: list[int] = []
+        totals_by_team: dict[int, float] = {}
+        for side_name in ("home", "away"):
+            if side_name not in row:
+                continue
+            side = _mapping(row[side_name], f"historical row {row_id}.{side_name}")
+            team_id = _int(side.get("teamId"), f"historical row {row_id}.{side_name}.teamId", minimum=1)
+            if team_id not in team_ids or team_id in side_ids:
+                raise LeagueRulesAuditError(f"historical row {row_id} has invalid team reference {team_id}")
+            side_ids.append(team_id)
+            if "totalPoints" in side:
+                totals_by_team[team_id] = _number(side.get("totalPoints"), f"historical row {row_id}.{side_name}.totalPoints")
+            scoring_weeks = periods.get(period)
+            if scoring_weeks and len(scoring_weeks) > 1:
+                points = _mapping(side.get("pointsByScoringPeriod"), f"historical row {row_id}.{side_name}.pointsByScoringPeriod")
+                values = [_number(points.get(str(week)), f"historical row {row_id}.{side_name}.week {week}") for week in scoring_weeks]
+                total = _number(side.get("totalPoints"), f"historical row {row_id}.{side_name}.totalPoints")
+                if not math.isclose(sum(values), total, abs_tol=1e-6):
+                    raise LeagueRulesAuditError(f"historical row {row_id}.{side_name} totalPoints does not equal scoring-period sum")
+                aggregate_checks += 1
+        if not side_ids:
+            raise LeagueRulesAuditError(f"historical row {row_id} has no participants")
+        winner = _winner(row, f"historical row {row_id}")
+        if winner is not None and winner not in side_ids:
+            raise LeagueRulesAuditError(f"historical row {row_id} winner is not a participant")
+        if winner is not None and len(totals_by_team) == 2 and totals_by_team[winner] < max(totals_by_team.values()):
+            raise LeagueRulesAuditError(f"historical row {row_id} winner conflicts with aggregate points")
+        rows_by_period.setdefault(period, []).append({"row_id": row_id, "team_ids": tuple(side_ids), "seed_pair": tuple(seed_by_team[team_id] for team_id in side_ids), "winner_team_id": winner})
+    if not rows_by_period:
         raise LeagueRulesAuditError(f"season {season} has no historical postseason schedule evidence")
-    team_ids = {_int(_mapping(team, "historical team").get("id"), "historical team ID", minimum=1) for team in _list(raw.get("teams"), "historical teams")}
-    for row in rows:
-        sides = []
-        for side in ("home", "away"):
-            if side in row:
-                team_id = _int(_mapping(row[side], f"historical {side}").get("teamId"), f"historical {side}.teamId", minimum=1)
-                if team_id not in team_ids:
-                    raise LeagueRulesAuditError(f"historical bracket references unknown team ID {team_id}")
-                sides.append(team_id)
-        if not sides or len(sides) == 2 and sides[0] == sides[1]:
-            raise LeagueRulesAuditError("historical bracket has missing or contradictory pairing")
-    home_only = sum(1 for item in rows if "home" in item and "away" not in item)
-    final_period = max(periods)
-    two_week_rows = sum(1 for item in rows if item.get("matchupPeriodId") == final_period)
+    for period, rows in rows_by_period.items():
+        appearances = [team_id for row in rows for team_id in row["team_ids"]]
+        if len(appearances) != len(set(appearances)):
+            raise LeagueRulesAuditError(f"historical period {period} places a team in multiple matchups")
+    championship_ids = {team_id for team_id, seed in seed_by_team.items() if seed <= playoff_count}
+    consolation_ids = team_ids - championship_ids
+    championship_pairings: dict[str, list[list[int]]] = {}
+    consolation_pairings: dict[str, list[list[int]]] = {}
+    bye_seeds: list[int] = []
+    for period, rows in sorted(rows_by_period.items()):
+        champ: list[list[int]] = []
+        cons: list[list[int]] = []
+        for row in rows:
+            ids = set(row["team_ids"])
+            pair = list(row["seed_pair"])
+            if ids <= championship_ids:
+                champ.append(pair)
+                if period == min(rows_by_period) and len(pair) == 1:
+                    bye_seeds.append(pair[0])
+            elif ids <= consolation_ids:
+                cons.append(pair)
+            else:
+                raise LeagueRulesAuditError(f"historical period {period} mixes championship and consolation teams")
+        championship_pairings[str(period)] = sorted(champ)
+        consolation_pairings[str(period)] = sorted(cons)
+    first_period = min(rows_by_period)
+    first_championship = [row for row in rows_by_period[first_period] if set(row["team_ids"]) <= championship_ids]
+    first_winner_seeds = sorted(seed_by_team[row["winner_team_id"]] for row in first_championship if row["winner_team_id"] is not None and len(row["team_ids"]) == 2)
+    next_period = sorted(rows_by_period)[1] if len(rows_by_period) > 1 else None
+    bye_winner_pairings: list[list[int]] = []
+    if next_period is not None and bye_seeds:
+        for row in rows_by_period[next_period]:
+            pair = set(row["seed_pair"])
+            if pair.intersection(bye_seeds) and pair.intersection(first_winner_seeds):
+                bye_winner_pairings.append(sorted(pair))
+        if set(seed for pair in bye_winner_pairings for seed in pair).intersection(first_winner_seeds) != set(first_winner_seeds):
+            raise LeagueRulesAuditError("historical first-round winner does not advance to a bye recipient")
+    final_period = max(rows_by_period)
+    placement_pairs: list[list[int]] = []
+    for row in rows_by_period[final_period]:
+        if set(row["team_ids"]) <= championship_ids:
+            placement_pairs.append(sorted(final_rank_by_team[team_id] for team_id in row["team_ids"]))
+    transition_evidence: dict[str, list[dict[str, object]]] = {}
+    ordered_periods = sorted(rows_by_period)
+    for period, following in zip(ordered_periods, ordered_periods[1:]):
+        next_pairs = [list(row["seed_pair"]) for row in rows_by_period[following]]
+        transitions: list[dict[str, object]] = []
+        for row in rows_by_period[period]:
+            if len(row["team_ids"]) != 2 or row["winner_team_id"] is None:
+                continue
+            winner_seed = seed_by_team[row["winner_team_id"]]
+            loser_seed = next(seed_by_team[team_id] for team_id in row["team_ids"] if team_id != row["winner_team_id"])
+            winner_next = [pair for pair in next_pairs if winner_seed in pair]
+            loser_next = [pair for pair in next_pairs if loser_seed in pair]
+            if len(winner_next) != 1 or len(loser_next) != 1:
+                raise LeagueRulesAuditError(f"historical period {period} has incoherent advancement relationships")
+            transitions.append({
+                "source_seed_pair": list(row["seed_pair"]),
+                "winner_seed": winner_seed,
+                "winner_next_pair": winner_next[0],
+                "loser_seed": loser_seed,
+                "loser_next_pair": loser_next[0],
+            })
+        transition_evidence[str(period)] = transitions
     return {
         "season": season,
-        "team_count": len(_list(raw.get("teams"), "historical teams")),
-        "postseason_periods": periods,
-        "postseason_schedule_rows": len(rows),
-        "home_only_bye_rows": home_only,
-        "two_week_rows": two_week_rows,
-        "classification": "Verified live (historical league response)",
+        "team_count": len(teams),
+        "playoff_qualifier_count": playoff_count,
+        "playoff_entrant_seeds": sorted(seed_by_team[team_id] for team_id in championship_ids),
+        "first_postseason_period_bye_seeds": sorted(bye_seeds),
+        "first_round_winner_seeds": first_winner_seeds,
+        "bye_winner_pairings_next_period": sorted(bye_winner_pairings),
+        "championship_pairings_by_period": championship_pairings,
+        "consolation_pairings_by_period": consolation_pairings,
+        "final_rank_by_seed": {str(seed_by_team[team_id]): final_rank_by_team[team_id] for team_id in sorted(team_ids, key=seed_by_team.get)},
+        "championship_placement_pairings_by_final_rank": sorted(placement_pairs),
+        "winner_loser_transitions_by_period": transition_evidence,
+        "decided_winner_count": len({row["winner_team_id"] for rows in rows_by_period.values() for row in rows if row["winner_team_id"] is not None}),
+        "multiweek_aggregate_side_checks": aggregate_checks,
+        "reseed_setting": _bool(settings.get("playoffReseed"), "historical playoffReseed"),
+        "classification": "Verified live (historical league response; relationships reconstructed by repository code)",
     }
 
 
-def build_report(raw: Mapping[str, Any], historical: Sequence[tuple[int, Mapping[str, Any]]], *, league_id: int, season: int, endpoint: str, expected_team_count: int, expected_playoff_teams: int) -> RulesAuditReport:
+def _capabilities(roster: Mapping[str, object], waivers: Mapping[str, object], standings: Mapping[str, object], championship: Mapping[str, object], consolation: Mapping[str, object]) -> tuple[dict[str, str], ...]:
+    return (
+        {"area": "roster_capacity", "status": "valid_but_unverified" if roster["unknown_slot_ids"] else "valid_and_understood", "reason": "Unknown positive slot IDs require semantic mapping." if roster["unknown_slot_ids"] else "All positive raw slot IDs have known labels."},
+        {"area": "waiver_system", "status": str(waivers["interpretation_status"]), "reason": "Raw acquisition type is preserved; only established enums are interpreted."},
+        {"area": "standings", "status": str(standings["interpretation_status"]), "reason": "Raw scoring and tiebreak enums are preserved without substitution."},
+        {"area": "championship", "status": str(championship["interpretation_status"]), "reason": "Counts, byes, periods, and durations are derived from ESPN settings."},
+        {"area": "consolation", "status": str(consolation["interpretation_status"]), "reason": "Enablement can be recorded even when advancement semantics are unavailable."},
+    )
+
+
+def build_report(raw: Mapping[str, Any], historical: Sequence[tuple[int, Mapping[str, Any]]], *, league_id: int, season: int, endpoint: str, expected_team_count: int | None = None) -> RulesAuditReport:
+    teams, _ = _teams(raw, expected_team_count)
     roster = audit_roster(raw, expected_team_count=expected_team_count)
     waivers = audit_waivers(raw, expected_team_count=expected_team_count)
     trades = audit_trades(raw)
-    standings, championship, consolation = audit_schedule(raw, expected_playoff_teams=expected_playoff_teams)
+    standings, championship, consolation = audit_schedule(raw)
     history = tuple(summarize_historical_bracket(item, year) for year, item in historical)
     return RulesAuditReport(
         league_id=league_id, season=season, retrieved_at_utc=datetime.now(timezone.utc).isoformat(), endpoint=endpoint, views=VIEWS,
-        team_count=expected_team_count, roster=roster, waivers=waivers, trades=trades, standings=standings,
-        championship=championship, consolation=consolation, historical_evidence=history,
+        team_count=len(teams), roster=roster, waivers=waivers, trades=trades, standings=standings, championship=championship, consolation=consolation,
+        capabilities=_capabilities(roster, waivers, standings, championship, consolation), historical_evidence=history,
         verified_live=(
-            "Raw roster slots configure nine starters, seven bench slots, and one distinct IR slot; current 16/17-player rosters reconcile to IR occupancy plus one ordinary vacancy.",
-            "Traditional non-FAAB waivers, a complete current 1..14 priority order, 24-hour waiver delay, configured processing days/hour, and unlimited acquisition codes were observed.",
-            "The current league configures H2H points, six playoff qualifiers, two first-round byes, no reseeding, one-week first two rounds, and a two-week final.",
-            "Completed historical seasons expose bye rows, fixed championship bracket progression, placement games, and two-week final rows.",
+            "Current raw roster, waiver, trade, standings, schedule, playoff, and consolation settings were structurally validated and recorded without a league template.",
+            "Current-league quantities are derived from retrieved settings; optional expected team count is an identity check only.",
+            "Completed historical responses expose entrants, seed pairings, byes, winners, final ranks, and multiweek score components for independent reconstruction.",
         ),
         verified_by_tests=(
-            "Malformed or contradictory slot counts, waiver enums/ranks, playoff counts, round lengths, seeds, and absent historical brackets fail explicitly.",
+            "Multiple valid league sizes, slot structures, flex counts, IR choices, playoff counts, round durations, and consolation choices are accepted.",
+            "Malformed capacities, identifiers, references, ranks, periods, pairings, and aggregates fail explicitly.",
+            "Unknown but structurally valid enums and slots remain recorded as unsupported or unverified instead of being replaced.",
         ),
         unverified=(
             "The exact operational meaning and timezone of waiverProcessHour is not established by the raw field alone.",
             "The ordering of multiple contingent claims from one manager requires direct UI or observed behavioral evidence.",
             "Trade review type, veto workflow, dropped-player reentry timing, postseason transaction restrictions, and tie resolution are not fully encoded by verified fields.",
-            "Current 14-team championship pairings have not materialized; historical fixed-bracket evidence comes from 12-team seasons with the same six-team playoff settings.",
-            "The exact eight-team consolation ladder pairings and finishing-position mapping cannot be inferred safely from completed six-team historical ladders.",
+            "The current eight-team consolation ladder cannot be inferred from completed historical six-team ladders.",
         ),
-        unsupported=(
-            "The investigated current schedule contains no future postseason pairings before qualification is resolved.",
-            "No verified field fully defines consolation ladder advancement or matchup-tie behavior.",
-        ),
+        unsupported=("The current schedule contains no future postseason pairings before qualification is resolved.", "No verified current field fully defines consolation advancement or raw NONE matchup-tie behavior."),
         manual_configuration=(
             {"key": "waivers.claim_processing_order", "allowed": "ordered verified procedure", "blocks_simulation": True, "reason": "Multiple-claim behavior is not fully exposed."},
             {"key": "waivers.process_timezone", "allowed": "verified IANA timezone", "blocks_simulation": False, "reason": "The raw processing hour does not identify its timezone."},
             {"key": "transactions.trade_review_type", "allowed": ["league_vote", "commissioner", "none"], "blocks_simulation": False, "reason": "Votes and delay do not prove workflow."},
             {"key": "standings.matchup_tie_rule", "allowed": "verified ESPN rule", "blocks_simulation": True, "reason": "Raw NONE enum is semantically unresolved."},
             {"key": "postseason.playoff_matchup_tie_rule", "allowed": "verified ESPN rule", "blocks_simulation": True, "reason": "Raw NONE enum is semantically unresolved."},
-            {"key": "postseason.consolation_ladder", "allowed": "explicit participants, pairings, advancement, durations, placement mapping", "blocks_simulation": True, "reason": "Eight-team structure is not exposed before postseason and lacks matching historical evidence."},
+            {"key": "postseason.consolation_ladder", "allowed": "explicit participants, pairings, advancement, durations, placement mapping", "blocks_simulation": True, "reason": "The current eight-team structure is not yet exposed."},
         ),
     )
 
 
-def audit_live(config: Settings, *, expected_team_count: int, expected_playoff_teams: int, historical_seasons: Sequence[int]) -> RulesAuditReport:
+def audit_live(config: Settings, *, historical_seasons: Sequence[int], expected_team_count: int | None = None) -> RulesAuditReport:
     credentials = config.credentials
     league = League(league_id=config.league_id, year=config.season, espn_s2=credentials.espn_s2 if credentials else None, swid=credentials.swid if credentials else None)
     raw = league.espn_request.get_league()
@@ -352,33 +545,33 @@ def audit_live(config: Settings, *, expected_team_count: int, expected_playoff_t
     for year in historical_seasons:
         old = League(league_id=config.league_id, year=year, espn_s2=credentials.espn_s2 if credentials else None, swid=credentials.swid if credentials else None)
         historical.append((year, old.espn_request.get_league()))
-    return build_report(raw, historical, league_id=config.league_id, season=config.season, endpoint=league.espn_request.LEAGUE_ENDPOINT, expected_team_count=expected_team_count, expected_playoff_teams=expected_playoff_teams)
+    return build_report(raw, historical, league_id=config.league_id, season=config.season, endpoint=league.espn_request.LEAGUE_ENDPOINT, expected_team_count=expected_team_count)
 
 
 def render_summary(report: RulesAuditReport) -> str:
     return "\n".join((
-        "M0.4 ESPN league-rules audit", f"League {report.league_id}; season {report.season}; retrieved {report.retrieved_at_utc}",
-        f"Roster capacity: {report.roster['ordinary_capacity']} ordinary + {report.roster['ir_capacity']} IR; observed {report.roster['observed_roster_size_range']}",
-        f"Waivers: {report.waivers['acquisition_type']}; current priority permutation valid={report.waivers['current_priority_is_complete_permutation']}",
-        f"Championship: {report.championship['qualifier_count']} teams; rounds {report.championship['round_lengths']}; reseed={report.championship['reseed']}",
-        f"Consolation: expected participants={report.consolation['expected_participant_count']}; current pairings available={report.consolation['current_pairings_available']}",
+        "M0.4 ESPN league-rules discovery", f"League {report.league_id}; season {report.season}; teams discovered={report.team_count}",
+        f"Roster capacity: starters={report.roster['starter_capacity']}, bench={report.roster['bench_capacity']}, IR={report.roster['ir_capacity']}",
+        f"Waivers: {report.waivers['acquisition_type_raw']} ({report.waivers['interpretation_status']})",
+        f"Playoffs: qualifiers={report.championship['qualifier_count']}, derived byes={report.championship['derived_first_round_byes']}, rounds={report.championship['round_lengths']}",
+        f"Consolation: enabled={report.consolation['enabled']} ({report.consolation['interpretation_status']})",
+        "", "Capability assessment:", *(f"- {item['area']}: {item['status']} - {item['reason']}" for item in report.capabilities),
         "", "Unresolved:", *(f"- {item}" for item in report.unverified),
     ))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the read-only M0.4 ESPN league-rules audit.")
-    parser.add_argument("--expected-team-count", type=int, required=True)
-    parser.add_argument("--expected-playoff-team-count", type=int, required=True)
+    parser = argparse.ArgumentParser(description="Run the read-only M0.4 ESPN league-rules discovery.")
+    parser.add_argument("--expected-team-count", type=int, help="Optional identity check; not a supported-structure restriction.")
     parser.add_argument("--historical-season", type=int, action="append", default=[])
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
         settings = load_settings()
         configure_logging(settings.log_level)
-        report = audit_live(settings, expected_team_count=args.expected_team_count, expected_playoff_teams=args.expected_playoff_team_count, historical_seasons=args.historical_season)
+        report = audit_live(settings, historical_seasons=args.historical_season, expected_team_count=args.expected_team_count)
     except (SettingsError, LeagueRulesAuditError, ESPNAccessDenied, ESPNInvalidLeague, ESPNUnknownError, RequestException) as exc:
-        LOGGER.error("M0.4 league-rules audit failed: %s", exc)
+        LOGGER.error("M0.4 league-rules discovery failed: %s", exc)
         return 2
     print(json.dumps(report.to_dict(), indent=2, sort_keys=True) if args.json else render_summary(report))
     return 0

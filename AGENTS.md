@@ -40,6 +40,7 @@ These rules apply to all future work in this repository. The approved requiremen
 5. Record library defects and unsupported assumptions explicitly. Do not quietly compensate with new modeling rules.
 6. Each ESPN discovery task must report implementation, live evidence, test-only evidence, library/API limitations, uncertainties, tests and results, and any recommended architecture change.
 7. Do not introduce or implement a new modeling assumption without explicit approval.
+8. Discover league settings dynamically and derive supported behavior from the retrieved configuration. Never use this league's team count, roster slots, playoff field, byes, round lengths, divisions, IR/flex presence, or consolation format as a universal validation template. Separate structurally invalid data from valid-but-unsupported semantics.
 
 ## Change discipline
 
