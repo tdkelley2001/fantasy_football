@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, is_dataclass
+from dataclasses import fields, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import json
@@ -15,9 +15,12 @@ from fantasy_football.canonical.model import (
     FantasyMatchup,
     FantasyTeam,
     InterpretationStatus,
+    JsonArray,
+    JsonObject,
     LeagueRules,
     LeagueSnapshot,
     LineupSlotRule,
+    MatchupEntryStatus,
     MatchupPeriod,
     MatchupPhase,
     NFLGame,
@@ -51,8 +54,12 @@ def _encode(value: Any) -> Any:
         return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, JsonArray):
+        return [_encode(item) for item in value.values]
+    if isinstance(value, JsonObject):
+        return {key: _encode(item) for key, item in value.items}
     if is_dataclass(value):
-        return {key: _encode(item) for key, item in asdict(value).items()}
+        return {field.name: _encode(getattr(value, field.name)) for field in fields(value)}
     if isinstance(value, tuple):
         return [_encode(item) for item in value]
     if isinstance(value, dict):
@@ -143,11 +150,19 @@ def _source(data: Mapping[str, Any]) -> SourceReference:
 
 def _interpretation(data: Mapping[str, Any]) -> RuleInterpretation:
     return RuleInterpretation(
-        rule_id=data["rule_id"], raw_field=data["raw_field"], raw_value=data.get("raw_value"),
-        normalized_value=data.get("normalized_value"), status=InterpretationStatus(data["status"]), source_id=data["source_id"],
+        rule_id=data["rule_id"], raw_field=data["raw_field"], raw_value=_json_value(data.get("raw_value")),
+        normalized_value=_json_value(data.get("normalized_value")), status=InterpretationStatus(data["status"]), source_id=data["source_id"],
         manual_config_key=data.get("manual_config_key"), manual_config_approval=data.get("manual_config_approval"),
         audited_gap_id=data.get("audited_gap_id"),
     )
+
+
+def _json_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return JsonObject(tuple((key, _json_value(item)) for key, item in sorted(value.items())))
+    if isinstance(value, list):
+        return JsonArray(tuple(_json_value(item) for item in value))
+    return value
 
 
 def _round(data: Mapping[str, Any]) -> PostseasonRound:
@@ -206,8 +221,11 @@ def _decode(data: Mapping[str, Any]) -> LeagueSnapshot:
             projection_class=ProjectionClass(item["projection_class"]), effective_projection=item["effective_projection"],
             effective_source=ProjectionSource(item["effective_source"]), source_id=item["source_id"])),
         matchup_periods=_records(data["matchup_periods"], "matchup_periods", lambda item: MatchupPeriod(
-            matchup_period_id=item["matchup_period_id"], scoring_weeks=tuple(item["scoring_weeks"]), phase=MatchupPhase(item["phase"]), round_number=item.get("round_number"))),
-        fantasy_matchups=_records(data["fantasy_matchups"], "fantasy_matchups", lambda item: FantasyMatchup(**item)),
+            matchup_period_id=item["matchup_period_id"], scoring_weeks=tuple(item["scoring_weeks"]), phase=MatchupPhase(item["phase"]))),
+        fantasy_matchups=_records(data["fantasy_matchups"], "fantasy_matchups", lambda item: FantasyMatchup(
+            matchup_id=item["matchup_id"], matchup_period_id=item["matchup_period_id"],
+            home_team_id=item.get("home_team_id"), away_team_id=item.get("away_team_id"),
+            bracket_type=item.get("bracket_type"), entry_status=MatchupEntryStatus(item["entry_status"]))),
         nfl_teams=_records(data["nfl_teams"], "nfl_teams", lambda item: NFLTeam(**item)),
         nfl_games=_records(data["nfl_games"], "nfl_games", lambda item: NFLGame(
             game_id=item["game_id"], scoring_week=item["scoring_week"], home_nfl_team_id=item["home_nfl_team_id"],

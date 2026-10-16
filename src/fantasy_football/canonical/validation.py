@@ -9,7 +9,10 @@ from typing import Hashable, Iterable, Mapping, TypeVar
 
 from fantasy_football.canonical.model import (
     InterpretationStatus,
+    JsonArray,
+    JsonObject,
     LeagueSnapshot,
+    MatchupEntryStatus,
     MatchupPhase,
     ProjectionClass,
     ProjectionSource,
@@ -80,6 +83,30 @@ def _json_scalar(value: object, *, entity: str, identifier: object, field: str) 
         _fail(entity, identifier, field, "must be a JSON scalar or null")
     if isinstance(value, float) and not math.isfinite(value):
         _fail(entity, identifier, field, "must be finite when numeric")
+
+
+def _json_value(value: object, *, entity: str, identifier: object, field: str) -> None:
+    if isinstance(value, JsonArray):
+        _tuple(value.values, entity=entity, identifier=identifier, field=field)
+        for index, child in enumerate(value.values):
+            _json_value(child, entity=entity, identifier=identifier, field=f"{field}[{index}]")
+        return
+    if isinstance(value, JsonObject):
+        _tuple(value.items, entity=entity, identifier=identifier, field=field)
+        keys = []
+        for index, item in enumerate(value.items):
+            if not isinstance(item, tuple) or len(item) != 2:
+                _fail(entity, identifier, field, f"object item {index} must be an immutable key/value pair")
+            key, child = item
+            _nonempty(key, entity=entity, identifier=identifier, field=f"{field}.key")
+            keys.append(key)
+            _json_value(child, entity=entity, identifier=identifier, field=f"{field}.{key}")
+        if len(keys) != len(set(keys)):
+            _fail(entity, identifier, field, "object keys must be unique")
+        if keys != sorted(keys):
+            _fail(entity, identifier, field, "object keys must use canonical increasing order")
+        return
+    _json_scalar(value, entity=entity, identifier=identifier, field=field)
 
 
 def validate_snapshot(snapshot: LeagueSnapshot) -> None:
@@ -198,8 +225,8 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             _fail("RuleInterpretation", item.rule_id, "source_id", f"unknown source {item.source_id!r}")
         if not isinstance(item.status, InterpretationStatus):
             _fail("RuleInterpretation", item.rule_id, "status", "invalid interpretation status")
-        _json_scalar(item.raw_value, entity="RuleInterpretation", identifier=item.rule_id, field="raw_value")
-        _json_scalar(item.normalized_value, entity="RuleInterpretation", identifier=item.rule_id, field="normalized_value")
+        _json_value(item.raw_value, entity="RuleInterpretation", identifier=item.rule_id, field="raw_value")
+        _json_value(item.normalized_value, entity="RuleInterpretation", identifier=item.rule_id, field="normalized_value")
         if item.status is InterpretationStatus.UNDERSTOOD and item.normalized_value is None:
             _fail("RuleInterpretation", item.rule_id, "normalized_value", "understood rule requires an interpretation")
         if item.status is InterpretationStatus.MISSING and (item.raw_value is not None or item.normalized_value is not None):
@@ -279,6 +306,12 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             _fail("RosterEntry", entry.player_id, "raw_owner_team_id", "contradicts authoritative team_id")
         occupancy[(entry.team_id, entry.lineup_slot_id)] += 1
         position_counts[(entry.team_id, player_by_id[entry.player_id].default_position_id)] += 1
+    for player in snapshot.players:
+        is_owned = player.player_id in owners
+        if player.acquisition_status == "ONTEAM" and not is_owned:
+            _fail("Player", player.player_id, "acquisition_status", "ONTEAM requires an authoritative RosterEntry")
+        if player.acquisition_status in {"FREEAGENT", "WAIVERS"} and is_owned:
+            _fail("Player", player.player_id, "acquisition_status", f"{player.acquisition_status} contradicts authoritative ownership")
     for (team_id, slot_id), count in occupancy.items():
         if count > slot_by_id[slot_id].capacity:
             _fail("FantasyTeam", team_id, "roster capacity", f"slot {slot_id} occupancy {count} exceeds capacity {slot_by_id[slot_id].capacity}")
@@ -344,6 +377,7 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
     if set(week_to_period) != required_weeks:
         _fail("LeagueSnapshot", snapshot.snapshot_id, "matchup periods", f"weeks covered {sorted(week_to_period)}, expected {sorted(required_weeks)}")
 
+    period_by_id = {period.matchup_period_id: period for period in snapshot.matchup_periods}
     for group, rounds in (("championship", rules.championship.rounds), ("consolation", rules.consolation.rounds)):
         round_numbers = _unique((item.round_number for item in rounds), entity=f"{group} round", field="round_number")
         for item in rounds:
@@ -351,26 +385,37 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             _integer(item.matchup_period_id, entity="LeagueRules", identifier=group, field="matchup_period_id", minimum=1)
             if item.matchup_period_id not in period_ids:
                 _fail("LeagueRules", group, "rounds", f"invalid round {item.round_number} or matchup period {item.matchup_period_id}")
+            if period_by_id[item.matchup_period_id].phase is not MatchupPhase.POSTSEASON:
+                _fail("LeagueRules", group, "rounds", f"round {item.round_number} references non-postseason period {item.matchup_period_id}")
 
     matchup_ids = _unique((matchup.matchup_id for matchup in snapshot.fantasy_matchups), entity="FantasyMatchup", field="matchup_id")
     appearances: Counter[tuple[int, int]] = Counter()
-    period_by_id = {period.matchup_period_id: period for period in snapshot.matchup_periods}
     for matchup in snapshot.fantasy_matchups:
         _integer(matchup.matchup_id, entity="FantasyMatchup", identifier=matchup.matchup_id, field="matchup_id", minimum=1)
         _integer(matchup.matchup_period_id, entity="FantasyMatchup", identifier=matchup.matchup_id, field="matchup_period_id", minimum=1)
         if matchup.matchup_period_id not in period_ids:
             _fail("FantasyMatchup", matchup.matchup_id, "matchup_period_id", "invalid matchup or period ID")
-        _boolean(matchup.is_bye, entity="FantasyMatchup", identifier=matchup.matchup_id, field="is_bye")
+        if not isinstance(matchup.entry_status, MatchupEntryStatus):
+            _fail("FantasyMatchup", matchup.matchup_id, "entry_status", "must use a supported MatchupEntryStatus")
         participants = [team_id for team_id in (matchup.home_team_id, matchup.away_team_id) if team_id is not None]
-        if not participants:
-            _fail("FantasyMatchup", matchup.matchup_id, "participants", "at least one known team is required")
         if len(participants) != len(set(participants)) or any(team_id not in team_ids for team_id in participants):
             _fail("FantasyMatchup", matchup.matchup_id, "participants", "contains duplicate or unknown team reference")
         period = period_by_id[matchup.matchup_period_id]
-        if period.phase is MatchupPhase.REGULAR and (len(participants) != 2 or matchup.is_bye):
-            _fail("FantasyMatchup", matchup.matchup_id, "participants", "regular-season matchup requires two teams and cannot be a bye")
-        if matchup.is_bye and len(participants) != 1:
-            _fail("FantasyMatchup", matchup.matchup_id, "is_bye", "bye entry must have exactly one known team")
+        if period.phase is MatchupPhase.REGULAR:
+            if matchup.entry_status is not MatchupEntryStatus.SCHEDULED or len(participants) != 2:
+                _fail("FantasyMatchup", matchup.matchup_id, "participants", "regular-season matchup requires a scheduled two-team pairing")
+            if matchup.bracket_type is not None:
+                _fail("FantasyMatchup", matchup.matchup_id, "bracket_type", "regular-season matchup cannot carry bracket classification")
+        expected_participants = {
+            MatchupEntryStatus.SCHEDULED: 2,
+            MatchupEntryStatus.BYE: 1,
+            MatchupEntryStatus.PARTIAL: 1,
+            MatchupEntryStatus.PLACEHOLDER: 0,
+        }[matchup.entry_status]
+        if len(participants) != expected_participants:
+            _fail("FantasyMatchup", matchup.matchup_id, "entry_status", f"{matchup.entry_status.value} requires {expected_participants} known participant(s); observed {len(participants)}")
+        if period.phase is MatchupPhase.POSTSEASON and not matchup.bracket_type:
+            _fail("FantasyMatchup", matchup.matchup_id, "bracket_type", "postseason entry requires a bracket classification")
         for team_id in participants:
             appearances[(matchup.matchup_period_id, team_id)] += 1
             if appearances[(matchup.matchup_period_id, team_id)] > 1:

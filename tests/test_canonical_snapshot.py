@@ -7,8 +7,13 @@ import math
 import pytest
 
 from fantasy_football.canonical.model import (
+    FantasyMatchup,
     InterpretationStatus,
+    JsonArray,
+    JsonObject,
     LineupSlotRule,
+    MatchupEntryStatus,
+    MatchupPhase,
     PlayerWeek,
     ProjectionClass,
     ProjectionSource,
@@ -61,6 +66,9 @@ def test_deterministic_round_trip_preserves_null_zero_negative_and_unresolved_ru
     assert '"raw_projection": -1.0' in payload
     assert restored.rules.consolation.structure_rule_id == "consolation_structure"
     assert next(item for item in restored.rules.interpretations if item.rule_id == "consolation_structure").status is InterpretationStatus.UNSUPPORTED
+    tiebreak = next(item for item in restored.rules.interpretations if item.rule_id == "standings_tiebreak_order")
+    assert tiebreak.raw_value == JsonArray(("TOTAL_POINTS_SCORED", "HEAD_TO_HEAD", "RANDOM"))
+    assert isinstance(next(item for item in restored.rules.interpretations if item.rule_id == "consolation_structure").raw_value, JsonObject)
 
 
 def test_serialization_order_is_independent_of_input_record_order() -> None:
@@ -146,7 +154,7 @@ def test_duplicate_player_record_is_rejected() -> None:
 def test_wrong_identifier_type_fails_with_entity_and_field() -> None:
     snapshot = canonical_snapshot()
     bad_team = replace(snapshot.teams[0], team_id="1")  # type: ignore[arg-type]
-    invalid = replace(snapshot, teams=(bad_team, snapshot.teams[1]))
+    invalid = replace(snapshot, teams=(bad_team,) + snapshot.teams[1:])
     with pytest.raises(CanonicalValidationError, match="FantasyTeam '1'.*team_id.*must be an integer"):
         validate_snapshot(invalid)
 
@@ -177,7 +185,8 @@ def test_invalid_roster_references_are_rejected(field: str, value: int, message:
 def test_roster_capacity_overflow_is_rejected() -> None:
     snapshot = canonical_snapshot()
     extras = (RosterEntry(3, 1, 20, 1), RosterEntry(4, 1, 20, 1), RosterEntry(2, 1, 20, 1))
-    invalid = replace(snapshot, roster_entries=(snapshot.roster_entries[0], snapshot.roster_entries[1]) + extras)
+    players = tuple(replace(player, acquisition_status="ONTEAM") if player.player_id in {2, 3, 4} else player for player in snapshot.players)
+    invalid = replace(snapshot, players=players, roster_entries=(snapshot.roster_entries[0], snapshot.roster_entries[1]) + extras)
     with pytest.raises(CanonicalValidationError, match="roster capacity.*exceeds"):
         validate_snapshot(invalid)
 
@@ -202,6 +211,102 @@ def test_incomplete_regular_schedule_is_rejected_without_inventing_pairing() -> 
     invalid = replace(snapshot, fantasy_matchups=tuple(item for item in snapshot.fantasy_matchups if item.matchup_period_id != 1))
     with pytest.raises(CanonicalValidationError, match="regular schedule coverage"):
         validate_snapshot(invalid)
+
+
+def test_postseason_period_supports_concurrent_brackets_and_placement_placeholder() -> None:
+    snapshot = canonical_snapshot()
+    period = next(item for item in snapshot.matchup_periods if item.matchup_period_id == 2)
+    entries = [item for item in snapshot.fantasy_matchups if item.matchup_period_id == 2]
+
+    assert period.phase is MatchupPhase.POSTSEASON
+    assert {item.bracket_type for item in entries} == {"championship", "consolation", "placement"}
+    validate_snapshot(snapshot)
+
+
+@pytest.mark.parametrize(
+    ("entry", "valid"),
+    [
+        (FantasyMatchup(10, 2, None, None, "championship", MatchupEntryStatus.PLACEHOLDER), True),
+        (FantasyMatchup(10, 2, 1, None, "championship", MatchupEntryStatus.PARTIAL), True),
+        (FantasyMatchup(10, 2, 1, None, "championship", MatchupEntryStatus.BYE), True),
+        (FantasyMatchup(10, 2, 1, 2, "placement", MatchupEntryStatus.SCHEDULED), True),
+        (FantasyMatchup(10, 2, 1, 999, "championship", MatchupEntryStatus.SCHEDULED), False),
+        (FantasyMatchup(10, 2, 1, 1, "championship", MatchupEntryStatus.SCHEDULED), False),
+        (FantasyMatchup(10, 2, None, None, "championship", MatchupEntryStatus.SCHEDULED), False),
+    ],
+)
+def test_postseason_entry_states(entry: FantasyMatchup, valid: bool) -> None:
+    snapshot = canonical_snapshot()
+    retained = tuple(item for item in snapshot.fantasy_matchups if item.matchup_period_id == 1)
+    candidate = replace(snapshot, fantasy_matchups=retained + (entry,))
+    if valid:
+        validate_snapshot(candidate)
+    else:
+        with pytest.raises(CanonicalValidationError, match="FantasyMatchup 10"):
+            validate_snapshot(candidate)
+
+
+def test_duplicate_postseason_appearance_across_brackets_is_rejected() -> None:
+    snapshot = canonical_snapshot()
+    duplicate = replace(snapshot.fantasy_matchups[-1], home_team_id=1, entry_status=MatchupEntryStatus.PARTIAL)
+    invalid = replace(snapshot, fantasy_matchups=snapshot.fantasy_matchups[:-1] + (duplicate,))
+    with pytest.raises(CanonicalValidationError, match="team 1 appears twice"):
+        validate_snapshot(invalid)
+
+
+def test_structured_rule_values_are_immutable_and_round_trip_deterministically() -> None:
+    snapshot = canonical_snapshot()
+    payload = snapshot_to_json(snapshot)
+    restored = snapshot_from_json(payload)
+    rule = next(item for item in restored.rules.interpretations if item.rule_id == "consolation_structure")
+
+    assert isinstance(rule.raw_value, JsonObject)
+    with pytest.raises(FrozenInstanceError):
+        rule.raw_value.items = ()  # type: ignore[misc,union-attr]
+    assert snapshot_to_json(restored) == payload
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        JsonArray((math.nan,)),
+        JsonObject((("value", math.inf),)),
+        JsonObject((("duplicate", 1), ("duplicate", 2))),
+        JsonObject((("z", 1), ("a", 2))),
+        ["mutable"],
+        {"mutable": True},
+    ],
+)
+def test_malformed_structured_rule_values_are_rejected(value) -> None:
+    snapshot = canonical_snapshot()
+    original = snapshot.rules.interpretations[0]
+    invalid_rule = replace(original, raw_value=value)
+    invalid = replace(snapshot, rules=replace(snapshot.rules, interpretations=(invalid_rule,) + snapshot.rules.interpretations[1:]))
+    with pytest.raises(CanonicalValidationError, match="RuleInterpretation.*raw_value"):
+        validate_snapshot(invalid)
+
+
+@pytest.mark.parametrize(
+    ("player_id", "status", "should_pass"),
+    [
+        (1, "ONTEAM", True),
+        (3, "FREEAGENT", True),
+        (4, "WAIVERS", True),
+        (3, "ONTEAM", False),
+        (1, "FREEAGENT", False),
+        (1, "WAIVERS", False),
+        (3, "NEW_ESPN_STATE", True),
+    ],
+)
+def test_recognized_acquisition_status_reconciles_with_authoritative_ownership(player_id, status, should_pass) -> None:
+    snapshot = canonical_snapshot()
+    players = tuple(replace(player, acquisition_status=status) if player.player_id == player_id else player for player in snapshot.players)
+    candidate = replace(snapshot, players=players)
+    if should_pass:
+        validate_snapshot(candidate)
+    else:
+        with pytest.raises(CanonicalValidationError, match=f"Player {player_id}.*acquisition_status"):
+            validate_snapshot(candidate)
 
 
 def test_unknown_source_reference_is_rejected() -> None:
