@@ -1,8 +1,16 @@
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 outputs/
 venv/
+.venv/
 .dashboard_deps/
 frontend/node_modules/
 frontend/dist/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
