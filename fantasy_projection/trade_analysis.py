@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable
 
-from .config import Config
-from .pipeline import ProjectionResult, project_from_normalized_inputs
+from .season import SeasonModelError, SeasonProjection, project_season
+from .transactions import apply_transaction, trade_transaction
+from .roster_fill import fill_open_roster_slots
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,9 @@ class TradeSpec:
     partner_team_id: int
     give_player_ids: tuple[int, ...]
     receive_player_ids: tuple[int, ...]
+    my_drop_player_ids: tuple[int, ...]
+    partner_drop_player_ids: tuple[int, ...]
+    effective_week: int
 
 
 @dataclass
@@ -23,116 +27,40 @@ class TradeComparison:
     weekly_comparison: list[dict[str, Any]]
     lineup_comparison: list[dict[str, Any]]
     league_comparison: list[dict[str, Any]]
-    before: ProjectionResult
-    after: ProjectionResult
+    before: SeasonProjection
+    after: SeasonProjection
 
 
-def resolve_player_references(
-    rosters: list[dict[str, Any]],
-    references: Iterable[str],
-) -> tuple[int, ...]:
-    """Resolve exact player names or ESPN player IDs on current rosters."""
-    players_by_id = {row["player_id"]: row for row in rosters}
-    players_by_name: dict[str, list[dict[str, Any]]] = {}
-    for row in rosters:
-        name_key = str(row["player_name"]).strip().casefold()
-        players_by_name.setdefault(name_key, []).append(row)
-
-    resolved: list[int] = []
-    for reference in references:
-        value = reference.strip()
-        if not value:
-            continue
-
-        player = None
-        try:
-            player_id = int(value)
-        except ValueError:
-            matches = players_by_name.get(value.casefold(), [])
-            if len(matches) > 1:
-                details = ", ".join(
-                    f'{row["player_name"]} ({row["player_id"]})'
-                    for row in matches
-                )
-                raise RuntimeError(
-                    f'Player name "{value}" is ambiguous: {details}. '
-                    "Use the ESPN player ID instead."
-                )
-            if matches:
-                player = matches[0]
-        else:
-            player = players_by_id.get(player_id)
-
-        if player is None:
-            suggestions = sorted(
-                {
-                    str(row["player_name"])
-                    for row in rosters
-                    if value.casefold()
-                    in str(row["player_name"]).casefold()
-                }
-            )
-            hint = (
-                f" Possible matches: {', '.join(suggestions[:5])}."
-                if suggestions
-                else ""
-            )
-            raise RuntimeError(
-                f'No rostered player matches "{value}".{hint}'
-            )
-
-        resolved.append(int(player["player_id"]))
-
-    if not resolved:
-        raise RuntimeError("At least one player is required on each side.")
-    if len(resolved) != len(set(resolved)):
-        raise RuntimeError("The same player was entered more than once.")
-    return tuple(resolved)
 
 
 def _validate_trade(
-    baseline: ProjectionResult,
+    baseline: SeasonProjection,
     *,
     my_team_id: int,
     give_player_ids: tuple[int, ...],
     receive_player_ids: tuple[int, ...],
+    my_drop_player_ids: tuple[int, ...],
+    partner_drop_player_ids: tuple[int, ...],
+    effective_week: int,
 ) -> TradeSpec:
-    teams = {row["team_id"]: row["team_name"] for row in baseline.teams}
-    players = {row["player_id"]: row for row in baseline.rosters}
+    teams = {row["team_id"]: row["team_name"] for row in baseline.state.teams}
+    players = {row["player_id"]: row for row in baseline.state.rosters}
 
     if my_team_id not in teams:
-        raise RuntimeError(
-            f"Team ID {my_team_id} was not found in this league."
-        )
+        raise SeasonModelError(f"Team ID {my_team_id} was not found in this league.")
     if not give_player_ids or not receive_player_ids:
-        raise RuntimeError("At least one player is required on each side.")
-    if len(give_player_ids) != len(set(give_player_ids)):
-        raise RuntimeError("A player cannot be given more than once.")
-    if len(receive_player_ids) != len(set(receive_player_ids)):
-        raise RuntimeError("A player cannot be received more than once.")
-    if set(give_player_ids) & set(receive_player_ids):
-        raise RuntimeError("A player cannot be on both sides of a trade.")
+        raise SeasonModelError("At least one player is required on each side.")
 
     missing = [
         player_id
-        for player_id in (*give_player_ids, *receive_player_ids)
+        for player_id in (*give_player_ids, *receive_player_ids,
+                          *my_drop_player_ids, *partner_drop_player_ids)
         if player_id not in players
     ]
     if missing:
-        raise RuntimeError(
+        raise SeasonModelError(
             "These player IDs are not on a current roster: "
             + ", ".join(map(str, missing))
-        )
-
-    wrong_owner = [
-        players[player_id]["player_name"]
-        for player_id in give_player_ids
-        if players[player_id]["team_id"] != my_team_id
-    ]
-    if wrong_owner:
-        raise RuntimeError(
-            f'{teams[my_team_id]} cannot give players it does not roster: '
-            + ", ".join(wrong_owner)
         )
 
     partner_ids = {
@@ -140,11 +68,11 @@ def _validate_trade(
         for player_id in receive_player_ids
     }
     if my_team_id in partner_ids:
-        raise RuntimeError(
+        raise SeasonModelError(
             "Received players must be rostered by another team."
         )
     if len(partner_ids) != 1:
-        raise RuntimeError(
+        raise SeasonModelError(
             "All received players must currently belong to the same team."
         )
 
@@ -153,35 +81,14 @@ def _validate_trade(
         partner_team_id=partner_ids.pop(),
         give_player_ids=give_player_ids,
         receive_player_ids=receive_player_ids,
+        my_drop_player_ids=my_drop_player_ids,
+        partner_drop_player_ids=partner_drop_player_ids,
+        effective_week=effective_week,
     )
 
 
-def _trade_rosters(
-    baseline: ProjectionResult,
-    spec: TradeSpec,
-) -> list[dict[str, Any]]:
-    team_names = {
-        row["team_id"]: row["team_name"] for row in baseline.teams
-    }
-    give_ids = set(spec.give_player_ids)
-    receive_ids = set(spec.receive_player_ids)
-    result = []
-
-    for roster_row in baseline.rosters:
-        row = dict(roster_row)
-        if row["player_id"] in give_ids:
-            row["team_id"] = spec.partner_team_id
-            row["team_name"] = team_names[spec.partner_team_id]
-        elif row["player_id"] in receive_ids:
-            row["team_id"] = spec.my_team_id
-            row["team_name"] = team_names[spec.my_team_id]
-        result.append(row)
-
-    return result
-
-
 def _standings_lookup(
-    result: ProjectionResult,
+    result: SeasonProjection,
 ) -> dict[int, dict[str, Any]]:
     regular = {row["team_id"]: row for row in result.projected_standings}
     final = {row["team_id"]: row for row in result.final_standings}
@@ -199,7 +106,7 @@ def _standings_lookup(
 
 
 def _weekly_lookup(
-    result: ProjectionResult,
+    result: SeasonProjection,
 ) -> dict[tuple[int, int], float]:
     return {
         (row["team_id"], row["week"]): row["projected_points"]
@@ -208,12 +115,12 @@ def _weekly_lookup(
 
 
 def _team_comparison_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     spec: TradeSpec,
     weeks: tuple[int, ...],
 ) -> list[dict[str, Any]]:
-    names = {row["team_id"]: row["team_name"] for row in before.teams}
+    names = {row["team_id"]: row["team_name"] for row in before.state.teams}
     before_standings = _standings_lookup(before)
     after_standings = _standings_lookup(after)
     before_weekly = _weekly_lookup(before)
@@ -269,12 +176,12 @@ def _team_comparison_rows(
 
 
 def _weekly_comparison_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     spec: TradeSpec,
     weeks: tuple[int, ...],
 ) -> list[dict[str, Any]]:
-    names = {row["team_id"]: row["team_name"] for row in before.teams}
+    names = {row["team_id"]: row["team_name"] for row in before.state.teams}
     old = _weekly_lookup(before)
     new = _weekly_lookup(after)
     rows = []
@@ -302,14 +209,14 @@ def _weekly_comparison_rows(
 
 
 def _lineup_comparison_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     spec: TradeSpec,
     weeks: tuple[int, ...],
 ) -> list[dict[str, Any]]:
     team_ids = {spec.my_team_id, spec.partner_team_id}
 
-    def keyed(result: ProjectionResult) -> dict[tuple[int, int, int, int], dict[str, Any]]:
+    def keyed(result: SeasonProjection) -> dict[tuple[int, int, int, int], dict[str, Any]]:
         return {
             (
                 row["team_id"],
@@ -354,11 +261,11 @@ def _lineup_comparison_rows(
 
 
 def _league_comparison_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     spec: TradeSpec,
 ) -> list[dict[str, Any]]:
-    names = {row["team_id"]: row["team_name"] for row in before.teams}
+    names = {row["team_id"]: row["team_name"] for row in before.state.teams}
     old = _standings_lookup(before)
     new = _standings_lookup(after)
     trade_teams = {spec.my_team_id, spec.partner_team_id}
@@ -391,42 +298,57 @@ def _league_comparison_rows(
 
 def evaluate_trade(
     *,
-    baseline: ProjectionResult,
-    config: Config,
+    baseline: SeasonProjection,
     my_team_id: int,
     give_player_ids: Iterable[int],
     receive_player_ids: Iterable[int],
+    my_drop_player_ids: Iterable[int] = (),
+    partner_drop_player_ids: Iterable[int] = (),
+    effective_week: int | None = None,
+    available_players: list[dict[str, Any]] | None = None,
+    fill_open_slots: bool = False,
+    roster_target: int = 17,
 ) -> TradeComparison:
     """Apply one proposed trade and compare full before/after projections."""
+    effective_week = baseline.state.current_week if effective_week is None else effective_week
     spec = _validate_trade(
         baseline,
         my_team_id=my_team_id,
         give_player_ids=tuple(give_player_ids),
         receive_player_ids=tuple(receive_player_ids),
+        my_drop_player_ids=tuple(my_drop_player_ids),
+        partner_drop_player_ids=tuple(partner_drop_player_ids),
+        effective_week=effective_week,
     )
-    rosters_after = _trade_rosters(baseline, spec)
-
-    after = project_from_normalized_inputs(
-        config=config,
-        teams=[dict(row) for row in baseline.teams],
-        rosters=rosters_after,
-        player_projections=baseline.player_projections,
-        starter_slots=baseline.starter_slots,
-        schedule_rows=baseline.schedule_rows,
-        settings_payload=baseline.settings_payload,
-        first_week=int(baseline.summary["first_scoring_period"]),
-        final_week=int(baseline.summary["final_scoring_period"]),
-        current_week=int(baseline.summary["current_scoring_period"]),
+    transaction = trade_transaction(
+        baseline.state, team_id=spec.my_team_id, partner_id=spec.partner_team_id,
+        give=spec.give_player_ids, receive=spec.receive_player_ids,
+        effective_week=effective_week, team_drops=spec.my_drop_player_ids,
+        partner_drops=spec.partner_drop_player_ids,
     )
+    source = replace(baseline.state, available_players=available_players or baseline.state.available_players)
+    transaction = trade_transaction(
+        source, team_id=spec.my_team_id, partner_id=spec.partner_team_id,
+        give=spec.give_player_ids, receive=spec.receive_player_ids,
+        effective_week=effective_week, team_drops=spec.my_drop_player_ids,
+        partner_drops=spec.partner_drop_player_ids,
+    )
+    after_state = apply_transaction(source, transaction)
+    waiver_fills = []
+    if fill_open_slots:
+        after_state, waiver_fills = fill_open_roster_slots(
+            after_state, (spec.my_team_id, spec.partner_team_id),
+            effective_week=effective_week, target_size=roster_target)
+    after = project_season(after_state, effective_week)
 
-    current_week = int(baseline.summary["current_scoring_period"])
+    current_week = effective_week
     final_week = int(baseline.summary["final_scoring_period"])
     weeks = tuple(range(current_week, final_week + 1))
     if not weeks:
-        raise RuntimeError("No scoring weeks remain to evaluate this trade.")
+        raise SeasonModelError("No scoring weeks remain to evaluate this trade.")
 
-    players = {row["player_id"]: row for row in baseline.rosters}
-    names = {row["team_id"]: row["team_name"] for row in baseline.teams}
+    players = {row["player_id"]: row for row in baseline.state.rosters}
+    names = {row["team_id"]: row["team_name"] for row in baseline.state.teams}
     team_comparison = _team_comparison_rows(
         baseline, after, spec, weeks
     )
@@ -449,10 +371,21 @@ def evaluate_trade(
             }
             for player_id in spec.receive_player_ids
         ],
+        "my_required_drops": [
+            {"player_id": player_id, "player_name": players[player_id]["player_name"]}
+            for player_id in spec.my_drop_player_ids
+        ],
+        "partner_required_drops": [
+            {"player_id": player_id, "player_name": players[player_id]["player_name"]}
+            for player_id in spec.partner_drop_player_ids
+        ],
         "comparison_weeks": list(weeks),
+        "effective_week": effective_week,
         "champion_before": baseline.summary["champion_team"],
         "champion_after": after.summary["champion_team"],
         "team_results": team_comparison,
+        "waiver_fill_enabled": fill_open_slots,
+        "waiver_fills": waiver_fills,
     }
 
     return TradeComparison(

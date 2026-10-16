@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-from fantasy_projection.config import Config
-from fantasy_projection.pipeline import ProjectionResult
+from fantasy_projection.season import LeagueState, SeasonModelError, SeasonRules, SeasonProjection
 from fantasy_projection.waiver_analysis import (
     evaluate_waiver,
-    resolve_player_reference,
 )
 
 
@@ -20,7 +17,7 @@ def _result(
     my_wins: int,
     my_seed: int,
     my_place: int,
-) -> ProjectionResult:
+) -> SeasonProjection:
     teams = [
         {"team_id": 1, "team_name": "Alpha"},
         {"team_id": 2, "team_name": "Beta"},
@@ -119,7 +116,9 @@ def _result(
             "projected_points": 90.0,
         },
     ]
-    return ProjectionResult(
+    return SeasonProjection(
+        state=LeagueState(league_id=1, season=2026, first_week=1, current_week=1, final_week=1,
+                          rules=SeasonRules(1, {1: (1,)}, 0, ()),
         teams=teams,
         rosters=rosters,
         player_projections=[
@@ -143,6 +142,7 @@ def _result(
         settings_payload={
             "settings": {"rosterSettings": {"positionLimits": {"3": 4}}}
         },
+        ),
         optimal_lineups=lineups,
         weekly_team_projections=weekly,
         regular_season_matchups=[],
@@ -174,24 +174,6 @@ def _available() -> list[dict[str, object]]:
     ]
 
 
-class WaiverReferenceTests(unittest.TestCase):
-    def test_resolves_available_player_by_name_or_id(self) -> None:
-        self.assertEqual(
-            303,
-            resolve_player_reference(
-                _available(),
-                "available player",
-                pool_description="currently available player",
-            ),
-        )
-        self.assertEqual(
-            303,
-            resolve_player_reference(
-                _available(),
-                "303",
-                pool_description="currently available player",
-            ),
-        )
 
 
 class EvaluateWaiverTests(unittest.TestCase):
@@ -212,23 +194,21 @@ class EvaluateWaiverTests(unittest.TestCase):
             my_seed=1,
             my_place=1,
         )
-        config = Config(1, 2026, Path("outputs"), None, None)
 
         with patch(
             "fantasy_projection.waiver_analysis."
-            "project_from_normalized_inputs",
+            "project_season",
             return_value=after,
         ) as project:
             result = evaluate_waiver(
                 baseline=before,
-                config=config,
                 my_team_id=1,
                 available_players=_available(),
                 add_player_id=303,
                 drop_player_id=101,
             )
 
-        projected_roster = project.call_args.kwargs["rosters"]
+        projected_roster = project.call_args.args[0].rosters
         my_ids = {
             row["player_id"]
             for row in projected_roster
@@ -255,13 +235,11 @@ class EvaluateWaiverTests(unittest.TestCase):
             my_seed=2,
             my_place=2,
         )
-        before.rosters[0]["droppable"] = False
-        config = Config(1, 2026, Path("outputs"), None, None)
+        before.state.rosters[0]["droppable"] = False
 
-        with self.assertRaisesRegex(RuntimeError, "undroppable"):
+        with self.assertRaisesRegex(SeasonModelError, "undroppable"):
             evaluate_waiver(
                 baseline=before,
-                config=config,
                 my_team_id=1,
                 available_players=_available(),
                 add_player_id=303,

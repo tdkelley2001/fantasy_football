@@ -2,18 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from .espn import as_int
-from .league_data import (
-    get_schedule_settings,
-    matchup_period_scoring_weeks,
-)
+from .season import SeasonRules, SeasonModelError
 
 
 def project_regular_season(
     schedule_rows: list[dict[str, Any]],
     teams: list[dict[str, Any]],
     weekly_team_projections: list[dict[str, Any]],
-    settings_payload: dict[str, Any],
+    rules: SeasonRules,
 ) -> list[dict[str, Any]]:
     names = {
         row["team_id"]: row["team_name"]
@@ -29,10 +25,7 @@ def project_regular_season(
 
     for row in schedule_rows:
         period = row["matchup_period"]
-        weeks = matchup_period_scoring_weeks(
-            settings_payload,
-            period,
-        )
+        weeks = rules.period_weeks[period]
 
         home_projection = sum(
             weekly_lookup.get(
@@ -49,7 +42,7 @@ def project_regular_season(
             for week in weeks
         )
 
-        espn_winner = row["espn_winner"]
+        espn_winner = row["winner"]
 
         if espn_winner in {"HOME", "AWAY", "TIE"}:
             home_points = row["actual_home_points"] or 0.0
@@ -63,6 +56,10 @@ def project_regular_season(
             else:
                 winner_id = None
         else:
+            if any((team, week) not in weekly_lookup
+                   for team in (row["home_team_id"], row["away_team_id"])
+                   for week in weeks):
+                raise SeasonModelError("Unresolved matchups require every team-week score.")
             home_points = home_projection
             away_points = away_projection
             result_type = "PROJECTED"
@@ -100,7 +97,7 @@ def project_regular_season(
 def build_projected_standings(
     teams: list[dict[str, Any]],
     matchup_results: list[dict[str, Any]],
-    settings_payload: dict[str, Any],
+    rules: SeasonRules,
 ) -> list[dict[str, Any]]:
     records = {
         team["team_id"]: {
@@ -146,18 +143,15 @@ def build_projected_standings(
             away["wins"] += 1
             home["losses"] += 1
 
-    seeding_rule = get_schedule_settings(
-        settings_payload
-    ).get("playoffSeedingRule")
+    seeding_rule = rules.seeding_tiebreak
 
     standings = list(records.values())
 
-    # The current league reports TOTAL_POINTS_SCORED as its
-    # seeding tiebreak. Division logic can be added later if needed.
+    # Rank by winning percentage, counting ties as half a win. This also
+    # handles unequal games played; team ID makes exact ties reproducible.
     standings.sort(
         key=lambda x: (
-            -x["wins"],
-            -x["ties"],
+            -(x["wins"] + .5 * x["ties"]) / max(1, x["wins"] + x["losses"] + x["ties"]),
             -x["points_for"],
             x["team_id"],
         )

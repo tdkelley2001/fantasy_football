@@ -36,17 +36,32 @@ def get_roster_settings(
     return settings_payload["settings"]["rosterSettings"]
 
 
+
+
 def normalize_teams(
     team_payload: dict[str, Any],
 ) -> list[dict[str, Any]]:
     rows = []
 
     for team in team_payload.get("teams", []):
+        transaction_counter = team.get("transactionCounter")
+        if not isinstance(transaction_counter, dict):
+            transaction_counter = {}
         rows.append(
             {
                 "team_id": as_int(team.get("id")),
                 "team_name": team.get("name"),
                 "abbrev": team.get("abbrev"),
+                "waiver_rank": as_int(team.get("waiverRank")),
+                "acquisitions": as_int(
+                    transaction_counter.get("acquisitions"), 0
+                ),
+                "acquisition_budget_spent": as_float(
+                    transaction_counter.get("acquisitionBudgetSpent")
+                ),
+                "transaction_locked": bool(
+                    team.get("isTransactionLocked", False)
+                ),
             }
         )
 
@@ -161,23 +176,15 @@ def build_starter_slots(
     return slots
 
 
-def normalize_regular_season_schedule(
+def normalize_schedule(
     matchup_payload: dict[str, Any],
-    settings_payload: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    regular_period_count = as_int(
-        get_schedule_settings(settings_payload).get(
-            "matchupPeriodCount"
-        ),
-        0,
-    ) or 0
-
     rows = []
 
     for matchup in matchup_payload.get("schedule", []):
         period = as_int(matchup.get("matchupPeriodId"))
 
-        if period is None or period > regular_period_count:
+        if period is None:
             continue
 
         home = matchup.get("home") or {}
@@ -194,7 +201,7 @@ def normalize_regular_season_schedule(
                 "matchup_period": period,
                 "home_team_id": home_id,
                 "away_team_id": away_id,
-                "espn_winner": matchup.get(
+                "winner": matchup.get(
                     "winner",
                     "UNDECIDED",
                 ),
@@ -220,21 +227,54 @@ def normalize_regular_season_schedule(
     return rows
 
 
-def matchup_period_scoring_weeks(
-    settings_payload: dict[str, Any],
-    matchup_period: int,
-) -> list[int]:
-    mapping = get_schedule_settings(settings_payload).get(
-        "matchupPeriods",
-        {},
-    )
+def normalize_season_rules(settings_payload):
+    """Translate supported ESPN settings once at the ingestion boundary."""
+    from .season import SeasonRules, SeasonModelError
+    settings = get_schedule_settings(settings_payload)
+    regular = as_int(settings.get("matchupPeriodCount"))
+    count = as_int(settings.get("playoffTeamCount"))
+    if regular is None or count is None:
+        raise SeasonModelError("ESPN schedule settings are missing season or playoff lengths.")
+    if settings.get("divisionWinnerPlayoffSeed", 0) or settings.get("divisionCount", 0) > 1 or len(settings.get("divisions", [])) > 1:
+        raise SeasonModelError("Division-based playoff seeding is not supported.")
+    mapping = settings.get("matchupPeriods", {})
+    period_weeks = {int(period): tuple(int(w) for w in weeks) for period, weeks in mapping.items()}
+    round_lengths = settings.get("playoffMatchupPeriodLengthByRound", {})
+    lengths = [int(round_lengths[k]) for k in sorted(round_lengths, key=int)] if count else []
+    rounds = []
+    for offset, length in enumerate(lengths, 1):
+        weeks = period_weeks.get(regular + offset)
+        if not weeks or len(weeks) != length:
+            raise SeasonModelError("ESPN playoff week mapping does not match configured round lengths.")
+        rounds.append(weeks)
+    explicit_tiebreak = settings.get("playoffMatchupTieRule")
+    if explicit_tiebreak not in (None, "HIGHER_SEED"):
+        raise SeasonModelError(f"Unsupported ESPN playoff tiebreak: {explicit_tiebreak}.")
+    return SeasonRules(regular_periods=regular, period_weeks=period_weeks,
+                       playoff_team_count=count, playoff_rounds=tuple(rounds),
+                       playoff_reseed=bool(settings.get("playoffReseed", False)),
+                       consolation_ladder=not bool(settings.get("consolationLadderDisabled", False)),
+                       seeding_tiebreak=settings.get("playoffSeedingRule", "UNSPECIFIED"))
 
-    raw = mapping.get(str(matchup_period))
-    if raw is None:
-        raw = mapping.get(matchup_period)
 
-    if isinstance(raw, list):
-        weeks = [as_int(x) for x in raw]
-        return [x for x in weeks if x is not None]
-
-    return [matchup_period]
+def normalize_actual_weekly_points(matchup_payload, current_week):
+    """Use only finished scoring weeks, never an in-progress week total."""
+    from .season import SeasonModelError
+    scores = {}
+    for matchup in matchup_payload.get("schedule", []):
+        for side in ("home", "away"):
+            team = matchup.get(side) or {}
+            team_id = as_int(team.get("teamId"))
+            if team_id is None:
+                continue
+            for raw_week, points in team.get("pointsByScoringPeriod", {}).items():
+                week = as_int(raw_week)
+                completed = matchup.get("winner") in {"HOME", "AWAY", "TIE"}
+                if week is None or week > current_week or (week == current_week and not completed) or points is None:
+                    continue
+                key = (team_id, week)
+                value = float(points)
+                if key in scores and scores[key] != value:
+                    raise SeasonModelError("ESPN returned conflicting completed team-week scores.")
+                scores[key] = value
+    return [dict(team_id=team, week=week, points=points) for (team, week), points in sorted(scores.items())]

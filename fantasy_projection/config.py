@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -11,7 +10,6 @@ from dotenv import load_dotenv
 class Config:
     league_id: int
     season: int
-    output_dir: Path
     espn_s2: str | None
     swid: str | None
 
@@ -22,10 +20,6 @@ def load_config() -> Config:
 
     league_id_raw = os.getenv("ESPN_LEAGUE_ID")
     season_raw = os.getenv("ESPN_SEASON", "2026")
-    output_dir = os.getenv(
-        "ESPN_OUTPUT_DIR",
-        "league_projection_output",
-    )
 
     if not league_id_raw:
         raise RuntimeError("ESPN_LEAGUE_ID is missing from .env.")
@@ -41,7 +35,6 @@ def load_config() -> Config:
     return Config(
         league_id=league_id,
         season=season,
-        output_dir=Path(output_dir),
         espn_s2=os.getenv("ESPN_S2"),
         swid=os.getenv("ESPN_SWID"),
     )

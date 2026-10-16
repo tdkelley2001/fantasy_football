@@ -5,7 +5,7 @@ import time
 from typing import Any, Iterable
 
 import requests
-from tqdm import tqdm
+from .progress import Progress as tqdm
 
 from .config import Config
 
@@ -225,6 +225,7 @@ def pull_weekly_player_projections(
     *,
     first_week: int,
     final_week: int,
+    progress_callback=None,
 ) -> list[dict[str, Any]]:
     """Pull one ESPN projected-fantasy-points record per player/week."""
     rows: list[dict[str, Any]] = []
@@ -246,6 +247,7 @@ def pull_weekly_player_projections(
         desc="Pulling ESPN projections",
         unit="week",
         dynamic_ncols=True,
+        callback=progress_callback,
     ):
         payload = client.get_league(
             "kona_player_info",

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
-from unittest.mock import call, patch
 
-from fantasy_projection.config import Config
 from fantasy_projection.espn import normalize_available_players
-from fantasy_projection.waiver_outputs import save_waiver_outputs
 from fantasy_projection.waivers import (
-    WaiverAnalysisResult,
+    WaiverSearchOptions,
+    _filter_waiver_candidates,
     _marginal_roster_values,
     _move_tags,
     _position_limit_allows,
@@ -16,6 +13,24 @@ from fantasy_projection.waivers import (
 
 
 class AvailablePlayerTests(unittest.TestCase):
+    def test_generation_filters_adds_and_drops_before_evaluation(self) -> None:
+        players = {
+            1: {"player_id": 1, "default_position_id": 2},
+            2: {"player_id": 2, "default_position_id": 3},
+            3: {"player_id": 3, "default_position_id": 5},
+            10: {"player_id": 10, "default_position_id": 2},
+            11: {"player_id": 11, "default_position_id": 3},
+        }
+        options = WaiverSearchOptions(
+            add_positions=(2,), target_add_player_ids=(1,),
+            untouchable_drop_player_ids=(11,), include_special_teams=False,
+        )
+        adds, drops = _filter_waiver_candidates(
+            [1, 2, 3], [players[10], players[11]], players, options
+        )
+        self.assertEqual([1], adds)
+        self.assertEqual([10], [row["player_id"] for row in drops])
+
     def test_normalizes_only_free_agents_and_waivers(self) -> None:
         payload = {
             "players": [
@@ -156,37 +171,6 @@ class WaiverMetricTests(unittest.TestCase):
             rows[0]["marginal_value_status"],
         )
 
-    def test_waiver_output_contract_uses_one_timestamped_folder(self) -> None:
-        result = WaiverAnalysisResult(
-            available_players=[{"player_id": 1, "eligible_slots": [2]}],
-            transactions=[{"add_player_id": 1, "drop_player_id": 2}],
-            marginal_roster_values=[{"rostered_player_id": 2}],
-            summary={"valid_transactions": 1},
-        )
-        config = Config(1, 2026, Path("outputs"), None, None)
-        out = Path("outputs/waiver_analysis_timestamp")
-
-        with (
-            patch("pathlib.Path.mkdir"),
-            patch(
-                "fantasy_projection.waiver_outputs.timestamped_run_dir",
-                return_value=out,
-            ),
-            patch(
-                "fantasy_projection.waiver_outputs.write_csv"
-            ) as write_csv,
-            patch(
-                "fantasy_projection.waiver_outputs.write_json"
-            ) as write_json,
-        ):
-            actual = save_waiver_outputs(config, result)
-
-        self.assertEqual(out, actual)
-        self.assertEqual(3, write_csv.call_count)
-        self.assertEqual(
-            call(out / "waiver_analysis_summary.json", result.summary),
-            write_json.call_args,
-        )
 
 
 if __name__ == "__main__":

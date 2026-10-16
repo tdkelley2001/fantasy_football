@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-18T02:28:35.205235+00:00",
+  "scoring_version": "2e0dbec203bcc4eeb811de94d88227f68b7ffd7f8b900e4eae4110790c3a2ee8",
+  "scoring_season": 2026,
+  "scoring_retrieved_at": "2026-09-18T02:19:32.427212+00:00",
+  "seasons": [
+    {
+      "season": 2018,
+      "players": 2426,
+      "rows": 41242
+    },
+    {
+      "season": 2019,
+      "players": 2693,
+      "rows": 45781
+    },
+    {
+      "season": 2020,
+      "players": 2957,
+      "rows": 50269
+    },
+    {
+      "season": 2021,
+      "players": 3171,
+      "rows": 57078
+    },
+    {
+      "season": 2022,
+      "players": 3450,
+      "rows": 62100
+    },
+    {
+      "season": 2023,
+      "players": 3713,
+      "rows": 66834
+    },
+    {
+      "season": 2024,
+      "players": 1209,
+      "rows": 21762
+    },
+    {
+      "season": 2025,
+      "players": 1197,
+      "rows": 21546
+    }
+  ],
+  "source_sha256": {
+    "calendar_2018.json.gz": "0c300c18dc8ca849dd49723fad0791442101fb9badc6e172604ec74a084b4478",
+    "calendar_2019.json.gz": "66e468883e4c88d9e70452558f8c48284971e1f3bae14f1af993f882ffa26132",
+    "calendar_2020.json.gz": "27dec6810da56bf0436e57b9e4269b19ec7d0c7d826d2684f60737df20cc7c70",
+    "calendar_2021.json.gz": "9a4d0d1baa267053ef1610efe72cbd6859bfb45f9a23326cb4d277ef59d92064",
+    "calendar_2022.json.gz": "51889418fd0804396562579c9e4e8072544f82faa34b3cc1fd71764ab9c52c2d",
+    "calendar_2023.json.gz": "2da09dd4311231394ebf321a9b746a82127715c4c6f0b96f3528f3ee8b1e7d7e",
+    "calendar_2024.json.gz": "bff292c648d96b27e26b4f088e273c9e99704b49a46a45351922ff25bdc6c22f",
+    "calendar_2025.json.gz": "d2d061faebdcae41e647c928a6a021d8c7fd1657fbc2bcd67d03d76eb1ae0738",
+    "calendar_2026.json.gz": "895f4552d369a252575092f4537e169610f66bb1420cb3771a1026fe9ca19385",
+    "game_401437947.json.gz": "42fb54bc4a5a0716c0bce521d24a44bf6d72b27a499f904ec6dc266192619f5f",
+    "players_2018.json.gz": "f07a99236fb9d2b916fa37f685e8affadc4cecbdd60e1f3abb4fad4536db4460",
+    "players_2019.json.gz": "f252c87653182eadfa18e2747b590fde6bd0d36d900d92faa4538d3dd2ebe882",
+    "players_2020.json.gz": "a098f60bc0e30366c7c6ac31e0a4a0d6c7da60140bc46a761abccb0a433b876d",
+    "players_2021.json.gz": "3f65ad1018a96e2a87d9b9c08cc15fc4283f2b5d3be14f146834b1c386899be6",
+    "players_2022.json.gz": "f9bca8cd1addadbc46a1b131b59cf5c851512ecf9fec21ffab187e76ed62e4ff",
+    "players_2023.json.gz": "6a2d749d7a4938155650fa437ac5f9a37813eee0fe80e02465c4f52ed76fa849",
+    "players_2024.json.gz": "64b4a52cb2e7d65cdd7517208fd312f70f5c1106b1fc708c7541b88b8b852601",
+    "players_2025.json.gz": "56628de4a0ac3692f5106f8b4d5e46e36bfd5630e3db2090c3efe3e31a1e9cbe",
+    "schedule_2018.json.gz": "ff3e91ef527edd14b6dc4558068ca412250e9bcd462d1ae62690f9362616b068",
+    "schedule_2019.json.gz": "2d44ddfac49791cd6e47bfa13381847fba3ad73f2e4b29fa377f6d9d0f51aa4c",
+    "schedule_2020.json.gz": "49fb59488dd93dd1a978c08bd3dcdd4338347ebb96931d58898a4f6360f58c24",
+    "schedule_2021.json.gz": "427bab14b99e12a4de3bf0d9f282eee8c5a93f34ef7c97058e2f3a0847f7f89d",
+    "schedule_2022.json.gz": "d0fb8e368707c1ce1c287735d8e6d93c30e12c00c5f36818e309b8c16e95201f",
+    "schedule_2023.json.gz": "f665139d45c53e319328ac9d353631dbe0fcc8c23dd496cddf82774438d0b132",
+    "schedule_2024.json.gz": "76f971917fe054f800668d26ce8dee40dcca597d3f4200f1e892c2e60a632134",
+    "schedule_2025.json.gz": "ad55679a1a794f02c81da5f5c86c56c29cdbd1908243d0d1da3e86a95a04a784",
+    "scoring_rules.json.gz": "fb38bdb00c15887035f22a74ff7d558c050988af84549ed213e00335d0b6ff46"
+  },
+  "canonical_content_sha256": "8041b90fa89eae77997acc460e7a21b8af100a7a62f2763d00a829162f917d50",
+  "implementation_sha256": {
+    "fantasy_projection/history.py": "58746b45828d388a4dfe3903eb177faefa2fd4f18ac41b86a9080306b459a82a",
+    "research/build_history.py": "f0747120c4e1adbf94ef336b1867d69343ba5059cb3f32dcfa38dddf8731f4d3"
+  },
+  "artifacts": {
+    "player_weeks.jsonl.gz": "bd777a07f0cb3756e44d34b45a98fe75dbd07621d08f6502f9eb05d79f377564",
+    "initial_sample.jsonl.gz": "836ac761dcaedc9f9f80742be4e3859266627f1177cf0f7b364a76b69c2d849d",
+    "diagnostics.json": "1fb1255e57a151628e17501259ca7191171cb71b2e427be4062538b1418d9245",
+    "diagnostics.html": "5949d2d0ad546571205b4b5d26f8c9c5d6ee079aad0fe9bcbb681bfe17b6cdf3"
+  }
+}

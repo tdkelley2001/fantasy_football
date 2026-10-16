@@ -5,16 +5,13 @@ from itertools import combinations
 from statistics import median
 from typing import Any, Iterable
 
-from tqdm import tqdm
+from .progress import Progress as tqdm
 
-from .lineup import optimize_lineup
-from .pipeline import ProjectionResult
-from .postseason import project_postseason
-from .regular_season import (
-    build_projected_standings,
-    project_regular_season,
-)
+from .lineup import optimize_lineup_weeks
+from .season import SeasonModelError, SeasonProjection, season_results
 from .trade_config import TradeConfig
+from .transactions import apply_transaction, trade_transaction
+from .search_runtime import SearchRuntime, prune_ranked, runtime_profile
 
 EPSILON = 1e-9
 
@@ -23,6 +20,36 @@ EPSILON = 1e-9
 class TradeSearchResult:
     all_evaluations: list[dict[str, Any]]
     search_summary: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class TradeSearchOptions:
+    partner_ids: tuple[int, ...] = ()
+    package_shapes: tuple[tuple[int, int], ...] = ((1, 1), (1, 2), (2, 1), (2, 2))
+    include_player_ids: tuple[int, ...] = ()
+    exclude_player_ids: tuple[int, ...] = ()
+    untouchable_player_ids: tuple[int, ...] = ()
+    target_player_ids: tuple[int, ...] = ()
+    include_positions: tuple[int, ...] = ()
+    exclude_positions: tuple[int, ...] = ()
+    include_special_teams: bool = True
+    drop_strategy: str = "least_lineup_benefit"
+    effective_week: int | None = None
+    balance_filter: bool = False
+    minimum_value_ratio: float = 0.5
+    runtime: SearchRuntime = runtime_profile()
+
+
+def _candidate_packages(player_ids, size, players, *, required=(), excluded=(),
+                        include_positions=(), exclude_positions=(), include_special=True):
+    """Generate packages only; scoring and season evaluation happen later."""
+    excluded, required = set(excluded), set(required)
+    allowed = [pid for pid in player_ids if pid not in excluded
+               and (include_special or players[pid].get("default_position_id") not in (5, 16))
+               and players[pid].get("default_position_id") not in set(exclude_positions)]
+    packages = _packages(allowed, size)
+    return [package for package in packages if required.issubset(package)
+            and (not include_positions or any(players[pid].get("default_position_id") in include_positions for pid in package))]
 
 
 def _team_name_map(
@@ -79,6 +106,7 @@ def _projection_lookup(
             "projected_points"
         ]
         for row in player_projections
+        if row.get("projected_points") is not None
     }
 
 
@@ -124,17 +152,12 @@ def _score_roster_weeks(
         team_name=team_name,
     )
 
-    scores = []
-    for week in weeks:
-        total, _ = optimize_lineup(
-            roster,
-            starter_slots,
-            projection_lookup,
-            week,
-        )
-        scores.append(total)
-
-    result = tuple(scores)
+    result = optimize_lineup_weeks(
+        roster,
+        starter_slots,
+        projection_lookup,
+        weeks,
+    )
     cache[key] = result
     return result
 
@@ -154,7 +177,7 @@ def _player_label(
 
 
 def _baseline_team_scores(
-    baseline: ProjectionResult,
+    baseline: SeasonProjection,
 ) -> dict[tuple[int, int], float]:
     return {
         (row["team_id"], row["week"]): row[
@@ -164,8 +187,15 @@ def _baseline_team_scores(
     }
 
 
+def _preserve_actual_scores(baseline, team_id, weeks, scores):
+    """Cached roster scores must not overwrite a finalized current-week score."""
+    actuals = {r["week"]: r["projected_points"] for r in baseline.weekly_team_projections
+               if r["team_id"] == team_id and r.get("result_type") == "ACTUAL"}
+    return tuple(actuals.get(week, score) for week, score in zip(weeks, scores, strict=True))
+
+
 def _team_metrics(
-    baseline: ProjectionResult,
+    baseline: SeasonProjection,
 ) -> dict[int, dict[str, Any]]:
     reg = {
         row["team_id"]: row
@@ -191,7 +221,7 @@ def _team_metrics(
 
 
 def _scenario_metrics(
-    baseline: ProjectionResult,
+    baseline: SeasonProjection,
     replacement_weekly_scores: dict[tuple[int, int], float],
 ) -> tuple[
     dict[int, dict[str, Any]],
@@ -204,29 +234,11 @@ def _scenario_metrics(
     for row in baseline.weekly_team_projections:
         key = (row["team_id"], row["week"])
         copy = dict(row)
-        if key in replacement_weekly_scores:
+        if key in replacement_weekly_scores and row["week"] >= baseline.state.current_week and row.get("result_type") != "ACTUAL":
             copy["projected_points"] = replacement_weekly_scores[key]
         weekly.append(copy)
 
-    regular_matchups = project_regular_season(
-        baseline.schedule_rows,
-        baseline.teams,
-        weekly,
-        baseline.settings_payload,
-    )
-    standings = build_projected_standings(
-        baseline.teams,
-        regular_matchups,
-        baseline.settings_payload,
-    )
-    postseason_matchups, final_standings, postseason_summary = (
-        project_postseason(
-            standings,
-            baseline.teams,
-            weekly,
-            baseline.settings_payload,
-        )
-    )
+    regular_matchups, standings, postseason_matchups, final_standings, postseason_summary = season_results(baseline.state, weekly)
 
     reg_lookup = {row["team_id"]: row for row in standings}
     final_lookup = {
@@ -286,6 +298,15 @@ def _weekly_lineup_metrics(
     total_gain = after_total - before_total
     if abs(total_gain) <= EPSILON:
         total_gain = 0.0
+    # A transaction's single best week is often a bye or short-term injury
+    # replacement. Excluding that one spike measures repeatable roster value.
+    sustained_gain = (
+        (total_gain - max(0.0, max(deltas))) / (len(deltas) - 1)
+        if len(deltas) > 1
+        else total_gain
+    )
+    if abs(sustained_gain) <= EPSILON:
+        sustained_gain = 0.0
 
     return {
         f"{prefix}_current_week_lineup_points_before": before[0],
@@ -306,6 +327,7 @@ def _weekly_lineup_metrics(
         f"{prefix}_total_remaining_season_lineup_points_after": after_total,
         f"{prefix}_total_remaining_season_lineup_gain": total_gain,
         f"{prefix}_median_weekly_lineup_gain": float(median(deltas)),
+        f"{prefix}_sustained_weekly_lineup_gain": sustained_gain,
         f"{prefix}_positive_weeks": sum(x > EPSILON for x in deltas),
         f"{prefix}_negative_weeks": sum(x < -EPSILON for x in deltas),
         f"{prefix}_neutral_weeks": sum(abs(x) <= EPSILON for x in deltas),
@@ -313,6 +335,8 @@ def _weekly_lineup_metrics(
         f"{prefix}_best_week_gain": deltas[best_index],
         f"{prefix}_worst_week": weeks[worst_index],
         f"{prefix}_worst_week_gain": deltas[worst_index],
+        f"{prefix}_weekly_weeks": list(weeks),
+        f"{prefix}_weekly_lineup_gains": list(deltas),
     }
 
 
@@ -434,6 +458,8 @@ def _base_export_record(
     partner_name: str,
     my_out: tuple[int, ...],
     partner_out: tuple[int, ...],
+    my_drops: tuple[int, ...],
+    partner_drops: tuple[int, ...],
     players: dict[int, dict[str, Any]],
 ) -> dict[str, Any]:
     return {
@@ -445,14 +471,118 @@ def _base_export_record(
         "my_give": _player_label(my_out, players),
         "my_receive_player_ids": ",".join(map(str, partner_out)),
         "my_receive": _player_label(partner_out, players),
+        "my_drop_player_ids": ",".join(map(str, my_drops)),
+        "my_required_drops": _player_label(my_drops, players) if my_drops else "",
+        "partner_drop_player_ids": ",".join(map(str, partner_drops)),
+        "partner_required_drops": _player_label(partner_drops, players) if partner_drops else "",
     }
+
+
+def _legal_trade_resolutions(baseline, my_team_id, partner_id, my_out, partner_out,
+                             effective_week, options):
+    """Return explicit required-drop resolutions, preferring real open slots."""
+    def valid(my_drops=(), partner_drops=()):
+        apply_transaction(baseline.state, trade_transaction(
+            baseline.state, team_id=my_team_id, partner_id=partner_id,
+            give=my_out, receive=partner_out, effective_week=effective_week,
+            team_drops=my_drops, partner_drops=partner_drops))
+    try:
+        valid()
+        return [((), ())]
+    except SeasonModelError:
+        pass
+    if len(partner_out) > len(my_out):
+        rows = [row for row in baseline.state.rosters
+                if row["team_id"] == my_team_id and row["player_id"] not in my_out
+                and row["player_id"] not in options.untouchable_player_ids
+                and row["player_id"] not in options.exclude_player_ids
+                and (options.include_special_teams or row.get("default_position_id") not in (5, 16))
+                and row.get("droppable", True) and not row.get("lineup_locked") and not row.get("roster_locked")]
+        max_drops = len(partner_out) - len(my_out)
+        candidates = [(tuple(combo), ()) for size in range(1, max_drops + 1)
+                      for combo in combinations((int(row["player_id"]) for row in rows), size)]
+    elif len(my_out) > len(partner_out):
+        rows = [row for row in baseline.state.rosters
+                if row["team_id"] == partner_id and row["player_id"] not in partner_out
+                and row["player_id"] not in options.exclude_player_ids
+                and (options.include_special_teams or row.get("default_position_id") not in (5, 16))
+                and row.get("droppable", True) and not row.get("lineup_locked") and not row.get("roster_locked")]
+        max_drops = len(my_out) - len(partner_out)
+        candidates = [((), tuple(combo)) for size in range(1, max_drops + 1)
+                      for combo in combinations((int(row["player_id"]) for row in rows), size)]
+    else:
+        return []
+    result = []
+    for my_drops, partner_drops in candidates:
+        try:
+            valid(my_drops, partner_drops)
+            result.append((my_drops, partner_drops))
+        except SeasonModelError:
+            continue
+    return result
+
+
+def select_trade_resolution(
+    baseline: SeasonProjection,
+    my_team_id: int,
+    partner_id: int,
+    my_out: tuple[int, ...],
+    partner_out: tuple[int, ...],
+    effective_week: int,
+    options: TradeSearchOptions | None = None,
+    *,
+    roster_ids: dict[int, set[int]] | None = None,
+    players: dict[int, dict[str, Any]] | None = None,
+    projection_lookup: dict[tuple[int, int], float] | None = None,
+    score_cache: dict | None = None,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Choose the legal required drops under the requested projection strategy."""
+    options = options or TradeSearchOptions(effective_week=effective_week)
+    resolutions = _legal_trade_resolutions(
+        baseline, my_team_id, partner_id, my_out, partner_out, effective_week, options)
+    if not resolutions:
+        raise SeasonModelError("This trade has no legal required-drop resolution.")
+    if len(resolutions) == 1:
+        return resolutions[0]
+    roster_ids = roster_ids or _roster_ids_by_team(baseline.state.rosters)
+    players = players or _player_map(baseline.state.rosters)
+    projection_lookup = projection_lookup or _projection_lookup(baseline.state.player_projections)
+    score_cache = score_cache if score_cache is not None else {}
+    weeks = tuple(range(effective_week, baseline.state.final_week + 1))
+    names = _team_name_map(baseline.state.teams)
+
+    def package_value(package):
+        return sum(projection_lookup.get((pid, week), 0.0)
+                   for pid in package for week in weeks)
+
+    def rank(resolution):
+        my_drops, partner_drops = resolution
+        raw_drop_value = package_value(my_drops) + package_value(partner_drops)
+        if options.drop_strategy == "lowest_projection":
+            return (-raw_drop_value,)
+        if options.drop_strategy != "least_lineup_benefit":
+            raise SeasonModelError(f"Unsupported trade drop strategy: {options.drop_strategy}.")
+        if my_drops:
+            team_id, outgoing, incoming, drops = my_team_id, my_out, partner_out, my_drops
+        else:
+            team_id, outgoing, incoming, drops = partner_id, partner_out, my_out, partner_drops
+        final_ids = (roster_ids[team_id] - set(outgoing) - set(drops)) | set(incoming)
+        scores = _score_roster_weeks(
+            frozenset(final_ids), team_id=team_id, team_name=names[team_id],
+            weeks=weeks, players=players, starter_slots=baseline.state.starter_slots,
+            projection_lookup=projection_lookup, cache=score_cache)
+        return (_sum_scores(scores), -raw_drop_value)
+
+    return max(resolutions, key=rank)
 
 
 def _evaluate_all_trades_for_type(
     *,
-    trade_size: int,
-    baseline: ProjectionResult,
+    give_size: int,
+    receive_size: int,
+    baseline: SeasonProjection,
     trade_config: TradeConfig,
+    progress_callback=None,
     roster_ids: dict[int, set[int]],
     players: dict[int, dict[str, Any]],
     projection_lookup: dict[tuple[int, int], float],
@@ -463,20 +593,20 @@ def _evaluate_all_trades_for_type(
     future_weeks: tuple[int, ...],
     regular_weeks: tuple[int, ...],
     postseason_weeks: tuple[int, ...],
+    options: TradeSearchOptions,
 ) -> tuple[
     list[dict[str, Any]],
     dict[str, Any],
 ]:
     """Evaluate every legal package combination for one trade size.
 
-    No mutual-benefit or upper-bound screen is applied. Every 1-for-1 or
-    2-for-2 combination involving MY_TEAM_ID is attempted and written to the
-    evaluation output. Trades that make a legal starting lineup impossible
-    are retained with evaluation_status=INVALID_LINEUP.
+    Candidate constraints and an optional raw-value balance screen are
+    applied before full lineup evaluation. Trades that make a legal starting
+    lineup impossible are retained with evaluation_status=INVALID_LINEUP.
     """
-    names = _team_name_map(baseline.teams)
+    names = _team_name_map(baseline.state.teams)
     my_team_id = trade_config.my_team_id
-    trade_type = "1-for-1" if trade_size == 1 else "2-for-2"
+    trade_type = f"{give_size}-for-{receive_size}"
     baseline_weekly = _baseline_team_scores(baseline)
     baseline_metrics = _team_metrics(baseline)
 
@@ -484,22 +614,99 @@ def _evaluate_all_trades_for_type(
         my_team_id,
         roster_ids,
     )
-    my_packages = _packages(my_tradable, trade_size)
+    my_packages = _candidate_packages(my_tradable, give_size, players,
+        required=options.include_player_ids,
+        excluded=(*options.exclude_player_ids, *options.untouchable_player_ids),
+        include_positions=options.include_positions, exclude_positions=options.exclude_positions,
+        include_special=options.include_special_teams)
 
     partner_info = []
     total_combinations = 0
-    for team in baseline.teams:
+    for team in baseline.state.teams:
         partner_id = team["team_id"]
         if partner_id == my_team_id:
+            continue
+        if options.partner_ids and partner_id not in options.partner_ids:
             continue
 
         partner_tradable = _tradable_player_ids(
             partner_id,
             roster_ids,
         )
-        partner_packages = _packages(partner_tradable, trade_size)
+        partner_packages = _candidate_packages(partner_tradable, receive_size, players,
+            required=options.target_player_ids, excluded=options.exclude_player_ids,
+            include_positions=options.include_positions, exclude_positions=options.exclude_positions,
+            include_special=options.include_special_teams)
         partner_info.append((partner_id, partner_packages))
         total_combinations += len(my_packages) * len(partner_packages)
+
+    def package_value(package):
+        return sum(projection_lookup.get((pid, week), 0.0)
+                   for pid in package for week in future_weeks)
+
+    raw_candidates = [(partner_id, my_out, partner_out)
+                      for partner_id, partner_packages in partner_info
+                      for my_out in my_packages for partner_out in partner_packages]
+    balance_pruned = 0
+    if getattr(options, "balance_filter", False):
+        minimum_value_ratio = getattr(options, "minimum_value_ratio", 0.5)
+        if not 0 <= minimum_value_ratio <= 1:
+            raise SeasonModelError("Minimum package value ratio must be from 0 to 1.")
+        balanced = []
+        for candidate in raw_candidates:
+            my_value, partner_value = package_value(candidate[1]), package_value(candidate[2])
+            high = max(my_value, partner_value)
+            ratio = min(my_value, partner_value) / high if high > 0 else 1.0
+            if ratio >= minimum_value_ratio:
+                balanced.append(candidate)
+        balance_pruned = len(raw_candidates) - len(balanced)
+        raw_candidates = balanced
+    candidates_to_resolve, pruning = prune_ranked(
+        raw_candidates, options.runtime.candidate_limit,
+        key=lambda row: (abs(package_value(row[1]) - package_value(row[2])), row),
+    )
+    if progress_callback and pruning["pruned"]:
+        progress_callback("Applying approximate value filter", pruning["evaluated"],
+                          pruning["generated"], "candidates")
+    resolved = {}
+    if progress_callback:
+        progress_callback(f"Resolving required drops for {trade_type} trades",
+                          0, len(candidates_to_resolve), "trades")
+    for index, (partner_id, my_out, partner_out) in enumerate(candidates_to_resolve, start=1):
+        try:
+            resolution = select_trade_resolution(
+                baseline, my_team_id, partner_id, my_out, partner_out,
+                options.effective_week or baseline.state.current_week, options,
+                roster_ids=roster_ids, players=players,
+                projection_lookup=projection_lookup, score_cache=score_cache)
+            resolved[(partner_id, my_out, partner_out)] = resolution
+        except (RuntimeError, SeasonModelError):
+            # Some required-drop choices satisfy transaction constraints but
+            # cannot fill every required lineup slot.  They are invalid trade
+            # candidates, not a fatal error for the rest of the search.
+            pass
+        if progress_callback and (index % 100 == 0 or index == len(candidates_to_resolve)):
+            progress_callback(f"Resolving required drops for {trade_type} trades",
+                              index, len(candidates_to_resolve), "trades")
+    constrained = [(*key, *resolution) for key, resolution in resolved.items()]
+    candidates = []
+    if progress_callback:
+        progress_callback("Validating legal trade candidates", 0, len(constrained), "trades")
+    for index, (partner_id, my_out, partner_out, my_drops, partner_drops) in enumerate(constrained, start=1):
+        try:
+            apply_transaction(baseline.state, trade_transaction(
+                baseline.state, team_id=my_team_id, partner_id=partner_id,
+                give=my_out, receive=partner_out,
+                effective_week=options.effective_week or baseline.state.current_week,
+                team_drops=my_drops, partner_drops=partner_drops,
+            ))
+            candidates.append((partner_id, my_out, partner_out, my_drops, partner_drops))
+        except SeasonModelError:
+            pass
+        if progress_callback and (index % 100 == 0 or index == len(constrained)):
+            progress_callback("Validating legal trade candidates", index, len(constrained), "trades")
+    lossless_filtered = ((len(candidates_to_resolve) - len(resolved))
+                         + (len(constrained) - len(candidates)))
 
     my_baseline_future = tuple(
         baseline_weekly[(my_team_id, week)]
@@ -512,24 +719,29 @@ def _evaluate_all_trades_for_type(
     counter = 0
 
     progress = tqdm(
-        total=total_combinations,
+        total=len(candidates),
         desc=f"Evaluating all {trade_type} trades",
         unit="trade",
         dynamic_ncols=True,
+        callback=progress_callback,
         leave=True,
     )
 
+    candidate_map = {(partner_id, my_out, partner_out):(my_drops, partner_drops)
+                     for partner_id, my_out, partner_out, my_drops, partner_drops in candidates}
     for partner_id, partner_packages in partner_info:
         partner_base = frozenset(roster_ids[partner_id])
         partner_baseline_future = tuple(
             baseline_weekly[(partner_id, week)]
             for week in future_weeks
         )
-
         for my_out in my_packages:
             my_remaining = roster_ids[my_team_id] - set(my_out)
-
             for partner_out in partner_packages:
+                resolution = candidate_map.get((partner_id, my_out, partner_out))
+                if resolution is None:
+                    continue
+                my_drops, partner_drops = resolution
                 counter += 1
                 trade_id = (
                     f"{trade_type.replace('-', '')}_"
@@ -543,16 +755,18 @@ def _evaluate_all_trades_for_type(
                     partner_name=names[partner_id],
                     my_out=my_out,
                     partner_out=partner_out,
+                    my_drops=my_drops,
+                    partner_drops=partner_drops,
                     players=players,
                 )
 
                 my_new_ids = frozenset(
-                    my_remaining | set(partner_out)
+                    (my_remaining | set(partner_out)) - set(my_drops)
                 )
                 partner_new_ids = frozenset(
                     (roster_ids[partner_id] - set(partner_out))
                     | set(my_out)
-                )
+                ) - set(partner_drops)
 
                 try:
                     my_scores = _score_roster_weeks(
@@ -561,7 +775,7 @@ def _evaluate_all_trades_for_type(
                         team_name=names[my_team_id],
                         weeks=future_weeks,
                         players=players,
-                        starter_slots=baseline.starter_slots,
+                        starter_slots=baseline.state.starter_slots,
                         projection_lookup=projection_lookup,
                         cache=score_cache,
                     )
@@ -571,11 +785,11 @@ def _evaluate_all_trades_for_type(
                         team_name=names[partner_id],
                         weeks=future_weeks,
                         players=players,
-                        starter_slots=baseline.starter_slots,
+                        starter_slots=baseline.state.starter_slots,
                         projection_lookup=projection_lookup,
                         cache=score_cache,
                     )
-                except RuntimeError as exc:
+                except (RuntimeError, SeasonModelError) as exc:
                     invalid_count += 1
                     evaluations.append(
                         {
@@ -588,6 +802,8 @@ def _evaluate_all_trades_for_type(
                     progress.update(1)
                     continue
 
+                my_scores = _preserve_actual_scores(baseline, my_team_id, future_weeks, my_scores)
+                partner_scores = _preserve_actual_scores(baseline, partner_id, future_weeks, partner_scores)
                 my_weekly_metrics = _weekly_lineup_metrics(
                     "my", my_baseline_future, my_scores, future_weeks
                 )
@@ -605,9 +821,15 @@ def _evaluate_all_trades_for_type(
                 ]
                 mutual_avg_gain = min(my_avg_gain, partner_avg_gain)
                 combined_avg_gain = my_avg_gain + partner_avg_gain
+                my_sustained_gain = my_weekly_metrics[
+                    "my_sustained_weekly_lineup_gain"
+                ]
+                partner_sustained_gain = partner_weekly_metrics[
+                    "partner_sustained_weekly_lineup_gain"
+                ]
                 classification = _classify_trade(
-                    my_avg_gain,
-                    partner_avg_gain,
+                    my_sustained_gain,
+                    partner_sustained_gain,
                 )
 
                 export_record = {
@@ -659,11 +881,17 @@ def _evaluate_all_trades_for_type(
                     "combined_avg_remaining_season_lineup_gain": (
                         combined_avg_gain
                     ),
-                    "my_positive_gain": my_avg_gain > EPSILON,
-                    "partner_positive_gain": partner_avg_gain > EPSILON,
+                    "mutual_sustained_weekly_lineup_gain": min(
+                        my_sustained_gain, partner_sustained_gain
+                    ),
+                    "combined_sustained_weekly_lineup_gain": (
+                        my_sustained_gain + partner_sustained_gain
+                    ),
+                    "my_positive_gain": my_sustained_gain > EPSILON,
+                    "partner_positive_gain": partner_sustained_gain > EPSILON,
                     "both_positive_gain": (
-                        my_avg_gain > EPSILON
-                        and partner_avg_gain > EPSILON
+                        my_sustained_gain > EPSILON
+                        and partner_sustained_gain > EPSILON
                     ),
                 }
 
@@ -679,13 +907,15 @@ def _evaluate_all_trades_for_type(
 
     progress.close()
 
-    # Rank every valid trade by the weaker side's average gain first. The rank
+    # Rank by the weaker side's sustained gain first. Removing each side's
+    # single best week prevents a bye/injury fill-in from leading the search.
     # is informational only; no trade is removed from the output.
     valid_internal.sort(
         key=lambda x: (
+            -x["export"]["mutual_sustained_weekly_lineup_gain"],
+            -x["export"]["combined_sustained_weekly_lineup_gain"],
+            -x["export"]["my_sustained_weekly_lineup_gain"],
             -x["export"]["mutual_avg_remaining_season_lineup_gain"],
-            -x["export"]["combined_avg_remaining_season_lineup_gain"],
-            -x["export"]["my_avg_remaining_season_lineup_gain"],
             x["export"]["partner_team_id"],
             x["export"]["trade_id"],
         )
@@ -699,6 +929,7 @@ def _evaluate_all_trades_for_type(
         desc=f"Reprojecting all valid {trade_type} trades",
         unit="trade",
         dynamic_ncols=True,
+        callback=progress_callback,
         leave=True,
     ):
         record = item["export"]
@@ -816,6 +1047,14 @@ def _evaluate_all_trades_for_type(
     summary = {
         "trade_type": trade_type,
         "total_combinations": total_combinations,
+        "balance_filter_enabled": getattr(options, "balance_filter", False),
+        "balance_filtered": balance_pruned,
+        "minimum_value_ratio": getattr(options, "minimum_value_ratio", None) if getattr(options, "balance_filter", False) else None,
+        "search_mode": options.runtime.mode,
+        "candidate_limit": options.runtime.candidate_limit,
+        "legal_candidates": len(candidates) + pruning["pruned"],
+        "lossless_filtered": lossless_filtered,
+        **pruning,
         "valid_trades_evaluated": len(valid_exports),
         "invalid_lineup_trades": invalid_count,
         "both_positive": class_counts.get("BOTH_POSITIVE", 0),
@@ -836,16 +1075,19 @@ def _evaluate_all_trades_for_type(
 
 def evaluate_all_trades(
     *,
-    baseline: ProjectionResult,
+    baseline: SeasonProjection,
     trade_config: TradeConfig,
+    progress_callback=None,
+    options: TradeSearchOptions | None = None,
 ) -> TradeSearchResult:
-    """Evaluate every 1-for-1 and 2-for-2 trade involving MY_TEAM_ID.
+    """Evaluate configured one-, two-, and three-player trade packages.
 
     Every rostered player is eligible, including bench players, kickers, and
     D/ST. Every valid trade is fully reprojected through the regular season
     and postseason; no ranking threshold or top-N filter is applied.
     """
-    names = _team_name_map(baseline.teams)
+    options = options or TradeSearchOptions()
+    names = _team_name_map(baseline.state.teams)
     if trade_config.my_team_id not in names:
         raise RuntimeError(
             f"MY_TEAM_ID={trade_config.my_team_id} was not found in the "
@@ -853,11 +1095,11 @@ def evaluate_all_trades(
         )
 
     regular_end = int(
-        baseline.summary["regular_season_matchup_periods"]
+        max(baseline.state.rules.period_weeks[baseline.state.rules.regular_periods])
     )
-    current_week = int(
-        baseline.summary["current_scoring_period"]
-    )
+    current_week = options.effective_week or int(baseline.summary["current_scoring_period"])
+    if not baseline.state.current_week <= current_week <= baseline.state.final_week:
+        raise RuntimeError("Trade search effective week must be within the remaining season.")
     final_week = int(baseline.summary["final_scoring_period"])
 
     future_weeks = tuple(range(current_week, final_week + 1))
@@ -870,10 +1112,10 @@ def evaluate_all_trades(
         week for week in future_weeks if week > regular_end
     )
 
-    roster_ids = _roster_ids_by_team(baseline.rosters)
-    players = _player_map(baseline.rosters)
+    roster_ids = _roster_ids_by_team(baseline.state.rosters)
+    players = _player_map(baseline.state.rosters)
     projection_lookup = _projection_lookup(
-        baseline.player_projections
+        baseline.state.player_projections
     )
     score_cache: dict[
         tuple[frozenset[int], tuple[int, ...]],
@@ -891,13 +1133,17 @@ def evaluate_all_trades(
         f"Trade evaluation horizon: Weeks {current_week}-{final_week}."
     )
     print(
-        "All rostered positions are included. Every valid 1-for-1 and "
-        "2-for-2 trade will receive a full standings/playoff projection."
+        "All rostered positions are included. Every retained valid trade "
+        "will receive a full standings/playoff projection."
     )
 
-    for trade_size in (1, 2):
+    for give_size, receive_size in options.package_shapes:
+        if give_size not in (1, 2, 3) or receive_size not in (1, 2, 3):
+            raise RuntimeError("Trade search supports one-, two-, and three-player sides.")
         evaluations, summary = _evaluate_all_trades_for_type(
-            trade_size=trade_size,
+            give_size=give_size,
+            receive_size=receive_size,
+            progress_callback=progress_callback,
             baseline=baseline,
             trade_config=trade_config,
             roster_ids=roster_ids,
@@ -907,6 +1153,7 @@ def evaluate_all_trades(
             future_weeks=future_weeks,
             regular_weeks=regular_weeks,
             postseason_weeks=postseason_weeks,
+            options=options,
         )
 
         all_evaluations.extend(evaluations)

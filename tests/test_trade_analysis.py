@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-from fantasy_projection.config import Config
-from fantasy_projection.pipeline import ProjectionResult
+from fantasy_projection.season import LeagueState, SeasonModelError, SeasonRules, SeasonProjection
 from fantasy_projection.trade_analysis import (
     evaluate_trade,
-    resolve_player_references,
 )
 
 
@@ -19,7 +16,7 @@ def _result(
     places: tuple[int, int],
     starters: tuple[int, int],
     champion: str,
-) -> ProjectionResult:
+) -> SeasonProjection:
     teams = [
         {"team_id": 1, "team_name": "Alpha"},
         {"team_id": 2, "team_name": "Beta"},
@@ -93,13 +90,16 @@ def _result(
             ((1, "Alpha"), (2, "Beta"))
         )
     ]
-    return ProjectionResult(
+    return SeasonProjection(
+        state=LeagueState(league_id=1, season=2026, first_week=1, current_week=1, final_week=1,
+                          rules=SeasonRules(1, {1: (1,)}, 0, ()),
         teams=teams,
         rosters=rosters,
         player_projections=[],
         starter_slots=[],
         schedule_rows=[],
         settings_payload={},
+        ),
         optimal_lineups=lineups,
         weekly_team_projections=weekly,
         regular_season_matchups=[],
@@ -115,25 +115,6 @@ def _result(
     )
 
 
-class ResolvePlayerReferencesTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.rosters = _result(
-            weekly_points=(100.0, 90.0),
-            seeds=(1, 2),
-            places=(1, 2),
-            starters=(101, 202),
-            champion="Alpha",
-        ).rosters
-
-    def test_resolves_case_insensitive_name_and_id(self) -> None:
-        actual = resolve_player_references(
-            self.rosters, ["alice runner", "202"]
-        )
-        self.assertEqual((101, 202), actual)
-
-    def test_unknown_player_includes_partial_match(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "Alice Runner"):
-            resolve_player_references(self.rosters, ["Alice"])
 
 
 class EvaluateTradeTests(unittest.TestCase):
@@ -152,22 +133,20 @@ class EvaluateTradeTests(unittest.TestCase):
             starters=(202, 101),
             champion="Alpha",
         )
-        config = Config(1, 2026, Path("outputs"), None, None)
 
         with patch(
             "fantasy_projection.trade_analysis."
-            "project_from_normalized_inputs",
+            "project_season",
             return_value=after,
         ) as project:
             result = evaluate_trade(
                 baseline=before,
-                config=config,
                 my_team_id=1,
                 give_player_ids=[101],
                 receive_player_ids=[202],
             )
 
-        projected_rosters = project.call_args.kwargs["rosters"]
+        projected_rosters = project.call_args.args[0].rosters
         owners = {
             row["player_id"]: row["team_id"] for row in projected_rosters
         }
@@ -192,12 +171,10 @@ class EvaluateTradeTests(unittest.TestCase):
             starters=(101, 202),
             champion="Alpha",
         )
-        config = Config(1, 2026, Path("outputs"), None, None)
 
-        with self.assertRaisesRegex(RuntimeError, "does not roster"):
+        with self.assertRaisesRegex(SeasonModelError, "Received players"):
             evaluate_trade(
                 baseline=before,
-                config=config,
                 my_team_id=1,
                 give_player_ids=[202],
                 receive_player_ids=[101],

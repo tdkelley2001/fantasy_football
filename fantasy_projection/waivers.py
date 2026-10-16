@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from tqdm import tqdm
+from .progress import Progress as tqdm
 
 from .espn import as_int
 from .league_data import get_roster_settings
-from .pipeline import ProjectionResult
+from .season import SeasonModelError, SeasonProjection
+from .transactions import apply_transaction, waiver_transaction
+from .search_runtime import SearchRuntime, prune_ranked, runtime_profile
 from .trades import (
     EPSILON,
     _phase_lineup_metrics,
     _playoff_path,
     _projected_game_flip_metrics,
     _projection_lookup,
+    _preserve_actual_scores,
     _score_roster_weeks,
     _scenario_metrics,
     _team_metrics,
@@ -32,12 +35,38 @@ DEFAULT_POSITION_NAMES = {
 }
 
 
+@dataclass(frozen=True)
+class WaiverSearchOptions:
+    add_positions: tuple[int, ...] = ()
+    drop_positions: tuple[int, ...] = ()
+    exclude_add_player_ids: tuple[int, ...] = ()
+    untouchable_drop_player_ids: tuple[int, ...] = ()
+    target_add_player_ids: tuple[int, ...] = ()
+    include_special_teams: bool = True
+    effective_week: int | None = None
+    runtime: SearchRuntime = runtime_profile()
+
+
 @dataclass
 class WaiverAnalysisResult:
     available_players: list[dict[str, Any]]
     transactions: list[dict[str, Any]]
     marginal_roster_values: list[dict[str, Any]]
     summary: dict[str, Any]
+
+
+def _filter_waiver_candidates(candidate_ids, drop_candidates, players, options):
+    """Apply generation constraints before any move is evaluated."""
+    adds = [pid for pid in candidate_ids
+            if pid not in options.exclude_add_player_ids
+            and (not options.target_add_player_ids or pid in options.target_add_player_ids)
+            and (not options.add_positions or players[pid].get("default_position_id") in options.add_positions)
+            and (options.include_special_teams or players[pid].get("default_position_id") not in (5, 16))]
+    drops = [row for row in drop_candidates
+             if int(row["player_id"]) not in options.untouchable_drop_player_ids
+             and (not options.drop_positions or row.get("default_position_id") in options.drop_positions)
+             and (options.include_special_teams or row.get("default_position_id") not in (5, 16))]
+    return adds, drops
 
 
 def _position_name(player: dict[str, Any]) -> str:
@@ -313,23 +342,28 @@ def _marginal_roster_values(
 
 def analyze_waivers(
     *,
-    baseline: ProjectionResult,
+    baseline: SeasonProjection,
     my_team_id: int,
     available_players: list[dict[str, Any]],
+    progress_callback=None,
+    options: WaiverSearchOptions | None = None,
 ) -> WaiverAnalysisResult:
     """Evaluate every sensible add/drop against the baseline projection."""
+    options = options or WaiverSearchOptions()
     names = {
-        row["team_id"]: row["team_name"] for row in baseline.teams
+        row["team_id"]: row["team_name"] for row in baseline.state.teams
     }
     if my_team_id not in names:
         raise RuntimeError(
             f"MY_TEAM_ID={my_team_id} was not found in this league."
         )
 
-    current_week = int(baseline.summary["current_scoring_period"])
+    current_week = options.effective_week or int(baseline.summary["current_scoring_period"])
+    if not baseline.state.current_week <= current_week <= baseline.state.final_week:
+        raise RuntimeError("Waiver search effective week must be within the remaining season.")
     final_week = int(baseline.summary["final_scoring_period"])
     regular_end = int(
-        baseline.summary["regular_season_matchup_periods"]
+        max(baseline.state.rules.period_weeks[baseline.state.rules.regular_periods])
     )
     future_weeks = tuple(range(current_week, final_week + 1))
     if not future_weeks:
@@ -342,7 +376,7 @@ def analyze_waivers(
     )
 
     my_roster = [
-        row for row in baseline.rosters if row["team_id"] == my_team_id
+        row for row in baseline.state.rosters if row["team_id"] == my_team_id
     ]
     drop_candidates = [
         row
@@ -355,16 +389,16 @@ def analyze_waivers(
         int(row["player_id"]) for row in my_roster
     )
     rostered_ids = {
-        int(row["player_id"]) for row in baseline.rosters
+        int(row["player_id"]) for row in baseline.state.rosters
     }
     players = {
-        int(row["player_id"]): row for row in baseline.rosters
+        int(row["player_id"]): row for row in baseline.state.rosters
     }
     for row in available_players:
         players.setdefault(int(row["player_id"]), row)
-    projection_lookup = _projection_lookup(baseline.player_projections)
+    projection_lookup = _projection_lookup(baseline.state.player_projections)
     starter_slot_ids = {
-        int(row["slot_id"]) for row in baseline.starter_slots
+        int(row["slot_id"]) for row in baseline.state.starter_slots
     }
     (
         available_rows,
@@ -378,6 +412,9 @@ def analyze_waivers(
         regular_weeks=regular_weeks,
         postseason_weeks=postseason_weeks,
         starter_slot_ids=starter_slot_ids,
+    )
+    candidate_ids, drop_candidates = _filter_waiver_candidates(
+        candidate_ids, drop_candidates, players, options
     )
 
     baseline_weekly = {
@@ -404,12 +441,43 @@ def analyze_waivers(
     invalid_lineups = 0
     illegal_position_limits = 0
     total_pairs = len(candidate_ids) * len(drop_candidates)
+    constrained_pairs = [(add_id, int(drop["player_id"]))
+                         for add_id in candidate_ids for drop in drop_candidates]
+    source = replace(baseline.state, available_players=available_players)
+    pairs = []
+    if progress_callback:
+        progress_callback("Validating legal waiver candidates", 0, len(constrained_pairs), "moves")
+    for index, (add_id, drop_id) in enumerate(constrained_pairs, start=1):
+        try:
+            apply_transaction(source, waiver_transaction(
+                source, team_id=my_team_id, add=add_id, drop=drop_id,
+                effective_week=current_week,
+            ))
+            pairs.append((add_id, drop_id))
+        except SeasonModelError:
+            pass
+        if progress_callback and (index % 100 == 0 or index == len(constrained_pairs)):
+            progress_callback("Validating legal waiver candidates", index, len(constrained_pairs), "moves")
+    lossless_filtered = len(constrained_pairs) - len(pairs)
+    pairs, pruning = prune_ranked(
+        pairs, options.runtime.candidate_limit,
+        key=lambda pair: (
+            abs(sum(_projection_values(pair[0], future_weeks, projection_lookup))
+                - sum(_projection_values(pair[1], future_weeks, projection_lookup))),
+            pair,
+        ),
+    )
+    if progress_callback and pruning["pruned"]:
+        progress_callback("Applying approximate value filter", pruning["evaluated"],
+                          pruning["generated"], "candidates")
+    pair_set = set(pairs)
 
     progress = tqdm(
-        total=total_pairs,
+        total=len(pairs),
         desc="Evaluating add/drop transactions",
         unit="move",
         dynamic_ncols=True,
+        callback=progress_callback,
     )
     for add_id in candidate_ids:
         add_player = players[add_id]
@@ -419,6 +487,8 @@ def analyze_waivers(
 
         for drop_player in drop_candidates:
             drop_id = int(drop_player["player_id"])
+            if (add_id, drop_id) not in pair_set:
+                continue
             drop_projections = _projection_values(
                 drop_id, future_weeks, projection_lookup
             )
@@ -450,7 +520,7 @@ def analyze_waivers(
                 new_ids,
                 baseline_player_ids=baseline_ids,
                 players=players,
-                settings_payload=baseline.settings_payload,
+                settings_payload=baseline.state.settings_payload,
             ):
                 illegal_position_limits += 1
                 progress.update(1)
@@ -463,11 +533,11 @@ def analyze_waivers(
                     team_name=names[my_team_id],
                     weeks=future_weeks,
                     players=players,
-                    starter_slots=baseline.starter_slots,
+                    starter_slots=baseline.state.starter_slots,
                     projection_lookup=projection_lookup,
                     cache=score_cache,
                 )
-            except RuntimeError as exc:
+            except (RuntimeError, SeasonModelError) as exc:
                 invalid_lineups += 1
                 transactions.append(
                     {
@@ -479,6 +549,7 @@ def analyze_waivers(
                 progress.update(1)
                 continue
 
+            after_scores = _preserve_actual_scores(baseline, my_team_id, future_weeks, after_scores)
             record = {
                 **base_record,
                 "evaluation_status": "VALID",
@@ -605,6 +676,7 @@ def analyze_waivers(
     ]
     valid.sort(
         key=lambda row: (
+            -row["team_sustained_weekly_lineup_gain"],
             -row["team_avg_remaining_season_lineup_gain"],
             -row["team_playoff_window_total_lineup_gain"],
             -row["team_current_week_lineup_gain"],
@@ -613,6 +685,8 @@ def analyze_waivers(
         )
     )
     for rank, row in enumerate(valid, start=1):
+        row["rank_by_sustained_weekly_gain"] = rank
+        # Retained for API compatibility; it now reflects the default ranking.
         row["rank_by_ros_lineup_gain"] = rank
     invalid = [
         row for row in transactions
@@ -630,6 +704,12 @@ def analyze_waivers(
     summary = {
         "team_id": my_team_id,
         "team_name": names[my_team_id],
+        "search_mode": options.runtime.mode,
+        "candidate_limit": options.runtime.candidate_limit,
+        "total_combinations": total_pairs,
+        "legal_candidates": len(pairs) + pruning["pruned"],
+        "lossless_filtered": lossless_filtered,
+        **pruning,
         "available_players_pulled": len(available_players),
         "available_players_evaluated": len(candidate_ids),
         "available_player_exclusions": dict(exclusions),

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Iterable
+from dataclasses import dataclass, replace
+from typing import Any
 
-from .config import Config
-from .pipeline import ProjectionResult, project_from_normalized_inputs
+from .season import SeasonModelError, SeasonProjection, project_season
+from .transactions import apply_transaction, waiver_transaction
 from .trades import (
     _phase_lineup_metrics,
     _playoff_path,
@@ -13,14 +13,15 @@ from .trades import (
     _team_metrics,
     _weekly_lineup_metrics,
 )
-from .waivers import _move_tags, _position_limit_allows, _position_name
+from .waivers import _move_tags, _position_name
 
 
 @dataclass(frozen=True)
 class WaiverSpec:
     my_team_id: int
     add_player_id: int
-    drop_player_id: int
+    drop_player_id: int | None
+    effective_week: int
 
 
 @dataclass
@@ -31,189 +32,15 @@ class WaiverComparison:
     weekly_comparison: list[dict[str, Any]]
     lineup_comparison: list[dict[str, Any]]
     league_comparison: list[dict[str, Any]]
-    before: ProjectionResult
-    after: ProjectionResult
+    before: SeasonProjection
+    after: SeasonProjection
 
 
-def resolve_player_reference(
-    players: Iterable[dict[str, Any]],
-    reference: str,
-    *,
-    pool_description: str,
-) -> int:
-    """Resolve one exact player name or ESPN ID within a player pool."""
-    rows = list(players)
-    players_by_id = {int(row["player_id"]): row for row in rows}
-    players_by_name: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        key = str(row.get("player_name") or "").strip().casefold()
-        players_by_name.setdefault(key, []).append(row)
-
-    value = reference.strip()
-    if not value:
-        raise RuntimeError(f"Enter one {pool_description}.")
-
-    player = None
-    try:
-        player_id = int(value)
-    except ValueError:
-        matches = players_by_name.get(value.casefold(), [])
-        if len(matches) > 1:
-            details = ", ".join(
-                f'{row["player_name"]} ({row["player_id"]})'
-                for row in matches
-            )
-            raise RuntimeError(
-                f'Player name "{value}" is ambiguous: {details}. '
-                "Use the ESPN player ID instead."
-            )
-        if matches:
-            player = matches[0]
-    else:
-        player = players_by_id.get(player_id)
-
-    if player is None:
-        suggestions = sorted(
-            {
-                str(row.get("player_name") or "")
-                for row in rows
-                if value.casefold()
-                in str(row.get("player_name") or "").casefold()
-            }
-        )
-        hint = (
-            f" Possible matches: {', '.join(suggestions[:5])}."
-            if suggestions
-            else ""
-        )
-        raise RuntimeError(
-            f'No {pool_description} matches "{value}".{hint}'
-        )
-
-    return int(player["player_id"])
-
-
-def _validate_waiver(
-    baseline: ProjectionResult,
-    *,
-    my_team_id: int,
-    available_players: list[dict[str, Any]],
-    add_player_id: int,
-    drop_player_id: int,
-) -> WaiverSpec:
-    team_names = {
-        int(row["team_id"]): row["team_name"] for row in baseline.teams
-    }
-    rostered = {
-        int(row["player_id"]): row for row in baseline.rosters
-    }
-    available = {
-        int(row["player_id"]): row for row in available_players
-    }
-
-    if my_team_id not in team_names:
-        raise RuntimeError(
-            f"MY_TEAM_ID={my_team_id} was not found in this league."
-        )
-    if add_player_id == drop_player_id:
-        raise RuntimeError("The added and dropped player cannot be the same.")
-    if add_player_id not in available:
-        raise RuntimeError(
-            f"Player ID {add_player_id} is not currently available."
-        )
-    if add_player_id in rostered:
-        raise RuntimeError("The added player is already on a roster.")
-    if drop_player_id not in rostered:
-        raise RuntimeError(
-            f"Player ID {drop_player_id} is not currently rostered."
-        )
-
-    drop = rostered[drop_player_id]
-    if int(drop["team_id"]) != my_team_id:
-        raise RuntimeError(
-            f'{team_names[my_team_id]} does not roster '
-            f'{drop["player_name"]}.'
-        )
-    if not drop.get("droppable", True):
-        raise RuntimeError(f'{drop["player_name"]} is undroppable on ESPN.')
-    if drop.get("lineup_locked", False):
-        raise RuntimeError(f'{drop["player_name"]} is lineup-locked on ESPN.')
-    if drop.get("roster_locked", False):
-        raise RuntimeError(f'{drop["player_name"]} is roster-locked on ESPN.')
-
-    baseline_ids = frozenset(
-        int(row["player_id"])
-        for row in baseline.rosters
-        if int(row["team_id"]) == my_team_id
-    )
-    new_ids = frozenset(
-        (baseline_ids - {drop_player_id}) | {add_player_id}
-    )
-    players = {**rostered, **available}
-    if not _position_limit_allows(
-        new_ids,
-        baseline_player_ids=baseline_ids,
-        players=players,
-        settings_payload=baseline.settings_payload,
-    ):
-        raise RuntimeError(
-            "This add/drop would exceed an ESPN roster position limit."
-        )
-
-    return WaiverSpec(
-        my_team_id=my_team_id,
-        add_player_id=add_player_id,
-        drop_player_id=drop_player_id,
-    )
-
-
-def _waiver_rosters(
-    baseline: ProjectionResult,
-    spec: WaiverSpec,
-    available_players: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    team_name = next(
-        row["team_name"]
-        for row in baseline.teams
-        if int(row["team_id"]) == spec.my_team_id
-    )
-    add = dict(
-        next(
-            row
-            for row in available_players
-            if int(row["player_id"]) == spec.add_player_id
-        )
-    )
-    add.update(
-        {
-            "team_id": spec.my_team_id,
-            "team_name": team_name,
-            "current_lineup_slot_id": None,
-            "acquisition_type": "WAIVER_PROPOSAL",
-            "player_status": "ONTEAM",
-            "droppable": True,
-            "lineup_locked": False,
-            "roster_locked": False,
-        }
-    )
-    rows = [
-        dict(row)
-        for row in baseline.rosters
-        if int(row["player_id"]) != spec.drop_player_id
-    ]
-    rows.append(add)
-    rows.sort(
-        key=lambda row: (
-            int(row["team_id"]),
-            str(row.get("player_name") or ""),
-        )
-    )
-    return rows
 
 
 def _weekly_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     team_id: int,
     weeks: tuple[int, ...],
 ) -> list[dict[str, Any]]:
@@ -226,7 +53,7 @@ def _weekly_rows(
         for row in after.weekly_team_projections
     }
     team_name = next(
-        row["team_name"] for row in before.teams
+        row["team_name"] for row in before.state.teams
         if int(row["team_id"]) == team_id
     )
     return [
@@ -245,13 +72,13 @@ def _weekly_rows(
 
 
 def _lineup_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     team_id: int,
     weeks: tuple[int, ...],
 ) -> list[dict[str, Any]]:
     def keyed(
-        result: ProjectionResult,
+        result: SeasonProjection,
     ) -> dict[tuple[int, int, int], dict[str, Any]]:
         return {
             (row["week"], row["slot_id"], row["slot_instance"]): row
@@ -296,14 +123,14 @@ def _lineup_rows(
 
 
 def _league_rows(
-    before: ProjectionResult,
-    after: ProjectionResult,
+    before: SeasonProjection,
+    after: SeasonProjection,
     my_team_id: int,
 ) -> list[dict[str, Any]]:
     old = _team_metrics(before)
     new = _team_metrics(after)
     names = {
-        int(row["team_id"]): row["team_name"] for row in before.teams
+        int(row["team_id"]): row["team_name"] for row in before.state.teams
     }
     return [
         {
@@ -332,42 +159,29 @@ def _league_rows(
 
 def evaluate_waiver(
     *,
-    baseline: ProjectionResult,
-    config: Config,
+    baseline: SeasonProjection,
     my_team_id: int,
     available_players: list[dict[str, Any]],
     add_player_id: int,
-    drop_player_id: int,
+    drop_player_id: int | None,
+    effective_week: int | None = None,
 ) -> WaiverComparison:
     """Apply one proposed add/drop and compare full league projections."""
-    spec = _validate_waiver(
-        baseline,
-        my_team_id=my_team_id,
-        available_players=available_players,
-        add_player_id=add_player_id,
-        drop_player_id=drop_player_id,
-    )
-    after = project_from_normalized_inputs(
-        config=config,
-        teams=[dict(row) for row in baseline.teams],
-        rosters=_waiver_rosters(baseline, spec, available_players),
-        player_projections=baseline.player_projections,
-        starter_slots=baseline.starter_slots,
-        schedule_rows=baseline.schedule_rows,
-        settings_payload=baseline.settings_payload,
-        first_week=int(baseline.summary["first_scoring_period"]),
-        final_week=int(baseline.summary["final_scoring_period"]),
-        current_week=int(baseline.summary["current_scoring_period"]),
-    )
+    effective_week = baseline.state.current_week if effective_week is None else effective_week
+    spec = WaiverSpec(my_team_id, add_player_id, drop_player_id, effective_week)
+    source = replace(baseline.state, available_players=available_players)
+    transaction = waiver_transaction(source, team_id=my_team_id, add=add_player_id,
+                                     drop=drop_player_id, effective_week=effective_week)
+    after = project_season(apply_transaction(source, transaction), effective_week)
 
-    current_week = int(baseline.summary["current_scoring_period"])
+    current_week = effective_week
     final_week = int(baseline.summary["final_scoring_period"])
     regular_end = int(
-        baseline.summary["regular_season_matchup_periods"]
+        max(baseline.state.rules.period_weeks[baseline.state.rules.regular_periods])
     )
     weeks = tuple(range(current_week, final_week + 1))
     if not weeks:
-        raise RuntimeError("No scoring weeks remain to evaluate this waiver.")
+        raise SeasonModelError("No scoring weeks remain to evaluate this waiver.")
     regular_weeks = tuple(week for week in weeks if week <= regular_end)
     playoff_weeks = tuple(week for week in weeks if week > regular_end)
 
@@ -383,7 +197,7 @@ def evaluate_waiver(
     impact = {
         "team_id": my_team_id,
         "team_name": next(
-            row["team_name"] for row in baseline.teams
+            row["team_name"] for row in baseline.state.teams
             if int(row["team_id"]) == my_team_id
         ),
         **_weekly_lineup_metrics(
@@ -449,20 +263,20 @@ def evaluate_waiver(
     impact["move_tags"] = " | ".join(tags)
 
     rostered = {
-        int(row["player_id"]): row for row in baseline.rosters
+        int(row["player_id"]): row for row in baseline.state.rosters
     }
     available = {
         int(row["player_id"]): row for row in available_players
     }
     add = available[spec.add_player_id]
-    drop = rostered[spec.drop_player_id]
-    projection_lookup = _projection_lookup(baseline.player_projections)
+    drop = rostered.get(spec.drop_player_id)
+    projection_lookup = _projection_lookup(baseline.state.player_projections)
     add_values = tuple(
         projection_lookup.get((spec.add_player_id, week), 0.0)
         for week in weeks
     )
     drop_values = tuple(
-        projection_lookup.get((spec.drop_player_id, week), 0.0)
+        projection_lookup.get((spec.drop_player_id, week), 0.0) if spec.drop_player_id is not None else 0.0
         for week in weeks
     )
     waiver_summary = {
@@ -476,14 +290,14 @@ def evaluate_waiver(
         },
         "drop": {
             "player_id": spec.drop_player_id,
-            "player_name": drop["player_name"],
-            "position": _position_name(drop),
+            "player_name": drop["player_name"] if drop else "Open roster slot",
+            "position": _position_name(drop) if drop else None,
         },
         "same_position_swap": (
-            add.get("default_position_id")
-            == drop.get("default_position_id")
+            bool(drop) and add.get("default_position_id") == drop.get("default_position_id")
         ),
         "comparison_weeks": list(weeks),
+        "effective_week": effective_week,
         "add_total_remaining_projection": sum(add_values),
         "drop_total_remaining_projection": sum(drop_values),
         "move_tags": tags,
