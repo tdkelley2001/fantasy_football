@@ -324,7 +324,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 ### 12.1 Milestone sequence and status
 
-#### M0 — ESPN feasibility and historical-data audit [NEXT / NOT STARTED]. Diagnostic script, documented actual API/endpoint coverage, historical pregame projection provenance, complete league settings/waiver/bracket inventory, known blockers. PASS: each critical field verified or explicitly addressed with a defensible path; material gaps and uncertainty written down.
+#### M0 — ESPN feasibility and historical-data audit [IN PROGRESS]. Diagnostic script, documented actual API/endpoint coverage, historical pregame projection provenance, complete league settings/waiver/bracket inventory, known blockers. PASS: each critical field verified or explicitly addressed with a defensible path; material gaps and uncertainty written down.
 
 #### M1 — Canonical snapshots and validation [NOT STARTED]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, SQLite/Parquet, fixture tests. PASS: deterministic snapshot round-trip, no data corruption on failed refresh, complete identifiable league state and usable future inputs.
 
@@ -350,7 +350,7 @@ Operating rules: Every numbered task has a concrete inspectable artifact, a smal
 
 #### M0 — ESPN data and feasibility audit (first priority; discovery, not modeling)
 
-M0.1 Create clean Python repository, dependency lockfile, configuration example, test runner, logging and credential loading; verify credentials are excluded from source control. GATE: clean setup and one automated smoke test on a fresh environment.
+M0.1 [COMPLETE — 15 October 2026] Create clean Python repository, dependency lockfile, configuration example, test runner, logging and credential loading; verify credentials are excluded from source control. GATE: PASSED — locked install, editable package install, 13 automated tests and the configuration/logging health check passed in a newly created Python 3.12 environment; repository tests verify `.env` is ignored and no local credential file is tracked.
 
 M0.2 Implement a read-only ESPN connectivity script for the user's actual league/season; enumerate teams, player and team IDs, roster ownership, standings, scoring and eligible lineup slots. GATE: reconcile 14 unique teams and ownership without silent assumptions.
 
@@ -452,7 +452,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is currently the next unstarted milestone; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.2 is the next unstarted work package; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -460,7 +460,7 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 ### 12.3 Immediate first-sprint checklist
 
-[ ] Establish clean repository, Python environment, league_id/season config and secure credential loading.
+[x] Establish clean repository, Python environment, league_id/season config and secure credential loading.
 
 [ ] Connect a read-only ESPN diagnostic to the actual 2026 league; retrieve team/league/scoring/roster metadata.
 

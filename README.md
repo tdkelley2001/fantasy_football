@@ -4,9 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-Repository transition only. No new engine implementation has begun, and every M0-M7 work package is **NOT STARTED**. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
-
-Do not begin M0.1 until this transition is reviewed and approved.
+M0, the ESPN data and feasibility audit, is in progress. M0.1, the clean Python repository foundation, is **COMPLETE**; M0.2 and all later work packages remain **NOT STARTED**. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -16,9 +14,30 @@ Do not begin M0.1 until this transition is reviewed and approved.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
 
-## Upcoming milestone
+## Development setup
 
-After transition approval, M0 is the next milestone: the ESPN data and feasibility audit. Its first work package is M0.1, repository and development-environment setup. This transition deliberately does not perform that work.
+Python 3.12 is required. From a clean checkout:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --requirement requirements.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps --editable .
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Copy `.env.example` to `.env` and replace its non-secret example values. Private-league credentials must be provided together as `ESPN_S2` and `ESPN_SWID`; configuration fails rather than accepting a partial pair. The `.env` file is ignored by Git.
+
+Run the setup health check after configuration:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football
+```
+
+The health check validates configuration and logging only. It performs no ESPN or network access; connectivity begins in M0.2.
+
+## Upcoming work package
+
+After M0.1 review, M0.2 is next: a read-only ESPN connectivity diagnostic for the actual league and season.
 
 ## Historical implementation
 

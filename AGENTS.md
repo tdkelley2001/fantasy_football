@@ -8,7 +8,7 @@ These rules apply to all future work in this repository. The approved requiremen
 2. Preserve a clean-sheet architecture. Legacy code is historical reference only and must not shape interfaces or behavior merely because it exists.
 3. Work in small, independently testable tasks. Do not combine roadmap packages unless their interfaces and acceptance gates have already been verified.
 4. Respect milestone dependencies and statuses. Never mark a task or milestone complete until its documented acceptance gate passes with inspectable evidence.
-5. Do not begin a milestone or work package without the required review or approval. In particular, M0.1 remains blocked on approval of the repository transition.
+5. Do not begin a milestone or work package without the required review or approval.
 
 ## Correctness rules
 
