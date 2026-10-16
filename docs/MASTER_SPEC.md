@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: M0 feasibility handoff | 16 October 2026 | Status: M0 complete; M1 pending architecture review*
+*Version: canonical schema v1 | 16 October 2026 | Status: M0 and M1.1 complete; M1.2 pending review*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Distinguish intended functionality from verified implementation: none of the algorithms or ESPN field availability described below should be understood as already built or confirmed.
 
@@ -68,6 +68,8 @@ Post-M0.5 approval: these unverified historical projection/actual pairs may be u
 
 Include team and player identities; complete real current rosters/lineup capacity and positional eligibility; an unrostered ESPN player pool and ownership map; current settled standings and PF; future schedule; regular-season and postseason format; current waiver order/rules; each player’s projection for each future week; status/byes/missingness; league scoring settings and source timestamps. Maintain no more than one owner per player per simulation path. Missing future projections remain explicitly distinct from confirmed ESPN zeros in canonical data. Store the nullable raw projection, a `missing` / `explicit_zero` / `present` status, the derived effective projection, and its source. Under the approved V1 policy, a missing raw projection produces `effective_projection=0` with source `missing_projection_policy`; an explicit ESPN zero produces the same effective value with source `espn`. Never overwrite the raw missing value or misattribute an imputation to ESPN. Evidence and methodology are recorded in `docs/MISSING_PROJECTION_POLICY.md`.
 
+M1.1 implements schema version 1 as frozen, slotted, ESPN-independent dataclasses with tuple collections and stable ID joins. `RosterEntry` is the only authoritative ownership relationship. `PlayerWeek` uses `(player_id, season, scoring_week)` and preserves finite raw values exactly: negative and positive present values remain unchanged with ESPN provenance, explicit zero remains ESPN zero, and missing derives policy zero. Projected-lineup availability is derived as `effective_projection > 0`. The snapshot stores explicit first/final simulation weeks, full intervening player-week coverage, cumulative present standings, dynamic rules, matchup-period/week mappings, NFL games/byes, source references, evidence interpretations, and unresolved gaps. Pure validation separates canonical contradictions from unresolved capability-specific meanings. Deterministic schema-v1 JSON rejects incompatible versions and round-trips nulls, zeros, signed IDs, UTC timestamps, raw enums, and gaps. M1.1 does not implement ESPN normalization, persistence, publication, or simulation. The contract is documented in `docs/CANONICAL_MODEL.md`.
+
 ### 3.4 Snapshot publication and staleness
 
 Fetch into temporary staging; validate critical schema, coverage and internal invariants; only then atomically mark a new immutable snapshot simulation-ready. A half-fetched, malformed or wrong-league refresh must fail and leave the last good snapshot untouched. Snapshot validators should be strict about actual missing core league data, not blindly treat every unprojected individual player as a catastrophic refresh failure. Record failure diagnostics and quality metrics.
@@ -76,7 +78,7 @@ Snapshot age is displayed with clear stale-data warnings, but valid snapshots re
 
 ### 3.5 Persistence and security
 
-Use lightweight local SQLite for metadata, snapshots/run indexes, manifests and small normalized tables, and Parquet for larger player-week datasets and simulation research output. Keep persistence abstracted from the simulation hot path. Store only useful original weekly baseline forecasts and selected representative histories; do not build permanent caching for completed hypothetical evaluations. Sensitive ESPN cookies/credentials (SWID, espn_s2) are provided securely, not embedded in source, reports, snapshots or logs. Define data retention and schema-version conventions.
+Use lightweight local SQLite as V1's authoritative persistent store for metadata, immutable snapshots, compressed raw ESPN payloads, request provenance, checksums, indexes, manifests, and normalized canonical records. Keep persistence abstracted from the simulation hot path. Do not introduce Parquet storage or scheduled collection in V1. Store only useful original weekly baseline forecasts and selected representative histories; do not build permanent caching for completed hypothetical evaluations. Sensitive ESPN cookies/credentials (SWID, espn_s2) are provided securely, not embedded in source, reports, snapshots or logs. Define data retention and schema-version conventions. Actual storage and publication remain M1.3.
 
 ### 3.6 ESPN-authoritative league rules and configuration portability
 
@@ -336,7 +338,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### M0 — ESPN feasibility and historical-data audit [COMPLETE]. Diagnostic scripts, documented actual API/endpoint coverage, historical projection provenance, complete league settings/waiver/bracket inventory, data dictionary, known gaps, and M1 handoff. PASS: each critical field is verified or explicitly addressed with a defensible path; material gaps and uncertainty are documented. M1 recommendation: GO WITH EXPLICIT UNRESOLVED METADATA.
 
-#### M1 — Canonical snapshots and validation [NOT STARTED]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, SQLite/Parquet, fixture tests. PASS: deterministic snapshot round-trip, no data corruption on failed refresh, complete identifiable league state and usable future inputs.
+#### M1 — Canonical snapshots and validation [IN PROGRESS]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, authoritative SQLite storage, fixture tests. PASS: deterministic snapshot round-trip, no data corruption on failed refresh, complete identifiable league state and usable future inputs.
 
 #### M2 — Structurally complete full-season simulator [NOT STARTED]. Legal projected-optimal weekly lineups, essential waiver processing/real shared pool, matchups, dynamic standings, exact six-team championship and eight-team consolation, initial report and deterministic tests. PASS: every path is legal and yields coherent championship/placement outcomes; known ESPN settings are honored; provisional models labeled.
 
@@ -374,11 +376,11 @@ M0.6 [COMPLETE — 16 October 2026] Publish the field-level ESPN data dictionary
 
 #### M1 — Versioned canonical snapshots and data contracts
 
-M1.1 Define typed canonical entities and join keys: league, rules, teams, gameweeks, players, ownership, schedule, projections and available free agents. Player-week projections must preserve nullable raw values and missing/explicit-zero/present status separately from the approved derived effective value and source. GATE: example JSON/typed fixture passes validation, including raw-missing/effective-zero and raw-explicit-zero/effective-zero cases.
+M1.1 [COMPLETE — 16 October 2026] Define typed immutable canonical entities and stable join keys for league rules, teams, current ownership, players, player-weeks, schedules, NFL calendar, provenance and unresolved rules. GATE: PASSED — schema-v1 deterministic JSON and sanitized typed fixtures validate raw-missing/effective-zero, raw-explicit-zero/effective-zero, positive, and negative cases plus alternate league structures. See `docs/CANONICAL_MODEL.md`.
 
 M1.2 Build explicit ESPN-to-canonical adapter with source provenance and league-specific editable config only for audited missing rules. GATE: adapter unit tests on real sanitized fixtures.
 
-M1.3 Implement staged immutable refresh, validation checks, separate raw/normalized storage and SQLite/Parquet layouts; never modify an approved snapshot on a failed refresh. GATE: round-trip and interrupted-refresh recovery tests.
+M1.3 Implement staged immutable refresh, validation checks, compressed raw payload retention, and normalized authoritative SQLite storage; never modify an approved snapshot on a failed refresh. GATE: round-trip and interrupted-refresh recovery tests.
 
 M1.4 Validate unique player ownership, league/team counts, player-week availability and week/schedule coverage; distinguish absent values from zeros. GATE: intentional malformed fixtures raise precise errors.
 
@@ -462,7 +464,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is complete. M1 is the next milestone but remains not started pending deliberate architecture review; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1.1 are complete. M1.2 is next but remains not started pending review; every later work package above is planned, not implemented.
 
 ### 12.2 Practical development method
 
