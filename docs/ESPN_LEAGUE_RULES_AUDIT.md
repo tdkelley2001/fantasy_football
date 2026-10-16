@@ -2,7 +2,7 @@
 
 ## Scope and evidence
 
-This document records a read-only audit performed on 2026-10-16 against the configured private league's 2026 season and completed 2024 and 2025 seasons. The executable diagnostic is `python -m fantasy_football.league_rules_audit --expected-team-count 14 --expected-playoff-team-count 6 --historical-season 2024 --historical-season 2025`. It emits only sanitized aggregates; raw private responses, credentials, manager identities, player identities, and transaction details are not persisted.
+This document records a read-only audit performed on 2026-10-16 against the configured private league's 2026 season and completed 2024 and 2025 seasons. The executable diagnostic is `python -m fantasy_football.league_rules_audit --expected-team-count 14 --historical-season 2024 --historical-season 2025`. The expected count is an optional identity check only. It emits only sanitized aggregates; raw private responses, credentials, manager identities, player identities, and transaction details are not persisted.
 
 The access path is `espn-api` 1.0.1 for authentication and its `get_league()` read-only request to `lm-api-reads.fantasy.espn.com`, using the `mTeam`, `mRoster`, `mMatchup`, `mSettings`, and `mStandings` views. The rule values below are raw ESPN fields unless a transformation is stated. `espn-api` constructs convenient league objects, but the audit parses the raw response because several required settings are absent from or ambiguously transformed by the library.
 
@@ -81,3 +81,41 @@ The diagnostic has credential-free positive, negative, and adversarial coverage 
 M0.3's original completion remains 47 passing tests. The projection-UI and missing-policy follow-up raised the suite to 55. M0.4 adds finite-projection checks, explicit 32-NFL-team reconciliation, and league-rule tests; the final M0.4 suite count is recorded in the roadmap after verification. Missing raw projections continue to become effective zero only under `missing_projection_policy`; explicit zero and imputed zero remain distinct.
 
 No current master-specification requirement was contradicted. The important refinement is that inverse standings is supported for the configured weekly reset, not a universal waiver assumption, and the eight-team consolation structure remains a blocking evidence gap.
+
+## Generalized discovery follow-up
+
+The follow-up removed the current league's shape from structural validation. Retrieval still obtains raw ESPN responses; pure discovery functions now parse roster, acquisition, trade, scoring, schedule, and team state; a separate capability inventory classifies each area as `valid_and_understood`, `valid_but_unverified`, or `valid_but_unsupported`. Only malformed or contradictory source data raises `LeagueRulesAuditError`.
+
+The diagnostic now derives all of the following from raw settings rather than expected constants:
+
+- observed team count; an optional expected count remains an identity check only;
+- every positive raw lineup-slot capacity, known label, unknown slot ID, starter/bench/IR capacity, current occupancy, and vacancies;
+- waiver type and current priority completeness without requiring traditional waivers;
+- scoring type and seeding-rule enums without requiring H2H points;
+- playoff qualifier count, next-power-of-two bye count, round IDs and durations, scoring-week membership, and reseeding flag;
+- consolation enablement when the field exists, while preserving a missing field as unverified.
+
+Credential-free fixtures verify valid 8-, 10-, and 14-team configurations; differing starter and bench counts; multiple flex slots; zero, one, or two IR slots; four, six, and eight playoff qualifiers; alternate round durations; disabled consolation; and absent consolation metadata. An unfamiliar slot or enum remains in the report with unsupported/unverified status. Negative capacities, duplicate IDs, over-capacity rosters, incomplete priority permutations, overlapping scoring weeks, noncontiguous rounds, duration conflicts, bad seed permutations, duplicate historical appearances, invalid references, winner/score contradictions, and bad multiweek totals fail explicitly.
+
+### Reproducible 2024 and 2025 bracket evidence
+
+The strengthened historical parser uses raw team `playoffSeed` and `rankCalculatedFinal`, schedule `matchupPeriodId`, `winner`, side `teamId`, `totalPoints`, and `pointsByScoringPeriod`, plus configured matchup-period weeks. Repository code—not `espn-api` transformation—reconstructs the relationships below and validates IDs, unique appearances, winner membership, winner/aggregate consistency, and two-week sums.
+
+Both completed seasons independently produced:
+
+- championship entrants seeded 1–6;
+- period 15 bye rows for seeds 1 and 2, plus 3–6 and 4–5 games;
+- first-round winners seeded 3 and 4;
+- period 16 pairings 1–4 and 2–3, with 5–6 in the fifth-place path;
+- period 17 championship placement pairings whose calculated final ranks are 1–2, 3–4, and 5–6;
+- twelve side-level checks proving each period-17 `totalPoints` equals the sum of weeks 17 and 18;
+- `playoffReseed=false`, with observed pairings consistent with fixed bracket progression.
+
+Winner and loser destinations are now recorded for every decided two-team row from periods 15 and 16. This supplies reproducible advancement and placement evidence rather than relying on row counts. The historical consolation evidence remains intentionally season-specific:
+
+- 2024 pairings by period were 7–8, 9–10, 11–12; then 7–10, 8–11, 9–12; then 7–9, 8–12, 10–11.
+- 2025 pairings by period were 7–8, 9–10, 11–12; then 7–11, 8–9, 10–12; then 7–8, 9–12, 10–11.
+
+Those differing winner/loser paths and final-rank mappings verify the completed six-team consolation ladders. They still do not establish the current eight-team consolation structure. Current 2026 consolation participants, pairings, advancement, and placement mapping remain unverified until ESPN exposes the bracket or the league supplies approved rules.
+
+This follow-up does not change the previously reported current-league values. It changes their architectural role: they are observed evidence and future configuration inputs, never universal validation templates.
