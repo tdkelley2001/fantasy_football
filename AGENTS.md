@@ -9,6 +9,8 @@ These rules apply to all future work in this repository. The approved requiremen
 3. Work in small, independently testable tasks. Do not combine roadmap packages unless their interfaces and acceptance gates have already been verified.
 4. Respect milestone dependencies and statuses. Never mark a task or milestone complete until its documented acceptance gate passes with inspectable evidence.
 5. Do not begin a milestone or work package without the required review or approval.
+6. Inspect existing modules before adding new ones. Reuse established configuration, authentication, logging, error handling, and validation; extract shared infrastructure only after multiple tasks demonstrate a real need.
+7. Avoid premature frameworks, unnecessary abstractions, and architectural changes unrelated to the assigned work package.
 
 ## Correctness rules
 
@@ -26,6 +28,18 @@ These rules apply to all future work in this repository. The approved requiremen
 3. Use hand-checkable fixtures for exhaustive enumeration and deterministic season behavior. Use seeded fixtures and cross-worker comparisons for probabilistic behavior.
 4. Benchmark before adding complex optimizations. Record correctness equivalence, runtime, memory, environment, and limitations.
 5. Keep provisional methods visibly provisional. Do not describe an algorithm, data source, ESPN field, or milestone as verified without source evidence and passing tests.
+6. Prefer representative sanitized fixtures. Assert precise failure behavior and messages, not merely that some exception occurred.
+7. Mock and synthetic tests establish code behavior only; they never prove a live ESPN field or API behavior exists.
+
+## ESPN evidence and provenance
+
+1. For every investigated ESPN field, record the raw endpoint and field, any `espn-api` transformation, any repository transformation, the verification method, and known limitations.
+2. Classify findings exactly as **Verified live**, **Verified by tests**, **Unverified**, or **Unsupported**.
+3. Keep missing values distinct from explicit zeros. Detect truncated pagination and incomplete multi-request retrieval; never substitute a default for absent or inconsistent data.
+4. Validate identifiers and relationships across responses. Record retrieval context sufficient to identify observations that may have changed between requests.
+5. Record library defects and unsupported assumptions explicitly. Do not quietly compensate with new modeling rules.
+6. Each ESPN discovery task must report implementation, live evidence, test-only evidence, library/API limitations, uncertainties, tests and results, and any recommended architecture change.
+7. Do not introduce or implement a new modeling assumption without explicit approval.
 
 ## Change discipline
 

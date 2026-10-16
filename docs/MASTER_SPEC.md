@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: design baseline | 14 October 2026 | Status: pre-implementation; ESPN feasibility audit pending*
+*Version: design baseline | 14 October 2026 | Status: ESPN feasibility audit in progress; M0.1-M0.3 complete*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Distinguish intended functionality from verified implementation: none of the algorithms or ESPN field availability described below should be understood as already built or confirmed.
 
@@ -356,7 +356,7 @@ M0.1 [COMPLETE — 15 October 2026] Create clean Python repository, dependency l
 
 M0.2 [COMPLETE — 15 October 2026] Implement a read-only ESPN connectivity script for the user's actual league/season; enumerate teams, player and team IDs, roster ownership, standings, scoring and eligible lineup slots. GATE: PASSED — the live 2026 diagnostic reconciled 14 expected, ESPN-reported and fetched teams; 233 uniquely owned rostered player IDs; nine configured slot types; and 39 scoring items. All team/player ownership and eligibility invariants passed. The explicit expected count is a required command input, and an observed espn-api sparse-slot parsing defect is bypassed by validated raw ESPN slot IDs rather than an inferred label order.
 
-M0.3 Audit projected future player-week scores, zero/missing distinction, available-player pool, bye weeks and future schedule; save sanitized sample responses. GATE: inventory required fields, response provenance and missing/unsupported cases.
+M0.3 [COMPLETE — 15 October 2026] Audit projected future player-week scores, zero/missing distinction, available-player pool, bye weeks and future schedule; save sanitized sample responses. GATE: PASSED — the live week 6–14 audit paginated the same 1,052-player universe for every week, reconciled all 233 current `ONTEAM` records to M0.2, distinguished 5,913 present projections (including 2,488 explicit zeros) from 3,555 missing values, verified explicit NFL byes, and validated 63 remaining regular-season matchups. Forty-seven credential-free tests passed; unsupported totals and multi-request limitations are documented in `ESPN_FUTURE_DATA_AUDIT.md`.
 
 M0.4 Audit actual league roster/trade/waiver rules, standings tiebreakers and regular/playoff/consolation brackets against ESPN settings and known results. GATE: verified rule matrix, or explicitly flagged manual league-config inputs/blockers.
 
@@ -454,7 +454,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.3 is the next unstarted work package; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.4 is the next unstarted work package; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -466,7 +466,9 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 [x] Connect a read-only ESPN diagnostic to the actual 2026 league; retrieve team/league/scoring/roster metadata.
 
-[ ] Probe future player-week projections, free-agent IDs/ownership, waiver rules, regular-season and postseason settings; reconcile all league-critical counts.
+[x] Probe future player-week projections, free-agent IDs/ownership, byes, and the remaining regular-season schedule; reconcile player and matchup counts.
+
+[ ] Audit waiver rules, standings tiebreakers, and regular-season/postseason bracket settings in M0.4.
 
 [ ] Examine a limited sample of prior ESPN seasons for player-week actual and projected scores and pregame-vs-restated forecast provenance.
 
