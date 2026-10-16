@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0 is **IN PROGRESS**. M0.1 through M0.4 are **COMPLETE**; M0.5-M0.6 and every M1-M7 work package are **NOT STARTED**. M7 remains a deferred milestone. No legacy implementation is credited toward these statuses.
+M0 is **IN PROGRESS**. M0.1 through M0.5 are **COMPLETE**; M0.6 and every M1-M7 work package are **NOT STARTED**. M7 remains a deferred milestone. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -46,7 +46,7 @@ M0.3 [COMPLETE — 15 October 2026] Audit projected future player-week scores, z
 
 M0.4 [COMPLETE — 16 October 2026] Audit actual league roster/trade/waiver rules, standings tiebreakers and regular/playoff/consolation brackets against ESPN settings and known results. GATE: PASSED — generalized discovery derives structure from raw ESPN settings rather than enforcing the current league as a template. The live audit reconciled 16 ordinary roster places plus one distinct IR slot, traditional weekly-reset waivers and a complete mutable priority order, trade settings, H2H standings fields, and a six-team championship with two byes and 1/1/2-week rounds. Sanitized deterministic reconstruction independently checks 2024/2025 entrants, seed pairings, winner/loser transitions, placement games, and two-week score aggregation. Exact multiple-claim ordering, tie behavior, and the current eight-team consolation ladder remain explicit blocking configuration/evidence gaps. The original M0.4 suite passed 70 tests; the generalized-discovery follow-up expanded the final suite to 81 passing tests. See `ESPN_LEAGUE_RULES_AUDIT.md`.
 
-M0.5 Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. Policy-imputed projection zeros must never be treated as genuine ESPN forecasts during historical calibration. GATE: evidence-backed historical data availability report and unambiguous gaps.
+M0.5 [COMPLETE — 16 October 2026] Probe small samples of historical seasons for as-of pregame ESPN projections and later actuals; detect hindsight/restated projections, date coverage and feasibility of held-out validation. GATE: PASSED — the bounded 2024/2025 audit sampled weeks 1, 8, 14, and 17 and validated 8,760 player-weeks, including 7,489 returned projections and 5,000 projection/actual pairs. No investigated record supplied authenticated as-of or revision timing, so all returned historical projections remain pregame-provenance unverified and none qualifies as a verified-pregame calibration observation. Same-session and cross-view consistency checks do not change that classification. Policy-imputed zeros were never introduced. Sixteen focused tests and the complete repository suite passed. See `ESPN_HISTORICAL_PROJECTION_AUDIT.md`.
 
 M0.6 Publish data dictionary, exact source paths/IDs, audit script, known errors and go/no-go decision for M1; do not let missing critical rules be silently guessed. GATE: reproducible audit result and an approved list of unresolved limitations.
 
@@ -140,7 +140,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.5 is the next unstarted work package; every later milestone above is planned, not implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 is the active milestone and M0.6 is the next unstarted work package; every later milestone above is planned, not implemented.
 
 ### 12.2 Practical development method
 
@@ -156,7 +156,7 @@ Each increment is a runnable vertical slice. Start with the clean repository and
 
 [x] Audit waiver rules, standings tiebreakers, and regular-season/postseason bracket settings in M0.4; preserve unresolved tie, multiple-claim, and eight-team consolation rules as explicit M1 blockers.
 
-[ ] Examine a limited sample of prior ESPN seasons for player-week actual and projected scores and pregame-vs-restated forecast provenance.
+[x] Examine a limited sample of prior ESPN seasons for player-week actual and projected scores and pregame-vs-restated forecast provenance; preserve the finding that returned projections lack authenticated pregame timing.
 
 [ ] Publish a data dictionary, machine-readable coverage checks, sanitized examples and go/no-go gaps; only then finalize M1 canonical input schema.
 

@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.4 are **COMPLETE**; M0.5 and all later work packages remain **NOT STARTED**. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.5 are **COMPLETE**; M0.6 and all later work packages remain **NOT STARTED**. M0.5 found retrievable historical projection/actual records but no authenticated pregame timestamps or forecast vintages. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -14,6 +14,7 @@ M0, the ESPN data and feasibility audit, is in progress. M0.1 through M0.4 are *
 - [M0.3 future player-week findings](docs/ESPN_FUTURE_DATA_AUDIT.md) — projection, player-pool, bye, schedule, pagination, and provenance evidence.
 - [Missing projection policy](docs/MISSING_PROJECTION_POLICY.md) — approved raw-versus-effective representation, week 6 evidence, methodology, and limitations.
 - [M0.4 league-rules audit](docs/ESPN_LEAGUE_RULES_AUDIT.md) — roster/IR, waiver, trade, standings, championship, consolation, provenance, and explicit configuration gaps.
+- [M0.5 historical projection audit](docs/ESPN_HISTORICAL_PROJECTION_AUDIT.md) — bounded historical coverage, projection/actual matching, as-of integrity, leakage risks, and M3 feasibility.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -73,9 +74,17 @@ M0.4 adds a sanitized rules and postseason diagnostic. Historical seasons are ex
 
 Add `--json` for the structured sanitized inventory. `--expected-team-count` is an optional identity check, not a supported-league template. Roster slots, playoff qualifiers, byes, round durations, and consolation settings are discovered dynamically. The command is read-only and reports unresolved rules rather than inventing them.
 
+M0.5 adds a bounded historical projection/actual diagnostic. Historical season/week samples must be explicit:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.historical_projection_audit --sample 2024:1 --sample 2024:8 --sample 2024:14 --sample 2024:17 --sample 2025:1 --sample 2025:8 --sample 2025:14 --sample 2025:17
+```
+
+Add `--json` for the sanitized aggregate report. The command never imputes missing projections and never treats a returned historical projection as verified pregame merely because ESPN labels it projected. Live output should not be committed.
+
 ## Upcoming work package
 
-After M0.4 review, M0.5 is next: audit historical pregame projection availability, provenance, and calibration feasibility. M0.4's unresolved tie, multiple-waiver-claim, and eight-team consolation rules remain explicit inputs to the later M0.6 go/no-go decision.
+After M0.5 review, M0.6 is next: consolidate ESPN feasibility evidence and make the explicit M1 go/no-go decision. M0.4's unresolved tie, multiple-waiver-claim, and eight-team consolation rules, plus M0.5's lack of authenticated historical pregame projections, remain explicit decision inputs.
 
 ## Historical implementation
 
