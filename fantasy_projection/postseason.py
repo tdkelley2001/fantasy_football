@@ -2,67 +2,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from .espn import as_int
-from .league_data import (
-    get_schedule_settings,
-    matchup_period_scoring_weeks,
-)
+from dataclasses import dataclass, field
+from .season import SeasonRules, SeasonModelError
 
 
-def playoff_round_scoring_weeks(
-    settings_payload: dict[str, Any],
-) -> list[list[int]]:
-    """Return scoring weeks for each configured postseason round."""
-    settings = get_schedule_settings(settings_payload)
-    regular_count = as_int(
-        settings.get("matchupPeriodCount"),
-        0,
-    ) or 0
-
-    round_lengths = settings.get(
-        "playoffMatchupPeriodLengthByRound",
-        {},
-    )
-
-    round_numbers = sorted(
-        as_int(key)
-        for key in round_lengths
-        if as_int(key) is not None
-    )
-
-    if not round_numbers:
-        raise RuntimeError(
-            "ESPN returned no playoff round-length settings."
-        )
-
-    return [
-        matchup_period_scoring_weeks(
-            settings_payload,
-            regular_count + offset,
-        )
-        for offset, _ in enumerate(
-            round_numbers,
-            start=1,
-        )
-    ]
-
-
-def team_score(
-    team_id: int,
-    scoring_weeks: list[int],
-    weekly_lookup: dict[tuple[int, int], float],
-) -> float:
-    return sum(
-        weekly_lookup.get((team_id, week), 0.0)
-        for week in scoring_weeks
-    )
+@dataclass
+class PostseasonScores:
+    weekly: dict[tuple[int, int], float]
+    actuals: dict[tuple[tuple[int, ...], frozenset[int]], dict[str, Any]]
+    current_week: int
+    used: set = field(default_factory=set)
 
 
 def resolve_matchup(
     a: tuple[int, int],
     b: tuple[int, int],
     scoring_weeks: list[int],
-    weekly_lookup: dict[tuple[int, int], float],
+    weekly_lookup: PostseasonScores,
 ) -> dict[str, Any]:
     """
     Resolve one deterministic postseason matchup.
@@ -72,32 +28,37 @@ def resolve_matchup(
     seed_a, team_a_id = a
     seed_b, team_b_id = b
 
-    score_a = team_score(
-        team_a_id,
-        scoring_weeks,
-        weekly_lookup,
-    )
-    score_b = team_score(
-        team_b_id,
-        scoring_weeks,
-        weekly_lookup,
-    )
-
+    key = (tuple(scoring_weeks), frozenset((team_a_id, team_b_id)))
+    actual = weekly_lookup.actuals.get(key)
     tiebreak_used = None
-
-    if score_a > score_b:
-        winner = a
-        loser = b
-    elif score_b > score_a:
-        winner = b
-        loser = a
+    result_type = "PROJECTED"
+    if actual is not None:
+        weekly_lookup.used.add(key)
+        score_a = actual["actual_home_points"] if actual["home_team_id"] == team_a_id else actual["actual_away_points"]
+        score_b = actual["actual_home_points"] if actual["home_team_id"] == team_b_id else actual["actual_away_points"]
+        if actual["winner"] == "TIE":
+            raise SeasonModelError("Completed playoff ties require an authoritative advancing team.")
+        winner_id = actual["home_team_id"] if actual["winner"] == "HOME" else actual["away_team_id"]
+        winner, loser = (a, b) if winner_id == team_a_id else (b, a)
+        result_type = "ACTUAL"
+        if score_a == score_b:
+            tiebreak_used = "RECORDED_WINNER"
     else:
-        # ESPN reports no explicit playoff matchup tiebreak in the
-        # current league. Higher regular-season seed is used only as
-        # a deterministic fallback for an exact projected tie.
-        winner = a if seed_a < seed_b else b
-        loser = b if winner == a else a
-        tiebreak_used = "HIGHER_SEED_FALLBACK"
+        if any((team, week) not in weekly_lookup.weekly
+               for team in (team_a_id, team_b_id) for week in scoring_weeks):
+            raise SeasonModelError("Missing completed playoff result or team-week scores for a postseason matchup.")
+        score_a = sum(weekly_lookup.weekly[(team_a_id, week)] for week in scoring_weeks)
+        score_b = sum(weekly_lookup.weekly[(team_b_id, week)] for week in scoring_weeks)
+        if max(scoring_weeks) < weekly_lookup.current_week:
+            raise SeasonModelError("A completed playoff round requires recorded winners and scores.")
+        if score_a > score_b:
+            winner, loser = a, b
+        elif score_b > score_a:
+            winner, loser = b, a
+        else:
+            winner = a if seed_a < seed_b else b
+            loser = b if winner == a else a
+            tiebreak_used = "HIGHER_SEED"
 
     return {
         "seed_a": seed_a,
@@ -111,6 +72,7 @@ def resolve_matchup(
         "loser_seed": loser[0],
         "loser_team_id": loser[1],
         "tiebreak_used": tiebreak_used,
+        "result_type": result_type,
     }
 
 
@@ -153,13 +115,14 @@ def _bracket_row(
         "winner_final_place": placement_high,
         "loser_final_place": placement_low,
         "tiebreak_used": result["tiebreak_used"],
+        "result_type": result["result_type"],
     }
 
 
 def project_six_team_championship_bracket(
     playoff_teams: list[tuple[int, int]],
     round_weeks: list[list[int]],
-    weekly_lookup: dict[tuple[int, int], float],
+    weekly_lookup: PostseasonScores,
     names: dict[int, str],
     playoff_reseed: bool,
 ) -> tuple[list[dict[str, Any]], dict[int, int]]:
@@ -450,7 +413,7 @@ def next_consolation_ladder_games(
 def project_consolation_ladder(
     consolation_teams: list[tuple[int, int]],
     round_weeks: list[list[int]],
-    weekly_lookup: dict[tuple[int, int], float],
+    weekly_lookup: PostseasonScores,
     names: dict[int, str],
     first_final_place: int,
 ) -> tuple[list[dict[str, Any]], dict[int, int]]:
@@ -553,139 +516,92 @@ def project_consolation_ladder(
     return rows, placements
 
 
+def project_placement_bracket(playoff_teams, round_weeks, scores, names, reseed):
+    """Fixed seeded 2/4/8-team brackets, including every placement game."""
+    count = len(playoff_teams)
+    order = {2: [1, 2], 4: [1, 4, 2, 3], 8: [1, 8, 4, 5, 2, 7, 3, 6]}[count]
+    by_seed = dict(playoff_teams)
+    groups = [(1, [(seed, by_seed[seed]) for seed in order])]
+    rows, placements = [], {}
+    for round_number, weeks in enumerate(round_weeks, 1):
+        next_groups = []
+        match_number = 0
+        for first_place, participants in groups:
+            if reseed and round_number > 1:
+                ranked = sorted(participants)
+                participants = [p for pair in zip(ranked[:len(ranked)//2], reversed(ranked[len(ranked)//2:])) for p in pair]
+            winners, losers = [], []
+            final = len(participants) == 2
+            for index in range(0, len(participants), 2):
+                match_number += 1
+                result = resolve_matchup(participants[index], participants[index + 1], weeks, scores)
+                winners.append((result["winner_seed"], result["winner_team_id"]))
+                losers.append((result["loser_seed"], result["loser_team_id"]))
+                name = ({1: "Championship", 3: "3rd Place"}.get(first_place, f"{first_place}th Place")) if final else ("Semifinal" if len(participants) == 4 else "Quarterfinal")
+                rows.append(_bracket_row(bracket="CHAMPIONSHIP", round_number=round_number,
+                                         round_name=name, matchup_number=match_number,
+                                         scoring_weeks=weeks, result=result, names=names,
+                                         placement_high=first_place if final else None,
+                                         placement_low=first_place + 1 if final else None))
+                if final:
+                    placements[result["winner_team_id"]] = first_place
+                    placements[result["loser_team_id"]] = first_place + 1
+            if not final:
+                next_groups.extend([(first_place, winners), (first_place + len(participants)//2, losers)])
+        groups = next_groups
+    return rows, placements
+
+
 def project_postseason(
     standings: list[dict[str, Any]],
     teams: list[dict[str, Any]],
     weekly_team_projections: list[dict[str, Any]],
-    settings_payload: dict[str, Any],
-) -> tuple[
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    dict[str, Any],
-]:
-    """Project complete postseason and return final places 1 through N."""
-    settings = get_schedule_settings(settings_payload)
-
-    playoff_count = as_int(
-        settings.get("playoffTeamCount"),
-        0,
-    ) or 0
-    playoff_reseed = bool(
-        settings.get("playoffReseed", False)
-    )
-    ladder_disabled = bool(
-        settings.get("consolationLadderDisabled", False)
-    )
-
-    round_weeks = playoff_round_scoring_weeks(
-        settings_payload
-    )
-
-    names = {
-        team["team_id"]: team["team_name"]
-        for team in teams
-    }
-    weekly_lookup = {
-        (row["team_id"], row["week"]):
-            row["projected_points"]
-        for row in weekly_team_projections
-    }
-
-    seeded = [
-        (row["seed"], row["team_id"])
-        for row in standings
-    ]
-    playoff_teams = seeded[:playoff_count]
-    consolation_teams = seeded[playoff_count:]
-
-    if playoff_count != 6:
-        raise NotImplementedError(
-            "This MVP currently implements the current league's "
-            f"6-team championship bracket; ESPN reports {playoff_count}."
-        )
-
-    championship_rows, championship_places = (
-        project_six_team_championship_bracket(
-            playoff_teams,
-            round_weeks,
-            weekly_lookup,
-            names,
-            playoff_reseed,
-        )
-    )
-
-    if ladder_disabled:
-        # If the league disables the consolation ladder, retain
-        # regular-season order for non-playoff teams.
-        consolation_rows = []
-        consolation_places = {
-            team_id: seed
-            for seed, team_id in consolation_teams
-        }
-        consolation_model = (
-            "REGULAR_SEASON_ORDER_LADDER_DISABLED"
-        )
+    rules: SeasonRules,
+    completed_results: list[dict[str, Any]],
+    current_week: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """Play out supported brackets, preserving authoritative completed games."""
+    playoff_count = rules.playoff_team_count
+    round_weeks = rules.playoff_rounds
+    names = {team["team_id"]: team["team_name"] for team in teams}
+    actuals = {}
+    for row in completed_results:
+        if row["winner"] == "UNDECIDED":
+            continue
+        weeks = round_weeks[row["matchup_period"] - rules.regular_periods - 1]
+        actuals[(tuple(weeks), frozenset((row["home_team_id"], row["away_team_id"])))] = row
+    scores = PostseasonScores({(r["team_id"], r["week"]): r["projected_points"] for r in weekly_team_projections}, actuals, current_week)
+    seeded = [(row["seed"], row["team_id"]) for row in standings]
+    playoff_teams, consolation_teams = seeded[:playoff_count], seeded[playoff_count:]
+    if not playoff_count:
+        championship_rows, championship_places = [], {}
+    elif playoff_count == 6:
+        championship_rows, championship_places = project_six_team_championship_bracket(
+            playoff_teams, round_weeks, scores, names, rules.playoff_reseed)
     else:
-        consolation_rows, consolation_places = (
-            project_consolation_ladder(
-                consolation_teams,
-                round_weeks,
-                weekly_lookup,
-                names,
-                first_final_place=playoff_count + 1,
-            )
-        )
-        consolation_model = "CONFIRMED_LEAGUE_LADDER"
-
-    placements = {
-        **championship_places,
-        **consolation_places,
-    }
-
-    standings_lookup = {
-        row["team_id"]: row
-        for row in standings
-    }
-
-    final_standings = []
-
-    for team_id, final_place in placements.items():
-        regular = standings_lookup[team_id]
-        final_standings.append(
-            {
-                "final_place": final_place,
-                "team_id": team_id,
-                "team_name": names.get(team_id),
-                "regular_season_seed": regular["seed"],
-                "regular_season_record": regular["record"],
-                "regular_season_points_for": regular[
-                    "points_for"
-                ],
-                "made_championship_playoffs": (
-                    regular["seed"] <= playoff_count
-                ),
-            }
-        )
-
-    final_standings.sort(
-        key=lambda x: x["final_place"]
-    )
-
+        championship_rows, championship_places = project_placement_bracket(
+            playoff_teams, round_weeks, scores, names, rules.playoff_reseed)
+    if not playoff_count or not rules.consolation_ladder:
+        consolation_rows = []
+        consolation_places = {team_id: seed for seed, team_id in consolation_teams}
+        consolation_model = "REGULAR_SEASON_ORDER"
+    else:
+        consolation_rows, consolation_places = project_consolation_ladder(
+            consolation_teams, round_weeks, scores, names, first_final_place=playoff_count + 1)
+        consolation_model = "CONSOLATION_LADDER"
+    if scores.used != set(actuals):
+        raise SeasonModelError("Recorded playoff participants do not match the supported seeded bracket. Custom seeding or bracket overrides are not supported.")
+    placements = {**championship_places, **consolation_places}
+    final_standings = [dict(final_place=placements[row["team_id"]], team_id=row["team_id"],
+                            team_name=row["team_name"], regular_season_seed=row["seed"],
+                            regular_season_record=row["record"], regular_season_points_for=row["points_for"],
+                            made_championship_playoffs=row["seed"] <= playoff_count) for row in standings]
+    final_standings.sort(key=lambda r: r["final_place"])
     champion = final_standings[0]
-
-    summary = {
-        "playoff_team_count": playoff_count,
-        "playoff_reseed": playoff_reseed,
-        "consolation_ladder_disabled": ladder_disabled,
-        "consolation_projection_model": consolation_model,
-        "round_scoring_weeks": round_weeks,
-        "champion_team_id": champion["team_id"],
-        "champion_team": champion["team_name"],
-        "champion_seed": champion["regular_season_seed"],
-    }
-
-    return (
-        championship_rows + consolation_rows,
-        final_standings,
-        summary,
-    )
+    summary = dict(playoff_team_count=playoff_count, playoff_reseed=rules.playoff_reseed,
+                   consolation_ladder_disabled=not rules.consolation_ladder,
+                   consolation_projection_model=consolation_model,
+                   round_scoring_weeks=[list(w) for w in round_weeks],
+                   champion_team_id=champion["team_id"], champion_team=champion["team_name"],
+                   champion_seed=champion["regular_season_seed"])
+    return championship_rows + consolation_rows, final_standings, summary

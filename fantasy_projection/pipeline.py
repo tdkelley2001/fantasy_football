@@ -1,156 +1,52 @@
+"""ESPN ingestion adapter. Season computation lives in season.py."""
 from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Any
 
 from .config import Config
 from .espn import EspnClient, as_int, pull_weekly_player_projections
-from .league_data import (
-    build_starter_slots,
-    get_schedule_settings,
-    normalize_regular_season_schedule,
-    normalize_rosters,
-    normalize_teams,
-)
-from .lineup import project_weekly_lineups
-from .postseason import project_postseason
-from .regular_season import (
-    build_projected_standings,
-    project_regular_season,
-)
+from .league_data import build_starter_slots, normalize_schedule, normalize_rosters, normalize_teams, normalize_season_rules, normalize_actual_weekly_points
+from .season import LeagueState, SeasonModelError
 
 
-@dataclass
-class ProjectionResult:
-    teams: list[dict[str, Any]]
-    rosters: list[dict[str, Any]]
-    player_projections: list[dict[str, Any]]
-    starter_slots: list[dict[str, Any]]
-    schedule_rows: list[dict[str, Any]]
-    settings_payload: dict[str, Any]
-    optimal_lineups: list[dict[str, Any]]
-    weekly_team_projections: list[dict[str, Any]]
-    regular_season_matchups: list[dict[str, Any]]
-    projected_standings: list[dict[str, Any]]
-    postseason_matchups: list[dict[str, Any]]
-    final_standings: list[dict[str, Any]]
-    summary: dict[str, Any]
-
-
-def project_from_normalized_inputs(
-    *,
-    config: Config,
-    teams: list[dict[str, Any]],
-    rosters: list[dict[str, Any]],
-    player_projections: list[dict[str, Any]],
-    starter_slots: list[dict[str, Any]],
-    schedule_rows: list[dict[str, Any]],
-    settings_payload: dict[str, Any],
-    first_week: int,
-    final_week: int,
-    current_week: int,
-) -> ProjectionResult:
-    """Project the entire league from already-normalized inputs.
-
-    This function performs no API requests. The trade engine can alter only
-    ``rosters`` and reuse the same projections, schedule, and league settings.
-    """
-    optimal_lineups, weekly_team_projections = (
-        project_weekly_lineups(
-            teams,
-            rosters,
-            player_projections,
-            starter_slots,
-            first_week=first_week,
-            final_week=final_week,
-        )
-    )
-
-    regular_season_matchups = project_regular_season(
-        schedule_rows,
-        teams,
-        weekly_team_projections,
-        settings_payload,
-    )
-
-    projected_standings = build_projected_standings(
-        teams,
-        regular_season_matchups,
-        settings_payload,
-    )
-
-    (
-        postseason_matchups,
-        final_standings,
-        postseason_summary,
-    ) = project_postseason(
-        projected_standings,
-        teams,
-        weekly_team_projections,
-        settings_payload,
-    )
-
-    schedule_settings = get_schedule_settings(settings_payload)
-    regular_champion = projected_standings[0]
-
-    summary = {
-        "league_id": config.league_id,
-        "season": config.season,
-        "team_count": len(teams),
-        "rostered_player_count": len(rosters),
-        "player_week_projection_count": len(player_projections),
-        "first_scoring_period": first_week,
-        "current_scoring_period": current_week,
-        "final_scoring_period": final_week,
-        "regular_season_matchup_periods": as_int(
-            schedule_settings.get("matchupPeriodCount")
-        ),
-        "playoff_seeding_rule": schedule_settings.get(
-            "playoffSeedingRule"
-        ),
-        "regular_season_champion_team_id": regular_champion[
-            "team_id"
-        ],
-        "regular_season_champion": regular_champion["team_name"],
-        "regular_season_champion_record": regular_champion["record"],
-        **postseason_summary,
-    }
-
-    return ProjectionResult(
-        teams=teams,
-        rosters=rosters,
-        player_projections=player_projections,
-        starter_slots=starter_slots,
-        schedule_rows=schedule_rows,
-        settings_payload=settings_payload,
-        optimal_lineups=optimal_lineups,
-        weekly_team_projections=weekly_team_projections,
-        regular_season_matchups=regular_season_matchups,
-        projected_standings=projected_standings,
-        postseason_matchups=postseason_matchups,
-        final_standings=final_standings,
-        summary=summary,
-    )
-
-
-def run_projection(config: Config) -> ProjectionResult:
+def load_league_state(config: Config, *, progress_callback=None) -> LeagueState:
     client = EspnClient(config)
 
     print("Pulling ESPN league data...")
+    if progress_callback:
+        progress_callback("Loading ESPN league data", 0, 4, "requests")
     team_payload = client.get_league("mTeam")
+    if progress_callback:
+        progress_callback("Loading ESPN league data", 1, 4, "requests")
     roster_payload = client.get_league("mRoster")
+    if progress_callback:
+        progress_callback("Loading ESPN league data", 2, 4, "requests")
     settings_payload = client.get_league("mSettings")
+    if progress_callback:
+        progress_callback("Loading ESPN league data", 3, 4, "requests")
     matchup_payload = client.get_league("mMatchupScore")
 
     status = roster_payload.get("status", {})
-    first_week = as_int(status.get("firstScoringPeriod"), 1) or 1
-    final_week = as_int(status.get("finalScoringPeriod"), 18) or 18
+    first_week = as_int(status.get("firstScoringPeriod"))
+    final_week = as_int(status.get("finalScoringPeriod"))
+    if first_week is None or final_week is None:
+        raise SeasonModelError("ESPN did not supply the season's scoring-week boundaries.")
     current_week = (
         as_int(status.get("currentScoringPeriod"))
         or as_int(roster_payload.get("scoringPeriodId"))
         or as_int(status.get("latestScoringPeriod"))
         or first_week
     )
+    if status.get("isSeasonOver"):
+        current_week = final_week + 1
+
+    rules = normalize_season_rules(settings_payload)
+    schedule_rows = normalize_schedule(matchup_payload)
+    # ESPN can still label a just-finished period as current. Move the model's
+    # boundary forward only when every scheduled matchup in that period is final.
+    for period, weeks in rules.period_weeks.items():
+        games = [r for r in schedule_rows if r["matchup_period"] == period]
+        if max(weeks) == current_week and games and all(r["winner"] != "UNDECIDED" for r in games):
+            current_week += 1
+            break
 
     teams = normalize_teams(team_payload)
     rosters = normalize_rosters(roster_payload, teams)
@@ -162,8 +58,9 @@ def run_projection(config: Config) -> ProjectionResult:
 
     player_projections = pull_weekly_player_projections(
         client,
-        first_week=first_week,
+        first_week=current_week,
         final_week=final_week,
+        progress_callback=progress_callback,
     )
 
     print(
@@ -172,20 +69,41 @@ def run_projection(config: Config) -> ProjectionResult:
     )
 
     starter_slots = build_starter_slots(settings_payload)
-    schedule_rows = normalize_regular_season_schedule(
-        matchup_payload,
-        settings_payload,
+    return LeagueState(
+        league_id=config.league_id, season=config.season,
+        first_week=first_week, final_week=final_week, current_week=current_week,
+        rules=rules, teams=teams, rosters=rosters, player_projections=player_projections,
+        starter_slots=starter_slots,
+        schedule_rows=[r for r in schedule_rows if r["matchup_period"] <= rules.regular_periods],
+        postseason_results=[r for r in schedule_rows if r["matchup_period"] > rules.regular_periods and r["winner"] != "UNDECIDED"],
+        actual_weekly_points=normalize_actual_weekly_points(matchup_payload, current_week),
+        settings_payload={"settings": {key: settings_payload["settings"].get(key, {})
+                                      for key in ("rosterSettings", "acquisitionSettings", "scoringSettings")}},
     )
 
-    return project_from_normalized_inputs(
-        config=config,
-        teams=teams,
-        rosters=rosters,
-        player_projections=player_projections,
-        starter_slots=starter_slots,
-        schedule_rows=schedule_rows,
-        settings_payload=settings_payload,
-        first_week=first_week,
-        final_week=final_week,
-        current_week=current_week,
-    )
+
+def load_simulation_state(state, client):
+    """Attach confirmed NFL bye weeks for the snapshot's current NFL affiliations."""
+    from dataclasses import replace
+    from .espn import BASE
+    response = client.session.get(f"{BASE}/seasons/{state.season}",
+                                  params={"view": "proTeamSchedules_wl"}, timeout=30)
+    response.raise_for_status()
+    return replace(state, player_bye_weeks=normalize_bye_weeks(state, response.json()))
+
+
+def normalize_bye_weeks(state, payload):
+    nfl_weeks = set(range(1, 18 if state.season <= 2020 else 19))
+    teams = {}
+    for team in payload.get("settings", {}).get("proTeams", []):
+        if not team.get("id"):
+            continue
+        games = {int(week) for week, rows in team.get("proGamesByScoringPeriod", {}).items()
+                 if rows and int(week) in nfl_weeks}
+        if len(games) != len(nfl_weeks)-1:
+            raise SeasonModelError("Incomplete NFL schedule; cannot confirm bye weeks for simulation.")
+        teams[team["id"]] = tuple(sorted(nfl_weeks-games))
+    if len(teams) != 32:
+        raise SeasonModelError("Expected 32 NFL teams when confirming bye weeks.")
+    players = state.rosters + (state.baseline_rosters or []) + state.available_players
+    return {p["player_id"]: teams[p["pro_team_id"]] for p in players if p.get("pro_team_id") in teams}

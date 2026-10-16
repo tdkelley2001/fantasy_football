@@ -1,6 +1,6 @@
-"""Deterministic ESPN fantasy-football league projection and trade engine."""
+"""Fantasy-football season model and app evaluators."""
+from .season import LeagueState, SeasonRules, SeasonProjection, SeasonModelError, project_season
+from .monte_carlo import ResidualModel, simulate_season
 
-from .pipeline import run_projection
-from .trades import find_mutually_beneficial_trades
-
-__all__ = ["run_projection", "find_mutually_beneficial_trades"]
+__all__ = ["LeagueState", "SeasonRules", "SeasonProjection", "SeasonModelError", "project_season",
+           "ResidualModel", "simulate_season"]

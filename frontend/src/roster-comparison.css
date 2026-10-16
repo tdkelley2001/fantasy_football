@@ -1,0 +1,18 @@
+.rostercompareintro{max-width:none;padding-top:45px;border-top:1px solid var(--line)}
+.rosterscenarios{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.rosterscenarios article{margin:0;background:var(--bg)}
+.rosterscenarios .sectionhead input{font-weight:700;font-size:16px;width:70%}
+.scenarioplayers{display:flex;flex-wrap:wrap;gap:7px;margin:16px 0}
+.scenarioplayers>span{display:flex;align-items:center;gap:5px;padding:5px 5px 5px 9px;border:1px solid var(--line);border-radius:20px;font-size:11px}
+.scenarioplayers button{border:0;padding:1px 5px}
+.searchmetricdetail .movestats{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.rosterworkspace{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;background:transparent;border:0;padding:0}
+.rosterdraft{margin:0;display:grid;gap:16px}.rosterdraft.baseline{align-content:start;background:linear-gradient(145deg,#46d3990d,transparent),var(--panel)}
+.rosterdraft.baseline>strong{font-size:30px}.rosterdraft>label{display:grid}.draftfooter{display:flex;justify-content:space-between;gap:14px;align-items:center;border-top:1px solid var(--line);padding-top:12px}.draftfooter label{display:flex;align-items:center;gap:7px}
+.comparebar{position:sticky;bottom:15px;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:20px;box-shadow:0 15px 50px #0007}.comparebar p{margin:4px 0 0}.comparebar button{min-width:190px}
+.rostertable td:nth-child(3){min-width:190px}.waiverfillnames{display:flex;flex-wrap:wrap;gap:5px}.waiverfillnames span{padding:4px 7px;border:1px solid #46d39955;border-radius:20px;color:var(--accent);font-size:10px;white-space:nowrap}
+.weeklyrostercards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin-top:20px}.weeklyrostercards article{margin:0;background:var(--bg)}.weeklyrostercards article>.sectionhead strong{font-size:20px;color:var(--accent)}.weeklystarterlist{margin:15px 0}.weeklystarterlist>div{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line);font-size:12px}.weeklystarterlist span{display:grid;gap:3px}.weeklystarterlist b{font-size:8px;letter-spacing:1px;color:var(--accent)}.weeklystarterlist .missingstarter{color:var(--muted)}
+.specialteampolicies{display:flex;flex-wrap:wrap;align-items:center;gap:18px}.specialteampolicies>div{margin-right:auto;max-width:580px}.specialteampolicies h3{margin:7px 0}.specialteampolicies label{display:flex;align-items:center;gap:7px}.streamrows{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:16px}.streamrows article{margin:0;background:var(--bg);display:grid;gap:9px}.streamrows span{font-size:11px}
+.rostertable tr{cursor:pointer}.selectedscenario td{background:#46d3990d}.positiongroups{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:20px 0}.positiongroups article{margin:0;padding:16px;background:var(--bg)}.positiongroups article>div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:12px}.positiongroups .waiveraddition{color:var(--accent)}.positiongroups .waiveraddition span{font-size:8px;letter-spacing:1px}.rosterdetail .weektiles>div{display:grid;gap:8px;padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px}.rosterdetail .weektiles span{font-size:10px;color:var(--muted)}
+@media(max-width:650px){.rosterscenarios{grid-template-columns:1fr}}
+@media(max-width:650px){.rosterworkspace{grid-template-columns:1fr}.comparebar{align-items:stretch;flex-direction:column}.comparebar button{width:100%}.draftfooter{align-items:flex-start;flex-direction:column}}
