@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
 import logging
+import math
 from numbers import Real
 from typing import Any, Callable, Mapping, Sequence
 
@@ -322,7 +323,12 @@ def parse_player_cards(
                 raise FutureDataAuditError(
                     f"player card player_id={player_id}, week={week}: appliedTotal must be numeric"
                 )
-            projections[week] = float(value)
+            numeric_value = float(value)
+            if not math.isfinite(numeric_value):
+                raise FutureDataAuditError(
+                    f"player card player_id={player_id}, week={week}: appliedTotal must be finite"
+                )
+            projections[week] = numeric_value
         injury = player.get("injuryStatus")
         if injury is not None and (not isinstance(injury, str) or not injury.strip()):
             raise FutureDataAuditError(
@@ -355,7 +361,7 @@ def parse_player_cards(
 
 
 def parse_pro_team_byes(
-    response: Mapping[str, Any], *, valid_weeks: Sequence[int]
+    response: Mapping[str, Any], *, valid_weeks: Sequence[int], expected_team_count: int
 ) -> dict[int, int]:
     """Validate ESPN's explicit ``byeWeek`` against its pro-team schedule."""
 
@@ -388,6 +394,10 @@ def parse_pro_team_byes(
         result[team_id] = bye
     if not result:
         raise FutureDataAuditError("pro schedule contains no NFL teams")
+    if len(result) != expected_team_count:
+        raise FutureDataAuditError(
+            f"pro schedule contains {len(result)} distinct NFL teams; expected {expected_team_count}"
+        )
     return result
 
 
@@ -593,7 +603,9 @@ def audit_live(settings: Settings, *, expected_team_count: int, page_size: int =
         ]
         pro_started = _utc_now()
         pro_response = league.espn_request.get_pro_schedule()
-        byes = parse_pro_team_byes(pro_response, valid_weeks=weeks)
+        byes = parse_pro_team_byes(
+            pro_response, valid_weeks=weeks, expected_team_count=32
+        )
         pro_finished = _utc_now()
         schedule = parse_remaining_schedule(
             raw_league,
