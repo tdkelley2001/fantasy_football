@@ -35,3 +35,10 @@ def test_no_local_env_file_is_tracked() -> None:
     assert example.is_file()
     ignored_example = _git("check-ignore", ".env.example")
     assert ignored_example.returncode == 1
+
+
+def test_local_league_rule_configuration_is_ignored() -> None:
+    result = _git("check-ignore", "config/league_rules.local.yaml")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "config/league_rules.local.yaml"

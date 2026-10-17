@@ -28,6 +28,8 @@ pytest==8.4.2
     # via fantasy-football-decision-engine (pyproject.toml)
 python-dotenv==1.2.4
     # via fantasy-football-decision-engine (pyproject.toml)
+pyyaml==6.0.3
+    # via fantasy-football-decision-engine (pyproject.toml)
 requests==2.34.2
     # via espn-api
 urllib3==2.8.0
