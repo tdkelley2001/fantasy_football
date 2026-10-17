@@ -4,7 +4,9 @@
 
 M1.1 defines the immutable ESPN-independent contract between future ingestion, persistence, and simulation. It does not fetch ESPN data, persist snapshots, allocate snapshot IDs, compile simulation arrays, or implement league behavior.
 
-The implementation is in `src/fantasy_football/canonical/` and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror.
+The implementation is in `src/fantasy_football/canonical/` and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror. The current serialized contract is schema version 2.
+
+Schema v2 adds immutable `LineupSlotNamespace.observed_slot_ids`, derived from the exact union of raw player eligibility evidence. This namespace is distinct from `LeagueRules.lineup_slots`, which contains only ESPN-configured capacities. An observed but unconfigured category such as slot 25 remains preserved but is not a legal roster destination. Occupied slots must have positive configured capacity and appear in the player's raw eligibility. Schema-v1 JSON is intentionally incompatible and rejected because it cannot express this distinction.
 
 ## Entities and keys
 

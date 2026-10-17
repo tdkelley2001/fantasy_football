@@ -24,7 +24,7 @@ def _player(player_id: int, status: str, owner: int, value: float | None, week: 
         "appliedTotal": value,
     }]
     position = 16 if player_id < 0 else 1
-    slots = [16, 20] if player_id < 0 else [0, 20, 21]
+    slots = [16, 20, 25] if player_id < 0 else [0, 20, 21, 25]
     return {
         "id": player_id,
         "status": status,

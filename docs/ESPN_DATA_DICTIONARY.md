@@ -67,7 +67,8 @@ Every M1 source record should carry endpoint, view, request parameters, retrieva
 |---|---|---|---|---|
 | `player_id` | wrapper `players[].id`, `player.id`, roster player ID; signed integer | R | Require wrapper equality; **Verified live** | S: nonzero; global player join key; negative D/ST IDs valid |
 | `default_position_id` | `player.defaultPositionId`; integer default-position namespace | R | Preserve and separately map known IDs; **Verified live** | S/C: never decode with lineup-slot mapping; player grouping |
-| `eligible_slot_ids` | `player.eligibleSlots[]`; integer lineup-slot namespace | R for lineup candidates | Deduplicate/preserve raw; **Verified live** | S: nonempty for rostered players; C: must support needed starting slots |
+| `eligible_slot_ids` | `player.eligibleSlots[]`; integer lineup-slot namespace | R for lineup candidates | Deduplicate/preserve raw; **Verified live** | S: nonempty for rostered players and included in the observed eligibility namespace; an unconfigured observed ID is preserved but is not playable |
+| `observed_lineup_slot_ids` | union of raw `player.eligibleSlots[]` across the retrieved player universe | R derived evidence | Preserve sorted immutable identifiers without adding absent capacity records; **Verified live + tests** | S: exactly reconciles player eligibility; distinct from configured `lineupSlotCounts`; source for schema-v2 namespace |
 | `nfl_team_id` | `player.proTeamId`; integer NFL-team namespace; zero can mean none | R for player-pool entry | Preserve; **Verified live** | S/C: nonzero must reference NFL universe; zero is not a bye |
 | `injury_status` | `player.injuryStatus`; enum/string | O; absent remains absent | Preserve raw; **Verified live** | W/C: availability evidence only; no future injury model |
 

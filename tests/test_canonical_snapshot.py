@@ -11,6 +11,7 @@ from fantasy_football.canonical.model import (
     InterpretationStatus,
     JsonArray,
     JsonObject,
+    LineupSlotNamespace,
     LineupSlotRule,
     MatchupEntryStatus,
     MatchupPhase,
@@ -69,6 +70,7 @@ def test_deterministic_round_trip_preserves_null_zero_negative_and_unresolved_ru
     tiebreak = next(item for item in restored.rules.interpretations if item.rule_id == "standings_tiebreak_order")
     assert tiebreak.raw_value == JsonArray(("TOTAL_POINTS_SCORED", "HEAD_TO_HEAD", "RANDOM"))
     assert isinstance(next(item for item in restored.rules.interpretations if item.rule_id == "consolation_structure").raw_value, JsonObject)
+    assert restored.lineup_slot_namespace.observed_slot_ids == (0, 16, 20, 21, 25)
 
 
 def test_serialization_order_is_independent_of_input_record_order() -> None:
@@ -342,17 +344,49 @@ def test_alternate_valid_roster_structure_without_ir_and_with_multiple_flex_slot
         LineupSlotRule(23, 2, SlotKind.STARTER, "Flex"),
     )
     players = tuple(replace(player, eligible_lineup_slot_ids=tuple(sorted(set(player.eligible_lineup_slot_ids) - {21} | {23}))) for player in snapshot.players)
-    alternate = replace(snapshot, rules=replace(snapshot.rules, lineup_slots=slots), players=players)
+    namespace = LineupSlotNamespace(tuple(sorted({slot for player in players for slot in player.eligible_lineup_slot_ids})))
+    alternate = replace(snapshot, rules=replace(snapshot.rules, lineup_slots=slots), players=players, lineup_slot_namespace=namespace)
     validate_snapshot(alternate)
 
 
 def test_incompatible_schema_and_malformed_timestamp_are_rejected() -> None:
     data = json.loads(snapshot_to_json(canonical_snapshot()))
-    data["schema_version"] = 2
+    data["schema_version"] = 1
     with pytest.raises(CanonicalSerializationError, match="unsupported schema_version"):
         snapshot_from_json(json.dumps(data))
 
-    data["schema_version"] = 1
+    data["schema_version"] = 2
     data["retrieval_started_at_utc"] = "not-a-time"
     with pytest.raises(CanonicalSerializationError, match="not a valid ISO-8601"):
         snapshot_from_json(json.dumps(data))
+
+
+def test_unconfigured_observed_eligibility_is_not_a_playable_capacity() -> None:
+    snapshot = canonical_snapshot()
+    assert 25 in snapshot.lineup_slot_namespace.observed_slot_ids
+    assert 25 not in {slot.slot_id for slot in snapshot.rules.lineup_slots}
+    validate_snapshot(snapshot)
+
+    invalid_entry = replace(snapshot.roster_entries[1], lineup_slot_id=25)
+    with pytest.raises(CanonicalValidationError, match="unknown or zero-capacity slot 25"):
+        validate_snapshot(replace(snapshot, roster_entries=(snapshot.roster_entries[0], invalid_entry, snapshot.roster_entries[2])))
+
+
+def test_other_unconfigured_eligibility_id_is_supported_without_special_case() -> None:
+    snapshot = canonical_snapshot()
+    players = tuple(
+        replace(player, eligible_lineup_slot_ids=player.eligible_lineup_slot_ids + (37,))
+        if player.player_id == 3 else player
+        for player in snapshot.players
+    )
+    candidate = replace(snapshot, players=players, lineup_slot_namespace=LineupSlotNamespace((0, 16, 20, 21, 25, 37)))
+    validate_snapshot(candidate)
+
+
+@pytest.mark.parametrize(
+    "namespace",
+    [LineupSlotNamespace((0, 16, 20, 21)), LineupSlotNamespace((0, 16, 20, 21, 25, 37)), LineupSlotNamespace((0, 16, 20, 21, 25, 25))],
+)
+def test_malformed_or_inconsistent_eligibility_namespace_is_rejected(namespace) -> None:
+    with pytest.raises(CanonicalValidationError, match="LineupSlotNamespace|eligibility namespace"):
+        validate_snapshot(replace(canonical_snapshot(), lineup_slot_namespace=namespace))

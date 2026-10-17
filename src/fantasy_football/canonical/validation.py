@@ -110,7 +110,7 @@ def _json_value(value: object, *, entity: str, identifier: object, field: str) -
 
 
 def validate_snapshot(snapshot: LeagueSnapshot) -> None:
-    """Validate schema-v1 structure and cross-entity invariants without mutation."""
+    """Validate schema-v2 structure and cross-entity invariants without mutation."""
 
     if snapshot.schema_version != SCHEMA_VERSION:
         _fail("LeagueSnapshot", snapshot.snapshot_id, "schema_version", f"expected {SCHEMA_VERSION}, observed {snapshot.schema_version}")
@@ -127,6 +127,14 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
         _fail("LeagueSnapshot", snapshot.snapshot_id, "simulation_horizon", "must be a positive inclusive range")
     for field in ("teams", "players", "roster_entries", "player_weeks", "matchup_periods", "fantasy_matchups", "nfl_teams", "nfl_games", "sources", "rule_gaps"):
         _tuple(getattr(snapshot, field), entity="LeagueSnapshot", identifier=snapshot.snapshot_id, field=field)
+
+    namespace = snapshot.lineup_slot_namespace
+    _tuple(namespace.observed_slot_ids, entity="LineupSlotNamespace", identifier="observed", field="observed_slot_ids")
+    observed_slot_ids = _unique(namespace.observed_slot_ids, entity="LineupSlotNamespace", field="observed_slot_ids")
+    for slot_id in observed_slot_ids:
+        _integer(slot_id, entity="LineupSlotNamespace", identifier=slot_id, field="observed_slot_ids", minimum=0)
+    if tuple(sorted(observed_slot_ids)) != namespace.observed_slot_ids:
+        _fail("LineupSlotNamespace", "observed", "observed_slot_ids", "must be unique and increasing")
 
     source_ids = _unique((item.source_id for item in snapshot.sources), entity="SourceReference", field="source_id")
     if not source_ids:
@@ -277,11 +285,18 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
         eligible = _unique(player.eligible_lineup_slot_ids, entity="Player eligible slot", field="slot_id")
         for slot_id in eligible:
             _integer(slot_id, entity="Player", identifier=player.player_id, field="eligible_lineup_slot_ids", minimum=0)
-        unknown = eligible - slot_ids
+        unknown = eligible - observed_slot_ids
         if unknown:
-            _fail("Player", player.player_id, "eligible_lineup_slot_ids", f"unknown lineup slot IDs {sorted(unknown)}")
+            _fail("Player", player.player_id, "eligible_lineup_slot_ids", f"IDs absent from observed eligibility namespace {sorted(unknown)}")
         _integer(player.nfl_team_id, entity="Player", identifier=player.player_id, field="nfl_team_id", minimum=0)
         _nonempty(player.acquisition_status, entity="Player", identifier=player.player_id, field="acquisition_status")
+
+    eligibility_evidence = {slot_id for player in snapshot.players for slot_id in player.eligible_lineup_slot_ids}
+    if observed_slot_ids != eligibility_evidence:
+        _fail(
+            "LineupSlotNamespace", "observed", "observed_slot_ids",
+            f"must exactly match player eligibility evidence {sorted(eligibility_evidence)}; observed {sorted(observed_slot_ids)}",
+        )
 
     owners: dict[int, int] = {}
     occupancy: Counter[tuple[int, int]] = Counter()

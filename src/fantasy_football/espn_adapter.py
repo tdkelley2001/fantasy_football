@@ -1,4 +1,4 @@
-"""Read-only ESPN retrieval and pure translation into canonical schema v1."""
+"""Read-only ESPN retrieval and pure translation into canonical schema v2."""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ from fantasy_football.canonical.model import (
     JsonValue,
     LeagueRules,
     LeagueSnapshot,
+    LineupSlotNamespace,
     LineupSlotRule,
     MatchupEntryStatus,
     MatchupPeriod,
@@ -153,7 +154,10 @@ class AdapterReport:
     fantasy_matchup_count: int
     nfl_team_count: int
     nfl_game_count: int
+    nfl_bye_metadata_count: int
     source_request_count: int
+    observed_lineup_slot_ids: tuple[int, ...]
+    canonical_sha256: str
     reconciled_state: tuple[str, ...]
     warnings: tuple[str, ...]
     unresolved_rule_gaps: tuple[str, ...]
@@ -1047,18 +1051,9 @@ def translate_bundle(
     teams = _translate_teams(initial, expected_count=rules.team_count)
     rosters = _translate_rosters(initial)
     players, player_weeks, page_lengths = _translate_players_and_weeks(bundle)
-    configured_slot_ids = {item.slot_id for item in rules.lineup_slots}
-    unrepresentable_slots = sorted({
-        slot_id
-        for player in players
-        for slot_id in player.eligible_lineup_slot_ids
-        if slot_id not in configured_slot_ids
-    })
-    if unrepresentable_slots:
-        raise EspnAdapterError(
-            "M1.1 canonical contract cannot faithfully represent raw eligible lineup-slot IDs "
-            f"absent from lineupSlotCounts: {unrepresentable_slots}; refusing to drop them or invent zero-capacity configuration"
-        )
+    observed_slot_ids = tuple(sorted({
+        slot_id for player in players for slot_id in player.eligible_lineup_slot_ids
+    }))
     _ownership_reconciliation(players, rosters, bundle.current_player_pages)
     nfl_teams, nfl_games = _translate_nfl_calendar(
         bundle.pro_schedule,
@@ -1104,6 +1099,7 @@ def translate_bundle(
         retrieval_finished_at_utc=bundle.retrieval_finished_at_utc,
         first_simulation_week=bundle.first_simulation_week,
         final_simulation_week=final_week,
+        lineup_slot_namespace=LineupSlotNamespace(observed_slot_ids),
         rules=rules,
         teams=teams,
         players=players,
@@ -1117,7 +1113,7 @@ def translate_bundle(
         rule_gaps=gaps,
         validation=ValidationMetadata(
             validated_at_utc=bundle.retrieval_finished_at_utc,
-            validator_version="m1.2-schema-v1",
+            validator_version="m1.2-schema-v2",
             warnings=warnings,
         ),
     )
@@ -1127,6 +1123,10 @@ def translate_bundle(
         raise EspnAdapterError(f"canonical snapshot validation failed: {exc}") from exc
     values = [item for item in player_weeks]
     present = [item for item in values if item.raw_projection is not None]
+    canonical_json = snapshot_to_json(snapshot)
+    canonical_sha256 = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    if hashlib.sha256(snapshot_to_json(snapshot).encode("utf-8")).hexdigest() != canonical_sha256:
+        raise EspnAdapterError("canonical serialization is not deterministic")
     report = AdapterReport(
         league_id=bundle.league_id,
         season=bundle.season,
@@ -1144,13 +1144,14 @@ def translate_bundle(
         fantasy_matchup_count=len(matchups),
         nfl_team_count=len(nfl_teams),
         nfl_game_count=len(nfl_games),
+        nfl_bye_metadata_count=sum(team.bye_week is not None for team in nfl_teams),
         source_request_count=len(captured),
+        observed_lineup_slot_ids=observed_slot_ids,
+        canonical_sha256=canonical_sha256,
         reconciled_state=reconciled,
         warnings=warnings,
         unresolved_rule_gaps=unresolved,
     )
-    # Exercise canonical encoding now; persistence remains M1.3.
-    snapshot_to_json(snapshot)
     return AdapterResult(snapshot, report, captured)
 
 
@@ -1333,8 +1334,10 @@ def render_summary(report: AdapterReport) -> str:
             f"explicit_zero={report.projection_zero_count}, negative={report.projection_negative_count}"
         ),
         f"Fantasy matchups: {report.fantasy_matchup_count}",
-        f"NFL calendar: teams={report.nfl_team_count}, games={report.nfl_game_count}",
+        f"NFL calendar: teams={report.nfl_team_count}, games={report.nfl_game_count}, bye_metadata={report.nfl_bye_metadata_count}",
         f"Captured source requests: {report.source_request_count}",
+        f"Observed lineup-slot IDs: {list(report.observed_lineup_slot_ids)}",
+        f"Deterministic canonical SHA-256: {report.canonical_sha256}",
         f"Reconciled mutable state: {', '.join(report.reconciled_state)}",
         "Outstanding rule gaps:",
         *(f"- {item}" for item in report.unresolved_rule_gaps),

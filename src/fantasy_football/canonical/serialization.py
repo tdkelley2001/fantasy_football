@@ -1,4 +1,4 @@
-"""Deterministic, human-inspectable JSON for canonical schema version 1."""
+"""Deterministic, human-inspectable JSON for canonical schema version 2."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from fantasy_football.canonical.model import (
     JsonObject,
     LeagueRules,
     LeagueSnapshot,
+    LineupSlotNamespace,
     LineupSlotRule,
     MatchupEntryStatus,
     MatchupPeriod,
@@ -209,6 +210,9 @@ def _decode(data: Mapping[str, Any]) -> LeagueSnapshot:
         retrieval_started_at_utc=_timestamp(data["retrieval_started_at_utc"], "retrieval_started_at_utc"),
         retrieval_finished_at_utc=_timestamp(data["retrieval_finished_at_utc"], "retrieval_finished_at_utc"),
         first_simulation_week=data["first_simulation_week"], final_simulation_week=data["final_simulation_week"],
+        lineup_slot_namespace=LineupSlotNamespace(
+            observed_slot_ids=tuple(_mapping(data["lineup_slot_namespace"], "lineup_slot_namespace")["observed_slot_ids"])
+        ),
         rules=_rules(_mapping(data["rules"], "rules")),
         teams=_records(data["teams"], "teams", lambda item: FantasyTeam(**item)),
         players=_records(data["players"], "players", lambda item: Player(

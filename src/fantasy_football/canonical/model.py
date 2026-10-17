@@ -1,4 +1,4 @@
-"""Immutable, ESPN-independent canonical records for schema version 1."""
+"""Immutable, ESPN-independent canonical records for schema version 2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import TypeAlias
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 JsonScalar: TypeAlias = str | int | float | bool | None
 
 
@@ -111,6 +111,13 @@ class LineupSlotRule:
     capacity: int
     kind: SlotKind
     label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LineupSlotNamespace:
+    """Raw lineup-slot IDs observed in player eligibility evidence."""
+
+    observed_slot_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,6 +296,7 @@ class LeagueSnapshot:
     retrieval_finished_at_utc: datetime
     first_simulation_week: int
     final_simulation_week: int
+    lineup_slot_namespace: LineupSlotNamespace
     rules: LeagueRules
     teams: tuple[FantasyTeam, ...]
     players: tuple[Player, ...]

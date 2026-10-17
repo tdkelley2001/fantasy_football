@@ -13,6 +13,7 @@ from fantasy_football.canonical.model import (
     JsonObject,
     LeagueRules,
     LeagueSnapshot,
+    LineupSlotNamespace,
     LineupSlotRule,
     MatchupEntryStatus,
     MatchupPeriod,
@@ -118,7 +119,7 @@ def canonical_snapshot() -> LeagueSnapshot:
     )
     players = (
         Player(-101, "Defense A", 16, (16, 20), 1, None, "ONTEAM"),
-        Player(1, "Quarterback A", 1, (0, 20, 21), 1, "ACTIVE", "ONTEAM"),
+        Player(1, "Quarterback A", 1, (0, 20, 21, 25), 1, "ACTIVE", "ONTEAM"),
         Player(2, "Quarterback B", 1, (0, 20), 2, "QUESTIONABLE", "ONTEAM"),
         Player(3, "Unassigned Player", 1, (0, 20), 0, None, "FREEAGENT"),
         Player(4, "Available Player", 1, (0, 20), 3, "ACTIVE", "WAIVERS"),
@@ -172,6 +173,7 @@ def canonical_snapshot() -> LeagueSnapshot:
         retrieval_finished_at_utc=datetime(2026, 10, 16, 12, 0, 2, tzinfo=UTC),
         first_simulation_week=15,
         final_simulation_week=17,
+        lineup_slot_namespace=LineupSlotNamespace((0, 16, 20, 21, 25)),
         rules=rules,
         teams=teams,
         players=players,
