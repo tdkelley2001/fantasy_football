@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 is **COMPLETE**. M1 is in progress: M1.1's immutable canonical entities and schema-v2 validation contracts are complete, and M1.2's ESPN-to-canonical adapter has passed credential-free and live acceptance. M1.3 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 is **COMPLETE**. M1 is in progress: M1.1's schema-v2 canonical contracts, M1.2's live-accepted ESPN adapter, and M1.3's immutable SQLite snapshot persistence are complete. M1.4 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -18,7 +18,8 @@ M0 is **COMPLETE**. M1 is in progress: M1.1's immutable canonical entities and s
 - [ESPN data dictionary](docs/ESPN_DATA_DICTIONARY.md) — proposed M1 logical fields, raw paths, identifier namespaces, transformations, evidence, and validation tiers.
 - [M0 feasibility and M1 handoff](docs/M0_FEASIBILITY_AND_M1_HANDOFF.md) — readiness matrix, rule-gap register, approved forecast/calibration policies, and the M1 recommendation.
 - [Canonical model](docs/CANONICAL_MODEL.md) — M1.1 schema-v2 entities, slot namespaces, identifiers, ownership and projection contracts, validation boundary, serialization, and deferred work.
-- [ESPN-to-canonical adapter](docs/ESPN_CANONICAL_ADAPTER.md) — M1.2 retrieval, translation, reconciliation, YAML rule-gap configuration, testing, live evidence, and the current schema blocker.
+- [ESPN-to-canonical adapter](docs/ESPN_CANONICAL_ADAPTER.md) — M1.2 retrieval, translation, reconciliation, YAML rule-gap configuration, testing, and live acceptance evidence.
+- [Snapshot storage](docs/SNAPSHOT_STORAGE.md) — M1.3 SQLite schema, canonical authority, source evidence, atomic publication, integrity checks, retention, and verification.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -103,7 +104,19 @@ The read-only adapter requires an explicit first fully unplayed scoring week and
 .\.venv\Scripts\python.exe -m fantasy_football.espn_adapter --first-simulation-week 8 --expected-team-count 14
 ```
 
-Schema v2 preserves observed eligibility categories independently of configured playable capacities. The command reports the observed namespace and deterministic canonical checksum. SQLite storage, staged publication, and all M1.3 work remain unstarted.
+Schema v2 preserves observed eligibility categories independently of configured playable capacities. The command reports the observed namespace and deterministic canonical checksum.
+
+## Immutable snapshot publication
+
+`SNAPSHOT_DB_PATH` defaults to the ignored private local file `outputs/fantasy_football.sqlite3`. Set it in `.env` or pass `--database` explicitly. Publish one fully retrieved and reconciled snapshot with:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_store `
+  --first-simulation-week 8 `
+  --expected-team-count 14
+```
+
+The command performs all ESPN requests before opening one SQLite write transaction, assigns a new UUID, atomically inserts the canonical document and all captured evidence, then reloads and verifies the committed snapshot. Database, WAL, and SHM files are ignored and must remain private. This is the minimal M1.3 publication workflow, not the M1.5 snapshot-management interface.
 
 ## Historical implementation
 

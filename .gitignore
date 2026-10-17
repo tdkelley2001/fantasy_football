@@ -16,3 +16,13 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-*
+*.db
+*.db-wal
+*.db-shm
+*.db-*
