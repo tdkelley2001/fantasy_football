@@ -2,11 +2,11 @@
 
 ## Status
 
-M1.2 is **BLOCKED pending a targeted M1.1 contract decision**. The credential-free retrieval/translation implementation and tests are complete enough to expose the issue, but the live acceptance gate did not produce a valid canonical snapshot.
+M1.2 is **COMPLETE as of 17 October 2026**. The targeted M1.1 amendment introduced canonical schema version 2, preserving an observed eligibility-slot namespace separately from configured league capacities. The credential-free suite and repeated authenticated read-only live acceptance both passed.
 
 On 17 October 2026, a read-only live run used explicit `first_simulation_week=8` because scoring week 7 was already active. The adapter retrieved the current league, current player authority, future week pages, and NFL calendar sequentially. Translation stopped before producing a snapshot because 97 players exposed raw eligible lineup-slot ID `25`, while `settings.rosterSettings.lineupSlotCounts` defined only IDs `0–24`.
 
-The current schema validates player eligibility against configured `LineupSlotRule` IDs. Dropping ID 25 would lose source evidence. Creating a zero-capacity rule would incorrectly claim that ESPN explicitly configured the absent ID. The adapter therefore fails with a contract-specific diagnostic, as required, and M1.2 is not marked complete.
+That run correctly stopped under schema v1. Schema v2 now records every raw `eligibleSlots` identifier in immutable `LineupSlotNamespace.observed_slot_ids`. `LineupSlotRule` remains limited to slots ESPN explicitly configures, and roster occupancy still requires a configured positive-capacity slot that is also in the player's eligibility tuple. Slot 25 is not special-cased and does not become playable merely because it was observed.
 
 ## Responsibility boundaries
 
@@ -79,13 +79,33 @@ The adapter permits at most two retries after the initial request. It retries co
 
 Sanitized fixtures cover current ownership, three-page pagination, two future weeks, positive/zero/missing/negative projections, a negative D/ST ID, 32 NFL teams, games/byes, standings, waiver priority, postseason rule metadata, unresolved rules, approved YAML configuration, deterministic translation, and sanitized CLI output.
 
-Adversarial tests cover incomplete and overlapping pages, inconsistent universes, ownership conflicts, invalid IDs, nonfinite/malformed projections, missing required settings, incomplete regular schedule, mutable-state changes, manual-config conflicts, and the unconfigured-eligible-slot contract blocker. The focused adapter/CLI suite passed 22 tests, and the complete credential-free repository suite passed 180 tests.
+Adversarial tests cover incomplete and overlapping pages, inconsistent universes, ownership conflicts, invalid IDs, nonfinite/malformed projections, missing required settings, incomplete regular schedule, mutable-state changes, manual-config conflicts, malformed slot namespaces, and attempted occupancy of unconfigured eligibility categories. Updated test counts and live results appear in the acceptance section below.
 
-## Required M1.1 decision
+## M1.1 schema amendment
 
-The recommended correction is to distinguish the **known raw lineup-slot identifier namespace** from **configured lineup-slot capacities**. For example, `LeagueRules` could preserve a separate immutable set of observed/known lineup-slot IDs, while `LineupSlotRule` continues to mean an explicitly present ESPN capacity. Player eligibility would validate against the namespace set; roster occupancy would continue to require an explicitly configured positive-capacity slot.
+The approved correction distinguishes the **observed raw lineup-slot identifier namespace** from **configured lineup-slot capacities**. `LeagueSnapshot.lineup_slot_namespace` is derived exactly from the union of player eligibility evidence. `LineupSlotRule` continues to mean an explicitly present ESPN capacity. Player eligibility validates against the observed namespace; roster occupancy continues to require an explicitly configured positive-capacity slot.
 
-No such amendment is implemented in M1.2. After review and approval, it requires a focused M1.1 schema/serialization/validation change, followed by another live M1.2 run. No evidence currently suggests an adapter mapping can solve the issue without losing or inventing data.
+The serialized contract is now schema version 2. Schema-v1 documents are rejected rather than silently interpreted because they lack the namespace field. No universal ESPN slot mapping is introduced; meanings remain unknown unless separately verified.
+
+## Live acceptance result
+
+The repeated read-only run used explicit `first_simulation_week=8` through final scoring week 18 and passed canonical validation, critical-state reconciliation, and deterministic serialization. Sanitized counts were:
+
+- 14 fantasy teams;
+- 1,052 players: 234 rostered and 818 unrostered;
+- 11,572 player-weeks, exactly 1,052 players × 11 required weeks;
+- 7,227 present raw projections, including 2,814 explicit zeros; 4,345 missing raw projections; no finite negative projections in this observation;
+- 49 future fantasy matchup records;
+- 32 NFL teams, 165 future games, and bye metadata retained for the NFL universe;
+- 63 captured read-only source requests;
+- observed eligibility slot IDs `[0, 2, 3, 4, 5, 6, 7, 12, 14, 15, 16, 17, 20, 21, 23, 25]`; and
+- exact reconciliation of roster ownership, standings/points, and waiver priority.
+
+The identical in-memory snapshot serialized twice to the same canonical SHA-256 (`9d259f72d9f76eb8515b0aecbf25b3c0e148f2b427392cf56b012296fe0d4418`). This digest identifies that transient live candidate only and is not an authoritative persisted snapshot ID.
+
+The live run retains unresolved rule gaps for the consolation ladder, dropped-player reentry, multiple-waiver-claim behavior, playoff ties, regular matchup ties, trade review workflow, and waiver-process timezone. These are explicit capability limitations, not canonical ingestion failures.
+
+The targeted canonical/adapter/CLI suite passed 81 tests. The complete credential-free repository suite passed 185 tests. No credentials, raw private responses, or player/manager details were written to the repository.
 
 ## Live workflow
 

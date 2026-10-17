@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, the ESPN data and feasibility audit, is **COMPLETE**. M1 is in progress: M1.1's immutable canonical entities, validation contracts, and deterministic schema-v1 JSON are complete. M1.2's offline adapter is implemented, but its live gate is **BLOCKED** because ESPN exposes eligible lineup-slot ID 25 outside the configured `lineupSlotCounts` namespace and schema v1 cannot preserve that distinction faithfully. M1.3 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 is **COMPLETE**. M1 is in progress: M1.1's immutable canonical entities and schema-v2 validation contracts are complete, and M1.2's ESPN-to-canonical adapter has passed credential-free and live acceptance. M1.3 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -17,7 +17,7 @@ M0, the ESPN data and feasibility audit, is **COMPLETE**. M1 is in progress: M1.
 - [M0.5 historical projection audit](docs/ESPN_HISTORICAL_PROJECTION_AUDIT.md) — bounded historical coverage, projection/actual matching, as-of integrity, leakage risks, and M3 feasibility.
 - [ESPN data dictionary](docs/ESPN_DATA_DICTIONARY.md) — proposed M1 logical fields, raw paths, identifier namespaces, transformations, evidence, and validation tiers.
 - [M0 feasibility and M1 handoff](docs/M0_FEASIBILITY_AND_M1_HANDOFF.md) — readiness matrix, rule-gap register, approved forecast/calibration policies, and the M1 recommendation.
-- [Canonical model](docs/CANONICAL_MODEL.md) — M1.1 schema-v1 entities, identifiers, ownership and projection contracts, validation boundary, serialization, and deferred work.
+- [Canonical model](docs/CANONICAL_MODEL.md) — M1.1 schema-v2 entities, slot namespaces, identifiers, ownership and projection contracts, validation boundary, serialization, and deferred work.
 - [ESPN-to-canonical adapter](docs/ESPN_CANONICAL_ADAPTER.md) — M1.2 retrieval, translation, reconciliation, YAML rule-gap configuration, testing, live evidence, and the current schema blocker.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
@@ -103,7 +103,7 @@ The read-only adapter requires an explicit first fully unplayed scoring week and
 .\.venv\Scripts\python.exe -m fantasy_football.espn_adapter --first-simulation-week 8 --expected-team-count 14
 ```
 
-The current live run intentionally fails on the documented lineup-slot namespace conflict instead of dropping source eligibility or inventing league configuration. The proposed narrow M1.1 correction requires review before M1.2 can pass its gate. SQLite storage, staged publication, and all M1.3 work remain unstarted.
+Schema v2 preserves observed eligibility categories independently of configured playable capacities. The command reports the observed namespace and deterministic canonical checksum. SQLite storage, staged publication, and all M1.3 work remain unstarted.
 
 ## Historical implementation
 

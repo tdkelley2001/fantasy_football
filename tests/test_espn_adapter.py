@@ -116,15 +116,11 @@ def test_missing_required_league_field_fails() -> None:
         translate_bundle(bundle)
 
 
-def test_unconfigured_raw_eligible_slot_reports_m11_contract_blocker() -> None:
-    bundle = source_bundle()
-    for pages in (bundle.current_player_pages, bundle.future_player_pages):
-        for page in pages:
-            for wrapper in page.response.payload["players"]:
-                if wrapper["id"] == 2:
-                    wrapper["player"]["eligibleSlots"].append(25)
-    with pytest.raises(EspnAdapterError, match=r"M1.1 canonical contract cannot faithfully represent.*\[25\]"):
-        translate_bundle(bundle)
+def test_unconfigured_raw_eligible_slot_is_preserved_without_capacity() -> None:
+    result = translate_bundle(source_bundle())
+    assert 25 in result.snapshot.lineup_slot_namespace.observed_slot_ids
+    assert 25 not in {slot.slot_id for slot in result.snapshot.rules.lineup_slots}
+    assert any(25 in player.eligible_lineup_slot_ids for player in result.snapshot.players)
 
 
 def test_changed_mutable_state_during_reconciliation_fails() -> None:
