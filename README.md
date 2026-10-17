@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, the ESPN data and feasibility audit, is **COMPLETE**. M1 is in progress: M1.1's immutable canonical entities, validation contracts, and deterministic schema-v1 JSON are complete; M1.2 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0, the ESPN data and feasibility audit, is **COMPLETE**. M1 is in progress: M1.1's immutable canonical entities, validation contracts, and deterministic schema-v1 JSON are complete. M1.2's offline adapter is implemented, but its live gate is **BLOCKED** because ESPN exposes eligible lineup-slot ID 25 outside the configured `lineupSlotCounts` namespace and schema v1 cannot preserve that distinction faithfully. M1.3 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -18,6 +18,7 @@ M0, the ESPN data and feasibility audit, is **COMPLETE**. M1 is in progress: M1.
 - [ESPN data dictionary](docs/ESPN_DATA_DICTIONARY.md) — proposed M1 logical fields, raw paths, identifier namespaces, transformations, evidence, and validation tiers.
 - [M0 feasibility and M1 handoff](docs/M0_FEASIBILITY_AND_M1_HANDOFF.md) — readiness matrix, rule-gap register, approved forecast/calibration policies, and the M1 recommendation.
 - [Canonical model](docs/CANONICAL_MODEL.md) — M1.1 schema-v1 entities, identifiers, ownership and projection contracts, validation boundary, serialization, and deferred work.
+- [ESPN-to-canonical adapter](docs/ESPN_CANONICAL_ADAPTER.md) — M1.2 retrieval, translation, reconciliation, YAML rule-gap configuration, testing, live evidence, and the current schema blocker.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -94,9 +95,15 @@ M0.6 provides a credential-free evidence manifest and reproduction guide. It lis
 
 `--check-config` validates local configuration only. The report always states whether live verification occurred, lists the credential requirements for each diagnostic, and preserves unresolved rules.
 
-## Upcoming work package
+## M1.2 live validation
 
-After M1.1 review, M1.2 is the next unstarted work package: map verified ESPN sources into the canonical contracts using sanitized adapter fixtures. Do not begin M1.2 automatically. SQLite storage, compressed raw payloads, staged refresh, and immutable publication remain M1.3.
+The read-only adapter requires an explicit first fully unplayed scoring week and emits only sanitized aggregate counts:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.espn_adapter --first-simulation-week 8 --expected-team-count 14
+```
+
+The current live run intentionally fails on the documented lineup-slot namespace conflict instead of dropping source eligibility or inventing league configuration. The proposed narrow M1.1 correction requires review before M1.2 can pass its gate. SQLite storage, staged publication, and all M1.3 work remain unstarted.
 
 ## Historical implementation
 

@@ -99,7 +99,7 @@ This is an interchange contract only. SQLite tables, compressed raw payload stor
 
 ## Representative fixture and tests
 
-`tests/canonical_fixtures.py` defines a sanitized two-team snapshot with:
+`tests/canonical_fixtures.py` defines a sanitized four-team snapshot with:
 
 - owned and unrostered players;
 - a signed negative D/ST ID;
@@ -116,3 +116,5 @@ An alternate fixture test removes IR and adds multiple flex slots, demonstrating
 M1.2 must map verified raw ESPN sources into these contracts and supply sanitized adapter fixtures. M1.3 must design SQLite storage, compressed raw payload retention, staged validation, immutable atomic publication, schema migrations, canonical checksums, and snapshot identity allocation. Neither work package is implemented here.
 
 The exact production display-name privacy policy and which raw payload fragments remain queryable versus compressed are persistence/adapter design questions. They do not alter the current entity keys or validation contract.
+
+M1.2 live translation identified one contract issue requiring review: ESPN player eligibility includes raw lineup-slot ID 25 even though the league's `lineupSlotCounts` mapping contains only IDs 0–24. Schema v1 currently has no separate lineup-slot namespace registry, so it cannot preserve the eligibility ID without either dropping evidence or inventing a configured capacity. The adapter fails explicitly. A separate immutable known/observed lineup-slot ID set is the recommended targeted amendment; it has not been implemented pending approval.
