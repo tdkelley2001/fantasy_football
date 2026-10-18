@@ -29,6 +29,7 @@ class Settings:
     league_id: int
     season: int
     log_level: str
+    snapshot_db_path: Path = Path("outputs/fantasy_football.sqlite3")
     credentials: EspnCredentials | None = field(default=None, repr=False)
 
 
@@ -60,6 +61,13 @@ def _credentials(values: Mapping[str, str]) -> EspnCredentials | None:
     if not espn_s2:
         return None
     return EspnCredentials(espn_s2=espn_s2, swid=swid)
+
+
+def _snapshot_db_path(values: Mapping[str, str]) -> Path:
+    raw = values.get("SNAPSHOT_DB_PATH", "outputs/fantasy_football.sqlite3").strip()
+    if not raw:
+        raise SettingsError("SNAPSHOT_DB_PATH must not be empty")
+    return Path(raw)
 
 
 def load_settings(
@@ -95,5 +103,6 @@ def load_settings(
         league_id=_required_positive_int(values, "ESPN_LEAGUE_ID"),
         season=_required_positive_int(values, "ESPN_SEASON"),
         log_level=log_level,
+        snapshot_db_path=_snapshot_db_path(values),
         credentials=_credentials(values),
     )

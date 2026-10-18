@@ -1,8 +1,8 @@
-# Canonical Snapshot Contract — Schema Version 1
+# Canonical Snapshot Contract — Schema Version 2
 
 ## Scope
 
-M1.1 defines the immutable ESPN-independent contract between future ingestion, persistence, and simulation. It does not fetch ESPN data, persist snapshots, allocate snapshot IDs, compile simulation arrays, or implement league behavior.
+M1.1 defines the immutable ESPN-independent contract between ingestion, persistence, and simulation. M1.2 translates live ESPN responses into this contract, and M1.3 assigns publication IDs and persists complete documents. The canonical package itself does not fetch ESPN data, access SQLite, compile simulation arrays, or implement league behavior.
 
 The implementation is in `src/fantasy_football/canonical/` and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror. The current serialized contract is schema version 2.
 
@@ -87,7 +87,7 @@ An unresolved consolation ladder or tie rule is valid canonical metadata. It blo
 
 ## Serialization
 
-`snapshot_to_json` and `snapshot_from_json` implement schema version `1`:
+`snapshot_to_json` and `snapshot_from_json` implement schema version `2`:
 
 - JSON is indented, human-readable, and ends with a newline;
 - object keys and all identity-bearing record collections have deterministic ordering;
@@ -95,9 +95,9 @@ An unresolved consolation ladder or tie rule is valid canonical metadata. It blo
 - null, explicit numeric zero, negative IDs, negative projections, raw enums, gaps, and evidence states round-trip unchanged;
 - JSON nonfinite numbers are prohibited;
 - deserialization reconstructs typed immutable records and performs full validation; and
-- any schema version other than `1` fails explicitly.
+- any schema version other than `2` fails explicitly.
 
-This is an interchange contract only. SQLite tables, compressed raw payload storage, transactionality, publication, checksums of the entire canonical document, migrations, and snapshot-ID allocation remain M1.3.
+This remains an interchange contract: `snapshot_store.py` owns SQLite, compressed evidence, transactions, publication UUIDs, and whole-document checksums without adding persistence behavior to canonical entities.
 
 ## Representative fixture and tests
 
@@ -113,10 +113,8 @@ This is an interchange contract only. SQLite tables, compressed raw payload stor
 
 An alternate fixture test removes IR and adds multiple flex slots, demonstrating that the validator does not impose the current league's roster template.
 
-## Deferred work
+## Implemented and deferred boundaries
 
-M1.2 must map verified raw ESPN sources into these contracts and supply sanitized adapter fixtures. M1.3 must design SQLite storage, compressed raw payload retention, staged validation, immutable atomic publication, schema migrations, canonical checksums, and snapshot identity allocation. Neither work package is implemented here.
+M1.2 implements verified ESPN translation and M1.3 implements immutable document persistence. M1.4 remains responsible for its additional validation work package, and M1.5 remains responsible for user-facing snapshot listing and inspection commands. Simulation compilation and league behavior remain later milestones.
 
-The exact production display-name privacy policy and which raw payload fragments remain queryable versus compressed are persistence/adapter design questions. They do not alter the current entity keys or validation contract.
-
-M1.2 live translation identified one contract issue requiring review: ESPN player eligibility includes raw lineup-slot ID 25 even though the league's `lineupSlotCounts` mapping contains only IDs 0–24. Schema v1 currently has no separate lineup-slot namespace registry, so it cannot preserve the eligibility ID without either dropping evidence or inventing a configured capacity. The adapter fails explicitly. A separate immutable known/observed lineup-slot ID set is the recommended targeted amendment; it has not been implemented pending approval.
+The M1.2 slot-25 finding is resolved in schema v2 through the observed eligibility namespace described above. No raw eligibility evidence is dropped and no absent capacity is fabricated.

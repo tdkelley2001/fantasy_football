@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
+import pytest
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,3 +44,9 @@ def test_local_league_rule_configuration_is_ignored() -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "config/league_rules.local.yaml"
+
+
+@pytest.mark.parametrize("path", ["outputs/live.sqlite3", "snapshot.sqlite", "state.db", "snapshot.sqlite3-wal", "snapshot.sqlite3-shm"])
+def test_sqlite_artifacts_are_ignored(path: str) -> None:
+    result = _git("check-ignore", path)
+    assert result.returncode == 0, result.stderr

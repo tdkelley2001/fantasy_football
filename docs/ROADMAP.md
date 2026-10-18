@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0 is **COMPLETE**. M1 is **IN PROGRESS**: M1.1 and M1.2 are **COMPLETE**, and M1.3–M1.5 are **NOT STARTED**. Every M2-M7 work package is **NOT STARTED**; M7 remains deferred. No legacy implementation is credited toward these statuses.
+M0 is **COMPLETE**. M1 is **IN PROGRESS**: M1.1–M1.3 are **COMPLETE**, and M1.4–M1.5 are **NOT STARTED**. Every M2-M7 work package is **NOT STARTED**; M7 remains deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -56,7 +56,7 @@ M1.1 [COMPLETE — amended 17 October 2026] Define typed canonical entities and 
 
 M1.2 [COMPLETE — 17 October 2026] Build explicit ESPN-to-canonical adapter with source provenance and league-specific editable config only for audited missing rules. The approved M1.1 amendment introduced schema v2's immutable observed eligibility-slot namespace without turning unconfigured categories into playable capacity. The targeted suite passed 81 tests and the complete credential-free suite passed 185. The repeated live run validated 14 teams, 1,052 players (234 rostered), 11,572 player-weeks for weeks 8–18, 49 fantasy matchups, 32 NFL teams/165 future games, full mutable-state reconciliation, preserved slot 25, and deterministic serialization. Seven simulator-specific rule gaps remain explicit but do not block canonical ingestion. GATE: PASSED. See `ESPN_CANONICAL_ADAPTER.md`.
 
-M1.3 Implement staged immutable refresh, validation checks, compressed raw payload retention, and normalized authoritative SQLite storage; never modify an approved snapshot on a failed refresh. GATE: round-trip and interrupted-refresh recovery tests.
+M1.3 [COMPLETE — 17 October 2026] Persist one authoritative deterministic canonical JSON document plus gzip-compressed deterministic JSON captured-response evidence in a local append-only SQLite store. Each successful publication receives a UUID and atomically commits metadata, canonical bytes, and every required source; reads verify schema versions, SHA-256 checksums, identities, source completeness, decompression, deserialization, and canonical validation. WAL/FULL durability, foreign keys, immutable-row triggers, indefinite retention, deterministic newest selection, rollback after partial insertion, reopen, duplicate-ID, and corruption behavior are tested. GATE: PASSED — full credential-free suite and bounded live publish/reopen results are recorded in `SNAPSHOT_STORAGE.md`.
 
 M1.4 Validate unique player ownership, league/team counts, player-week availability and week/schedule coverage; distinguish absent values from zeros. GATE: intentional malformed fixtures raise precise errors.
 
@@ -140,7 +140,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0, M1.1, and M1.2 are complete. M1.3 has not started, and every later work package remains planned rather than implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1.1–M1.3 are complete. M1.4 and every later work package remain planned rather than implemented.
 
 ### 12.2 Practical development method
 

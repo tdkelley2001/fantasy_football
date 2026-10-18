@@ -21,6 +21,17 @@ def test_load_settings_without_credentials() -> None:
     assert settings.season == 2026
     assert settings.log_level == "INFO"
     assert settings.credentials is None
+    assert settings.snapshot_db_path == Path("outputs/fantasy_football.sqlite3")
+
+
+def test_snapshot_database_path_is_configurable() -> None:
+    settings = load_settings(env_file=None, environ={**VALID_ENV, "SNAPSHOT_DB_PATH": "private/state.sqlite3"})
+    assert settings.snapshot_db_path == Path("private/state.sqlite3")
+
+
+def test_empty_snapshot_database_path_is_rejected() -> None:
+    with pytest.raises(SettingsError, match="SNAPSHOT_DB_PATH"):
+        load_settings(env_file=None, environ={**VALID_ENV, "SNAPSHOT_DB_PATH": "  "})
 
 
 def test_process_environment_overrides_dotenv(tmp_path: Path) -> None:
