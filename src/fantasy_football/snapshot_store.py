@@ -39,6 +39,18 @@ class SnapshotIntegrityError(SnapshotStoreError):
     """Raised when stored bytes, metadata, or relationships disagree."""
 
 
+class PostCommitVerificationError(SnapshotStoreError):
+    """Raised when an immutable commit succeeded but its subsequent verification failed."""
+
+    def __init__(self, snapshot_id: str, cause: Exception):
+        self.snapshot_id = snapshot_id
+        self.cause = cause
+        super().__init__(
+            f"snapshot {snapshot_id} was committed and was not rolled back, "
+            f"but post-commit verification failed: {cause}"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class SnapshotMetadata:
     snapshot_id: str
@@ -66,6 +78,24 @@ class LoadedSnapshot:
     snapshot: LeagueSnapshot
     canonical_json: bytes
     raw_sources: tuple[StoredRawResponse, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ForeignKeyViolation:
+    table: str
+    row_id: int | None
+    parent_table: str
+    foreign_key_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseIntegrityReport:
+    integrity_messages: tuple[str, ...]
+    foreign_key_violations: tuple[ForeignKeyViolation, ...]
+
+    @property
+    def ok(self) -> bool:
+        return self.integrity_messages == ("ok",) and not self.foreign_key_violations
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,13 +289,32 @@ class SnapshotStore:
         if missing:
             raise UnsupportedDatabaseSchemaError(f"database schema is missing tables: {sorted(missing)}")
 
-    def _verify_database_integrity(self, connection: sqlite3.Connection) -> None:
-        integrity = connection.execute("PRAGMA integrity_check").fetchall()
-        if [row[0] for row in integrity] != ["ok"]:
-            raise SnapshotIntegrityError(f"SQLite integrity_check failed: {[row[0] for row in integrity]}")
-        foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
-        if foreign_key_errors:
+    def check_database_integrity(self) -> DatabaseIntegrityReport:
+        """Run explicit database-wide SQLite and foreign-key diagnostics."""
+
+        connection = self._connect()
+        try:
+            self._verify_database_schema(connection)
+            integrity = tuple(str(row[0]) for row in connection.execute("PRAGMA integrity_check").fetchall())
+            violations = tuple(
+                ForeignKeyViolation(str(row[0]), row[1], str(row[2]), int(row[3]))
+                for row in connection.execute("PRAGMA foreign_key_check").fetchall()
+            )
+            return DatabaseIntegrityReport(integrity, violations)
+        finally:
+            connection.close()
+
+    def require_database_integrity(self) -> DatabaseIntegrityReport:
+        """Run the explicit full scan and raise when SQLite reports a problem."""
+
+        report = self.check_database_integrity()
+        if report.integrity_messages != ("ok",):
+            raise SnapshotIntegrityError(
+                f"SQLite integrity_check failed: {list(report.integrity_messages)}"
+            )
+        if report.foreign_key_violations:
             raise SnapshotIntegrityError("SQLite foreign_key_check found detached or invalid records")
+        return report
 
     def _prepare(
         self,
@@ -422,7 +471,6 @@ class SnapshotStore:
         connection = self._connect()
         try:
             self._verify_database_schema(connection)
-            self._verify_database_integrity(connection)
             rows = connection.execute(
                 """SELECT s.*, d.canonical_json FROM snapshots s
                    LEFT JOIN canonical_documents d ON d.snapshot_id=s.snapshot_id
@@ -513,6 +561,17 @@ class SnapshotStore:
         return self.load(snapshot_id, verify_sources=True).metadata
 
 
+def publish_and_verify(store: SnapshotStore, result: AdapterResult) -> SnapshotMetadata:
+    """Publish once, then explicitly distinguish any failure after commit."""
+
+    metadata = store.publish(result)
+    try:
+        store.verify(metadata.snapshot_id)
+    except Exception as exc:
+        raise PostCommitVerificationError(metadata.snapshot_id, exc) from exc
+    return metadata
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Retrieve and atomically publish one immutable ESPN snapshot.")
     parser.add_argument("--database", type=Path, help="SQLite path; defaults to SNAPSHOT_DB_PATH configuration.")
@@ -535,10 +594,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         store = SnapshotStore(database)
         store.initialize()
-        metadata = store.publish(result)
-        store.verify(metadata.snapshot_id)
+        metadata = publish_and_verify(store, result)
+    except PostCommitVerificationError as exc:
+        print(f"M1.3 snapshot committed but verification failed: {exc}")
+        return 3
     except (SettingsError, EspnAdapterError, CanonicalValidationError, SnapshotStoreError) as exc:
-        print(f"M1.3 snapshot publication failed: {exc}")
+        print(f"M1.3 snapshot publication failed before commit: {exc}")
         return 2
     print(
         f"Published immutable snapshot {metadata.snapshot_id} for league={metadata.league_id} "

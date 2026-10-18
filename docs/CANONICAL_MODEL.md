@@ -83,7 +83,15 @@ Rule values use ordinary JSON scalars when sufficient. Structured evidence uses 
 
 Failures identify the entity, identifier, field, and invariant. Validation never fills a value, changes an enum, assigns an owner, creates a matchup, or supplies a rule default.
 
-An unresolved consolation ladder or tie rule is valid canonical metadata. It blocks only future behavior that explicitly requires the missing meaning. Invalid references, duplicate ownership, malformed projection provenance, and contradictory bye/game records invalidate the snapshot itself.
+An unresolved consolation ladder or tie rule is valid canonical metadata. It blocks only future behavior that explicitly requires the missing meaning. Rule-gap records must name a nonempty unique gap ID and at least one nonempty, nonduplicated affected capability. Invalid references, duplicate ownership, malformed projection provenance, contradictory bye/game records, and malformed rule-gap metadata invalidate the snapshot itself.
+
+## Deterministic quality reporting
+
+`generate_quality_report(snapshot)` first invokes the authoritative canonical validator, then returns a frozen report separate from schema v2. It reports identity and horizon counts, rostered/unrostered counts, required and observed player-week coverage, schedule/source counts, and projection categories. Percentages use player-week records as their denominator. Projection breakdowns are calculated independently by scoring week, raw default-position ID, and current ownership state.
+
+Missing raw projections, explicit ESPN zeros, finite negatives, positive effective projections, unrostered players, and observed-but-unconfigured eligibility categories are data characteristics rather than structural failures. They appear as aggregate metrics or information diagnostics, not one warning per record. Rule gaps produce one deterministic warning with their affected capabilities, source, and manual-configuration eligibility; non-understood rule interpretations remain visible as limitations. Passing canonical validation does not assert that those capabilities are ready—callers still use `require_understood_rules()` for the specific rule IDs they require.
+
+For the sanitized fixture, the overall projection summary contains 15 records: 12 present raw values, 3 explicit zeros, 3 missing raw values, 3 finite negatives, and 6 positive effective projections. The counts are illustrative test evidence, not live-league findings. Identical snapshots yield equal report objects and canonical JSON report output.
 
 ## Serialization
 
@@ -115,6 +123,6 @@ An alternate fixture test removes IR and adds multiple flex slots, demonstrating
 
 ## Implemented and deferred boundaries
 
-M1.2 implements verified ESPN translation and M1.3 implements immutable document persistence. M1.4 remains responsible for its additional validation work package, and M1.5 remains responsible for user-facing snapshot listing and inspection commands. Simulation compilation and league behavior remain later milestones.
+M1.2 implements verified ESPN translation, M1.3 implements immutable document persistence, and M1.4 implements deterministic non-authoritative quality reporting plus the narrow rule-gap invariants above. M1.5 remains responsible for user-facing snapshot listing and inspection commands. Simulation compilation and league behavior remain later milestones.
 
 The M1.2 slot-25 finding is resolved in schema v2 through the observed eligibility namespace described above. No raw eligibility evidence is dropped and no absent capacity is fabricated.
