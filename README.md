@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 and M1 are **COMPLETE**. Schema-v2 canonical contracts, the live-accepted ESPN adapter, immutable SQLite persistence, deterministic quality diagnostics, and read-only snapshot management are implemented. M2 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1's deterministic exact projected-lineup optimizer is complete, while M2.2 and later work packages remain **NOT STARTED**. Schema-v2 canonical contracts, the live-accepted ESPN adapter, immutable SQLite persistence, deterministic quality diagnostics, and read-only snapshot management are implemented. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -149,6 +149,23 @@ Verify one exact or newest-selected snapshot, or explicitly scan the entire data
 ```
 
 An explicit UUID takes precedence over league/season selectors and never falls back if missing or corrupt. Without a UUID, both league and season are required. Snapshot age is informational and is measured from retrieval completion; an old valid snapshot remains selectable for reproducibility.
+
+## Projected-optimal lineup optimizer
+
+M2.1 exposes `optimize_starting_lineup()` as a programmatic, credential-free reference optimizer. It accepts a validated canonical snapshot, fantasy team ID, scoring week, and optionally a complete validated alternate roster state for a future simulation path:
+
+```python
+from fantasy_football.lineup_optimizer import optimize_starting_lineup
+from fantasy_football.snapshot_store import SnapshotStore
+
+store = SnapshotStore("outputs/fantasy_football.sqlite3")
+snapshot = store.load("00000000-0000-4000-8000-000000000001").snapshot
+
+lineup = optimize_starting_lineup(snapshot, team_id=1, scoring_week=8)
+print(lineup.total_projected_points, lineup.assignments, lineup.vacancies)
+```
+
+The exact dynamic program expands only ESPN-configured starter capacity, never observed-but-unconfigured eligibility categories. Bench players may start when eligible; reserve/IR occupants and players with nonpositive effective projections may not. Shortages return an explicit best partial lineup with zero-point vacancies. Results are deterministic under reordered inputs, and optimization never refreshes ESPN data or mutates the snapshot.
 
 ## Historical implementation
 
