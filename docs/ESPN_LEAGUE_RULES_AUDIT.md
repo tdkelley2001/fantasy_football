@@ -29,11 +29,11 @@ Evidence labels retain their established meaning: **Verified live** was observed
 | Standings records | `teams[].record.overall` | 14 complete W/L/T, PF, PA records | numeric fields | Direct current records; missing and zero remain distinct. | Verified live | Yes. |
 | Divisions | league settings / team division IDs | one division | integer relationship | No division-winner seeding effect exists in this league's current structure. | Verified live | Yes. |
 | Seeding tiebreak | `scheduleSettings.playoffSeedingRule` | `TOTAL_POINTS_SCORED` | enum | Points for is the configured first seeding tiebreak. Four current equal-record groups provide observational consistency, not proof of every deeper tie step. ESPN notes LM leagues can customize the sequence. | Verified live + [ESPN tiebreak guidance](https://support.espn.com/hc/en-us/articles/4669389557140-Regular-Season-Tiebreakers) | First rule yes; deeper sequence requires UI/config verification. |
-| Matchup ties | `scoringSettings.matchupTieRule` | `NONE` | enum | No verified raw definition establishes the operational result of `NONE`. | Unverified | `standings.matchup_tie_rule` is blocking. |
+| Matchup ties | `scoringSettings.matchupTieRule` | `NONE` | enum | The raw API value was observed during M0.4. On 2026-10-18, the owner directly confirmed in the ESPN settings UI that `None` allows a tied final score and awards neither side a win or loss. | Verified live raw value + owner UI confirmation | Sufficient for `NONE`; alternate configured policies remain unsupported until their required score inputs and behavior are implemented. |
 | Championship qualification | `playoffTeamCount`, `matchupPeriodCount` | six qualifiers; regular season through week 14; playoffs start week 15 | integers | Direct settings. | Verified live | Yes. |
 | Championship rounds | `playoffMatchupPeriodLengthByRound`, `matchupPeriods` | 1, 1, 2 weeks; final is weeks 17–18 | maps | Direct current settings. Historical 2024/2025 final rows corroborate two-week aggregate behavior. | Verified live | Yes. |
 | Byes and reseeding | six-team bracket, `playoffReseed` | two byes; false | derived count / bool | Two historical bye rows in both completed seasons verify seeds 1–2 receive byes. Historical pairings were fixed rather than reseeded. | Verified live (historical) | Strong evidence, but current 14-team bracket rows have not materialized. |
-| Playoff matchup tie | `playoffMatchupTieRule` | `NONE` | enum | ESPN's default is higher seed, but LM override is possible and the raw enum mapping is not established. | Unverified + [ESPN playoff tie guidance](https://support.espn.com/hc/en-us/articles/4669390376852-Playoff-Scoring-Tiebreakers) | `postseason.playoff_matchup_tie_rule` is blocking. |
+| Playoff matchup tie | `playoffMatchupTieRule` | `NONE` | enum | On 2026-10-18, the owner directly confirmed that ESPN advances the higher seed after a tied playoff matchup. A discretionary LM advancement override is possible but intentionally outside the model. | Verified live raw value + owner UI confirmation + [ESPN playoff tie guidance](https://support.espn.com/hc/en-us/articles/4669390376852-Playoff-Scoring-Tiebreakers) | Sufficient for future M2.4 tie advancement; not executed in M2.2. |
 | Placement games | historical `schedule` and final standings | championship, 3rd-place, and 5th-place rows observed | schedule relationships | Observed in both completed 12-team seasons. | Verified live (historical) | Yes for six-team championship component. |
 | Consolation enabled | `consolationLadderDisabled` | false | bool | A consolation ladder is enabled. Current 14-team pairings are not yet in the schedule. | Verified live | Enablement only. |
 | Consolation structure | historical schedule | completed six-team ladders in 2024/2025; current expected participants 8 | schedule relationships | Historical ladders were placement ladders, not safely reducible to conventional single elimination. They do not prove the new eight-team mapping. | Unverified for 2026 / Unsupported pre-postseason | Explicit ladder configuration or actual 2026 bracket evidence is blocking. |
@@ -50,7 +50,7 @@ This league uses traditional waivers. `waiverOrderReset=true`, official ESPN doc
 
 The raw trade settings establish the deadline, 24-hour review duration, eight-vote threshold, and no trade-count limit. Two team trade counters were observed. The audit did not fetch pending offers, votes, or manager-level transaction details. Add/drop positional limits use the raw `positionLimits`; IR and total-capacity legality also apply.
 
-The current league is H2H points with one division, and ESPN supplies W/L/T, PF, PA, and a complete 1–14 seed permutation. `TOTAL_POINTS_SCORED` directly verifies points for as the selected first seeding tiebreak. It does not establish every subsequent tiebreak. Regular matchup ties and playoff matchup ties remain unresolved because raw `NONE` has not been authoritatively mapped for this league.
+The current league is H2H points with one division, and ESPN supplies W/L/T, PF, PA, and a complete 1–14 seed permutation. `TOTAL_POINTS_SCORED` directly verifies points for as the selected first seeding tiebreak. It does not establish every subsequent tiebreak. The 2026-10-18 owner UI review resolved the current league's regular and playoff tie meanings without changing the earlier raw-API evidence classification.
 
 ## Championship and consolation evidence
 
@@ -67,9 +67,7 @@ These keys are proposals for later review, not a production schema or defaults:
 | `waivers.claim_processing_order` | Explicit ordered procedure for multiple claims and priority movement | Confirm in ESPN league UI/help or observe sanitized completed-claim sequences. ESPN state remains authoritative; conflict must fail. | Yes for path-dependent waivers |
 | `waivers.process_timezone` | IANA timezone verified for raw hour 11 | Compare UI-displayed processing time and execution timestamps. | Only for time-of-day simulation |
 | `transactions.trade_review_type` | `league_vote`, `commissioner`, or `none` | Confirm league settings UI; raw threshold alone is insufficient. | No unless trades are modeled |
-| `standings.matchup_tie_rule` | Named verified rule | Confirm UI or observe an actual tied regular matchup. | Yes |
 | `standings.secondary_seeding_tiebreaks` | Ordered verified list | Confirm LM playoff settings. | Yes when the first tiebreak remains tied |
-| `postseason.playoff_matchup_tie_rule` | Named verified rule | Confirm UI or an actual tied playoff matchup. | Yes |
 | `postseason.consolation_ladder` | Participants, seed mapping, pairings, round scoring periods, advancement, placement mapping | Export/inspect the 2026 bracket once available or supply league-approved rules. | Yes |
 
 Later reconciliation must compare every manual value with retrievable ESPN evidence and fail on conflict. Absence never activates a guessed default.
@@ -81,6 +79,16 @@ The diagnostic has credential-free positive, negative, and adversarial coverage 
 M0.3's original completion remains 47 passing tests. The projection-UI and missing-policy follow-up raised the suite to 55. M0.4 adds finite-projection checks, explicit 32-NFL-team reconciliation, and league-rule tests; the final M0.4 suite count is recorded in the roadmap after verification. Missing raw projections continue to become effective zero only under `missing_projection_policy`; explicit zero and imputed zero remain distinct.
 
 No current master-specification requirement was contradicted. The important refinement is that inverse standings is supported for the configured weekly reset, not a universal waiver assumption, and the eight-team consolation structure remains a blocking evidence gap.
+
+## 18 October 2026 owner UI confirmation follow-up
+
+This follow-up records direct inspection of the ESPN league-settings interface by the project owner. It supplements—but does not retroactively relabel—the M0.4 raw-response and historical-bracket observations.
+
+- The current regular-season `matchupTieRule=NONE` permits a tied game. Each club receives one tie and neither receives a win or loss. The UI also offered home team, most QB points, most WR points, most RB points, and most bench points. Those alternatives remain preserved configuration values, not implemented fallbacks.
+- The current `playoffSeedingRule=TOTAL_POINTS_SCORED` establishes cumulative PF as the first tiebreaker for equivalent records. The UI alternatives were head-to-head record, intradivision record, total points for, and total points against. Secondary ranking behavior after the configured first rule remains unverified.
+- A tied playoff matchup advances the higher-seeded team. Manual League Manager advancement changes are discretionary interventions and are outside the simulation model.
+
+For new adapter translations, the repository preserves the raw `NONE` enum while normalizing the confirmed regular-season meaning to `allow_ties` and the confirmed playoff meaning to `higher_seed`. Other raw values remain unverified rather than being coerced to these current-league rules. Existing immutable snapshots retain the evidence state with which they were published.
 
 ## Generalized discovery follow-up
 

@@ -94,7 +94,8 @@ def _prefer_projected_points(candidate: _State, incumbent: _State | None) -> boo
     return _assignment_tie_key(candidate.assignment) < _assignment_tie_key(incumbent.assignment)
 
 
-def _validate_roster_state(snapshot: LeagueSnapshot, entries: tuple[RosterEntry, ...]) -> None:
+def validate_roster_state(snapshot: LeagueSnapshot, entries: tuple[RosterEntry, ...]) -> None:
+    """Validate a complete modeled ownership/occupancy state without mutating it."""
     if not isinstance(entries, tuple):
         raise LineupOptimizationError("alternate roster state must be an immutable tuple of RosterEntry records")
     team_ids = {team.team_id for team in snapshot.teams}
@@ -213,7 +214,7 @@ def optimize_starting_lineup(
         )
 
     modeled_roster = snapshot.roster_entries if roster_entries is None else roster_entries
-    _validate_roster_state(snapshot, modeled_roster)
+    validate_roster_state(snapshot, modeled_roster)
     players = {player.player_id: player for player in snapshot.players}
     week_records = {
         record.player_id: record

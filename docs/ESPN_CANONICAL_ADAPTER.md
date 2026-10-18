@@ -105,6 +105,8 @@ The identical in-memory snapshot serialized twice to the same canonical SHA-256 
 
 The live run retains unresolved rule gaps for the consolation ladder, dropped-player reentry, multiple-waiver-claim behavior, playoff ties, regular matchup ties, trade review workflow, and waiver-process timezone. These are explicit capability limitations, not canonical ingestion failures.
 
+Follow-up, 18 October 2026: direct owner inspection of the ESPN settings UI established that the observed regular `matchupTieRule=NONE` allows ties and that tied playoff matchups advance the higher seed. New translations therefore retain raw `NONE` while normalizing these meanings to `allow_ties` and `higher_seed`; the corresponding gaps are no longer emitted for that enum. This does not rewrite the original live-run snapshot or its then-current seven-gap report. Unfamiliar tie enums remain unverified.
+
 The targeted canonical/adapter/CLI suite passed 81 tests. The complete credential-free repository suite passed 185 tests. No credentials, raw private responses, or player/manager details were written to the repository.
 
 ## Live workflow

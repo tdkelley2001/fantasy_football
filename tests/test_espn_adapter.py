@@ -40,6 +40,12 @@ def test_translate_sanitized_bundle_to_complete_valid_snapshot() -> None:
     assert result.report.projection_missing_count == 2
     assert result.report.projection_zero_count == 2
     assert result.report.unresolved_rule_gaps
+    interpretations = {item.rule_id: item for item in snapshot.rules.interpretations}
+    assert interpretations["regular_matchup_tie"].raw_value == "NONE"
+    assert interpretations["regular_matchup_tie"].normalized_value == "allow_ties"
+    assert interpretations["regular_matchup_tie"].status is InterpretationStatus.UNDERSTOOD
+    assert interpretations["playoff_tie"].normalized_value == "higher_seed"
+    assert {item.gap_id for item in snapshot.rule_gaps}.isdisjoint({"regular_tie", "playoff_tie"})
     assert len(result.raw_sources) == 12
 
 
