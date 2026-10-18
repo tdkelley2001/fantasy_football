@@ -16,7 +16,14 @@ from fantasy_football.canonical.model import (
     RosterEntry,
 )
 from fantasy_football.canonical.validation import CanonicalValidationError
-from fantasy_football.lineup_optimizer import optimize_starting_lineup
+from fantasy_football.lineup_optimizer import (
+    LineupAssignment,
+    LineupVacancy,
+    OptimizedLineup,
+    StartingSlot,
+    VacancyReason,
+    optimize_starting_lineup,
+)
 from fantasy_football.weekly_engine import (
     MatchupOutcome,
     ModeledStanding,
@@ -106,6 +113,15 @@ def _scores(snapshot, week: int, values: dict[int, float]):
 
 def _standing(result, team_id: int):
     return next(item for item in result.standings if item.team_id == team_id)
+
+
+def _move_player(snapshot, player_id: int, lineup_slot_id: int):
+    return tuple(
+        replace(entry, lineup_slot_id=lineup_slot_id)
+        if entry.player_id == player_id
+        else entry
+        for entry in snapshot.roster_entries
+    )
 
 
 def test_simple_matchups_update_both_sides_and_reconcile_pf_pa() -> None:
@@ -404,3 +420,117 @@ def test_team_score_uses_careful_finite_accumulation_without_rounding() -> None:
     )
     score = next(item.total_realized_points for item in result.team_scores if item.team_id == 1)
     assert math.isclose(score, -0.1, rel_tol=0, abs_tol=0)
+
+
+def test_positive_eligible_player_cannot_start_while_modeled_in_reserve() -> None:
+    snapshot = _supported_snapshot()
+    frozen = _lineups(snapshot, 15)
+    reserve_roster = _move_player(snapshot, 1, 21)
+    reserve_snapshot = replace(snapshot, roster_entries=reserve_roster)
+
+    with pytest.raises(WeeklyEngineError, match="occupies configured reserve slot 21"):
+        resolve_regular_season_week(
+            reserve_snapshot,
+            15,
+            initialize_standings(reserve_snapshot),
+            frozen,
+            _scores(snapshot, 15, {1: 5, 2: 4, 3: 3, 4: 2}),
+        )
+
+
+def test_positive_bench_player_can_start() -> None:
+    snapshot = _supported_snapshot()
+    bench_snapshot = replace(snapshot, roster_entries=_move_player(snapshot, 1, 20))
+    lineups = _lineups(bench_snapshot, 15)
+    result = resolve_regular_season_week(
+        bench_snapshot,
+        15,
+        initialize_standings(bench_snapshot),
+        lineups,
+        _scores(snapshot, 15, {1: 5, 2: 4, 3: 3, 4: 2}),
+    )
+    team_one = next(item for item in result.team_scores if item.team_id == 1)
+    assert 1 in {item.player_id for item in team_one.starting_player_scores}
+
+
+def test_original_ir_player_can_start_after_explicit_alternate_roster_activation() -> None:
+    snapshot = _supported_snapshot()
+    ir_snapshot = replace(snapshot, roster_entries=_move_player(snapshot, 1, 21))
+    activated = _move_player(ir_snapshot, 1, 20)
+    lineups = tuple(
+        optimize_starting_lineup(ir_snapshot, team_id, 15, roster_entries=activated)
+        for team_id in (4, 2, 1, 3)
+    )
+    before = repr((ir_snapshot, activated, lineups))
+
+    result = resolve_regular_season_week(
+        ir_snapshot,
+        15,
+        initialize_standings(ir_snapshot),
+        lineups,
+        _scores(snapshot, 15, {1: 5, 2: 4, 3: 3, 4: 2}),
+        roster_entries=activated,
+    )
+    team_one = next(item for item in result.team_scores if item.team_id == 1)
+    assert 1 in {item.player_id for item in team_one.starting_player_scores}
+    assert repr((ir_snapshot, activated, lineups)) == before
+
+
+def test_alternate_roster_move_into_ir_blocks_original_frozen_lineup(monkeypatch) -> None:
+    snapshot = _supported_snapshot()
+    frozen = _lineups(snapshot, 15)
+    moved_to_ir = _move_player(snapshot, 1, 21)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("weekly IR validation must not access ESPN")
+
+    monkeypatch.setattr("fantasy_football.espn_adapter.fetch_and_translate", forbidden)
+    with pytest.raises(WeeklyEngineError, match="occupies configured reserve slot 21"):
+        resolve_regular_season_week(
+            snapshot,
+            15,
+            initialize_standings(snapshot),
+            frozen,
+            _scores(snapshot, 15, {1: 5, 2: 4, 3: 3, 4: 2}),
+            roster_entries=moved_to_ir,
+        )
+
+
+def test_reserve_occupancy_cannot_be_hidden_behind_another_starting_slot() -> None:
+    snapshot = _supported_snapshot()
+    players = tuple(
+        replace(player, eligible_lineup_slot_ids=tuple(sorted(player.eligible_lineup_slot_ids + (16,))))
+        if player.player_id == 1
+        else player
+        for player in snapshot.players
+    )
+    snapshot = replace(snapshot, players=players)
+    reserve_roster = _move_player(snapshot, 1, 21)
+    ordinary = _lineups(snapshot, 15)
+    team_one = next(item for item in ordinary if item.team_id == 1)
+    player_projection = next(
+        item.effective_projection for item in team_one.assignments if item.player_id == 1
+    )
+    altered_team_one = OptimizedLineup(
+        team_id=1,
+        season=snapshot.season,
+        scoring_week=15,
+        assignments=(LineupAssignment(StartingSlot(16, 1), 1, player_projection),),
+        total_projected_points=player_projection,
+        required_starting_slot_count=2,
+        filled_starting_slot_count=1,
+        vacancy_count=1,
+        vacancies=(LineupVacancy(StartingSlot(0, 1), VacancyReason.ELIGIBLE_PLAYERS_ASSIGNED_ELSEWHERE),),
+        is_complete=False,
+    )
+    frozen = tuple(altered_team_one if item.team_id == 1 else item for item in ordinary)
+
+    with pytest.raises(WeeklyEngineError, match="occupies configured reserve slot 21"):
+        resolve_regular_season_week(
+            snapshot,
+            15,
+            initialize_standings(snapshot),
+            frozen,
+            _scores(snapshot, 15, {1: 5, 2: 4, 3: 3, 4: 2}),
+            roster_entries=reserve_roster,
+        )
