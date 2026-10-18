@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: canonical schema v2 / SQLite schema v1 | 18 October 2026 | Status: M0 and M1 complete; M2 not started*
+*Version: canonical schema v2 / SQLite schema v1 | 18 October 2026 | Status: M0 and M1 complete; M2.1 complete; M2.2 not started*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Distinguish intended functionality from verified implementation: none of the algorithms or ESPN field availability described below should be understood as already built or confirmed.
 
@@ -153,6 +153,8 @@ Start from the per-path roster ownership, current cumulative standings, waiver p
 ### 5.2 Projected-optimal starting lineup
 
 Maximize total ESPN projected points across all mandatory starter and flex slots, honoring player eligibility, all relevant league slot constraints and the one-player-one-slot requirement. Bench/eligible flex allocation must be globally optimal, not an error-prone greedy slot-by-slot choice. Select starters before seeing stochastic outcomes. If no roster/free-agent combination can fill a mandatory slot, leave it empty for a zero contribution in that week and log it; do not invent a synthetic player. Future manager attentiveness, mistaken starts and discretionary streaming are out of scope for the V1 baseline.
+
+M2.1 implements this contract as a deterministic exact dynamic program over the configured starter-slot instances and eligible rostered players. Only configured `STARTER` capacity creates destinations; bench, reserve/IR, and observed-but-unconfigured eligibility categories do not. A candidate must be on the selected modeled roster, outside reserve, eligible for the destination, covered by the requested canonical player-week, and have `effective_projection > 0`. Exact stored float values are compared without a tolerance. Objective ties prefer more filled positions and then the lexicographically stable assignment formed from configured slot ID, within-slot position index, and signed player ID. If a complete lineup is impossible, the optimizer returns the best feasible partial assignment, explicit deterministic vacancies and shortage reasons, with zero contribution from each vacancy. It accepts a separately validated complete roster state for later path-dependent simulation without mutating the source snapshot. Distribution-aware lineup objectives or tie decisions remain a deferred enhancement and must account for matchup and joint outcome context; they are not part of M2.1.
 
 ### 5.3 Essential waiver claims
 
@@ -344,7 +346,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### M1 — Canonical snapshots and validation [COMPLETE]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, authoritative SQLite storage, deterministic quality reporting, and sanitized snapshot-management CLI. PASS: deterministic snapshot round-trip and selection, no data corruption on failed refresh or read-only inspection, complete identifiable league state and usable future inputs.
 
-#### M2 — Structurally complete full-season simulator [NOT STARTED]. Legal projected-optimal weekly lineups, essential waiver processing/real shared pool, matchups, dynamic standings, exact six-team championship and eight-team consolation, initial report and deterministic tests. PASS: every path is legal and yields coherent championship/placement outcomes; known ESPN settings are honored; provisional models labeled.
+#### M2 — Structurally complete full-season simulator [IN PROGRESS]. M2.1 exact projected-optimal weekly lineups are complete; essential waiver processing/real shared pool, matchups, dynamic standings, championship/consolation progression, and the deterministic full-season path remain unstarted. PASS: every path is legal and yields coherent championship/placement outcomes; known ESPN settings are honored; provisional models labeled.
 
 #### M3 — Calibrated probabilistic and efficient baseline [NOT STARTED]. Historical ESPN error audit and chosen distribution, adaptive all-team precision, seeded common random numbers, compact high-performance/parallel engine, fast/detailed modes, progressive estimates and detailed-run recovery. PASS: reasonable calibration evidence or explicit limitations, interval/convergence tests, reproducible multiprocessing/resume, representative throughput measurements.
 
@@ -388,11 +390,11 @@ M1.3 [COMPLETE — 17 October 2026] Persist the complete canonical JSON authorit
 
 M1.4 [COMPLETE — 18 October 2026] Preserve the canonical validator as structural authority and derive deterministic immutable quality reports without changing schema v2. Reports cover identity, horizon, ownership, required/observed player-week records, schedules, sources, projection classes and percentages, plus scoring-week/default-position/ownership breakdowns. Expected missingness is informational, unresolved rules disclose affected capabilities, and malformed rule-gap capability metadata fails validation. M1.3 follow-ups distinguish post-commit verification failure and move database-wide integrity scans to an explicit diagnostic. GATE: PASSED with focused adversarial tests and 223 passing credential-free repository tests.
 
-M1.5 [COMPLETE — 18 October 2026] Implement compact deterministic listing, exact/scoped-newest validated selection, sanitized quality inspection, explicit detailed entity views, snapshot verification, and database-wide verification without ESPN requests or state mutation. Explicit UUIDs take precedence and never fall back; age is retrieval-based information, unresolved capabilities remain visible, and raw evidence bodies stay private. GATE: PASSED — two loads reproduce identical canonical bytes/state and the complete credential-free suite passed 235 tests. M1 is complete; M2 remains unstarted.
+M1.5 [COMPLETE — 18 October 2026] Implement compact deterministic listing, exact/scoped-newest validated selection, sanitized quality inspection, explicit detailed entity views, snapshot verification, and database-wide verification without ESPN requests or state mutation. Explicit UUIDs take precedence and never fall back; age is retrieval-based information, unresolved capabilities remain visible, and raw evidence bodies stay private. GATE: PASSED — two loads reproduce identical canonical bytes/state and the complete credential-free suite passed 235 tests. M1 is complete; M2.1 is tracked separately below.
 
 #### M2 — Complete deterministic season-path reference simulator
 
-M2.1 Implement per-week legal starting-lineup optimizer using ESPN eligibility, approved effective projections and available players. Missing raw projections and explicit ESPN zeros both yield an effective zero in V1 but remain distinguishable in evidence and reporting. Explicitly fail or report the approved unresolved state when too few positive-projection players exist to form a complete lineup; never invent a fallback or silently select an unavailable player. GATE: toy and real-fixture lineup correctness tests, including ties, shortages, and missing/zero provenance cases.
+M2.1 [COMPLETE — 18 October 2026] Implement a deterministic exact per-week starting-lineup optimizer using configured starter capacities, raw player eligibility, approved effective projections, and either canonical or validated alternate roster state. Reserve occupants and nonpositive projections remain unavailable; observed unconfigured categories never create playable capacity. Exact ties use stable slot/player identities, and shortages return the globally best partial lineup with explicit zero-point vacancies instead of invented players. GATE: PASSED — hand-checkable overlap/flex, nonstandard-slot, tie, reserve, slot-25, missing/zero/negative, partial-lineup, alternate-roster, invalid-input, immutability, no-network, and seeded exhaustive-oracle cases passed as part of the 256-test credential-free suite. M2.2 remains unstarted.
 
 M2.2 Implement week progression, actual ESPN matchup schedule, points-for/against accumulation, standings, and tie rules. GATE: synthetic schedule results agree with hand-calculated examples.
 
@@ -468,7 +470,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete. M2 and every later work package remain not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete, M2.1 is complete, and M2.2 and every later work package remain not started.
 
 ### 12.2 Practical development method
 
