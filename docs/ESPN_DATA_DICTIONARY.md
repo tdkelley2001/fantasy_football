@@ -134,8 +134,8 @@ Approved V1 uses the currently available ESPN player-specific projection for eve
 | `playoff_reseed` | `.playoffReseed`; bool | C | Preserve; **Verified live** | C: bracket behavior |
 | `first_round_bye_count` | derived from qualifier count and bracket power of two | C | Structural derivation; **Verified by tests and historical evidence** | C: does not hardcode current league |
 | `playoff_seeding_rule_raw` | `.playoffSeedingRule`; enum | C | Preserve and interpret known value; **Verified live** | C: secondary tiebreaks unresolved |
-| `matchup_tie_rule_raw` | `scoringSettings.matchupTieRule`; enum | C | Preserve `NONE`; semantics **Unverified** | C: blocks tied regular matchup progression, not M1 ingestion |
-| `playoff_tie_rule_raw` | `.playoffMatchupTieRule`; enum | C | Preserve raw; semantics **Unverified** | C: blocks tied playoff advancement |
+| `matchup_tie_rule_raw` | `scoringSettings.matchupTieRule`; enum | C | Preserve raw; observed `NONE` meaning **Verified by owner UI confirmation** as allowing tied games; other enums remain unverified | C: `NONE` supported by M2.2; other values block only an actually tied matchup |
+| `playoff_tie_rule_raw` | `.playoffMatchupTieRule`; enum | C | Preserve raw; observed `NONE` meaning **Verified by owner UI confirmation** as higher-seed advancement; other enums remain unverified | C: consumed by M2.4, not M2.2 |
 | `consolation_enabled` | `.consolationLadderDisabled`; bool/null | C | Invert only explicit bool; **Verified live** | C: null remains unknown |
 | `consolation_structure` | current/historical `schedule[]` relationships | C | Reconstruct only observed pairings/transitions | **Unverified** for current eight-team ladder; preserve gap metadata |
 

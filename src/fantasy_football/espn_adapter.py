@@ -601,11 +601,23 @@ def _translate_rules(
         ),
         RuleInterpretation(
             "regular_matchup_tie", "settings.scoringSettings.matchupTieRule", matchup_tie_raw,
-            None, InterpretationStatus.UNVERIFIED if matchup_tie_raw is not None else InterpretationStatus.MISSING, source_id,
+            "allow_ties" if matchup_tie_raw == "NONE" else None,
+            InterpretationStatus.UNDERSTOOD
+            if matchup_tie_raw == "NONE"
+            else InterpretationStatus.UNVERIFIED
+            if matchup_tie_raw is not None
+            else InterpretationStatus.MISSING,
+            source_id,
         ),
         RuleInterpretation(
             "playoff_tie", "settings.scoringSettings.playoffMatchupTieRule", playoff_tie_raw,
-            None, InterpretationStatus.UNVERIFIED if playoff_tie_raw is not None else InterpretationStatus.MISSING, source_id,
+            "higher_seed" if playoff_tie_raw == "NONE" else None,
+            InterpretationStatus.UNDERSTOOD
+            if playoff_tie_raw == "NONE"
+            else InterpretationStatus.UNVERIFIED
+            if playoff_tie_raw is not None
+            else InterpretationStatus.MISSING,
+            source_id,
         ),
         RuleInterpretation(
             "consolation_structure", "settings.scheduleSettings.consolationLadderDisabled", _freeze_json(consolation_flag, "consolationLadderDisabled"),
@@ -614,15 +626,19 @@ def _translate_rules(
             source_id,
         ),
     )
-    gaps = (
-        RuleGap("regular_tie", "Raw matchup-tie enum lacks verified operational semantics", source_id, ("regular_matchup_resolution",), True),
-        RuleGap("playoff_tie", "Raw playoff-tie enum lacks verified operational semantics", source_id, ("championship_simulation",), True),
+    gaps = tuple(item for item in (
+        None
+        if matchup_tie_raw == "NONE"
+        else RuleGap("regular_tie", "Raw matchup-tie enum lacks verified operational semantics", source_id, ("regular_matchup_resolution",), True),
+        None
+        if playoff_tie_raw == "NONE"
+        else RuleGap("playoff_tie", "Raw playoff-tie enum lacks verified operational semantics", source_id, ("championship_simulation",), True),
         RuleGap("consolation_ladder", "Consolation advancement and placement relationships are unresolved", source_id, ("full_placement_simulation",), True),
         RuleGap("multiple_waiver_claims", "Exact multiple-claim processing is unresolved", source_id, ("essential_waiver_simulation",), True),
         RuleGap("dropped_player_reentry", "Dropped-player waiver reentry timing is unresolved", source_id, ("waiver_simulation",), True),
         RuleGap("waiver_process_timezone", "Raw processing hour has no verified timezone", source_id, ("time_sensitive_transactions",), True),
         RuleGap("trade_review_workflow", "Trade threshold does not establish review workflow", source_id, ("trade_simulation",), True),
-    )
+    ) if item is not None)
     qualifier_count = _int(schedule.get("playoffTeamCount"), "schedule settings", "playoffTeamCount", minimum=0)
     if qualifier_count == 1:
         raise EspnAdapterError("schedule settings: playoffTeamCount=1 cannot form a bracket")

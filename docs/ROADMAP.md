@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0 and M1 are **COMPLETE**. M2.1 is **COMPLETE**; M2.2-M2.5 and M3-M7 are **NOT STARTED**, with M7 deferred. No legacy implementation is credited toward these statuses.
+M0 and M1 are **COMPLETE**. M2.1-M2.2 are **COMPLETE**; M2.3-M2.5 and M3-M7 are **NOT STARTED**, with M7 deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -64,9 +64,9 @@ M1.5 [COMPLETE — 18 October 2026] Add compact newest-first snapshot listing wi
 
 #### M2 — Complete deterministic season-path reference simulator
 
-M2.1 [COMPLETE — 18 October 2026] Implement a deterministic exact per-week starting-lineup optimizer using configured starter capacities, raw player eligibility, approved effective projections, and either canonical or validated alternate roster state. Reserve occupants and nonpositive projections remain unavailable; observed unconfigured categories never create playable capacity. Exact ties use stable slot/player identities, and shortages return the globally best partial lineup with explicit zero-point vacancies instead of invented players. GATE: PASSED — hand-checkable overlap/flex, nonstandard-slot, tie, reserve, slot-25, missing/zero/negative, partial-lineup, alternate-roster, invalid-input, immutability, no-network, and seeded exhaustive-oracle cases passed as part of the 256-test credential-free suite. M2.2 remains unstarted.
+M2.1 [COMPLETE — 18 October 2026] Implement a deterministic exact per-week starting-lineup optimizer using configured starter capacities, raw player eligibility, approved effective projections, and either canonical or validated alternate roster state. Reserve occupants and nonpositive projections remain unavailable; observed unconfigured categories never create playable capacity. Exact ties use stable slot/player identities, and shortages return the globally best partial lineup with explicit zero-point vacancies instead of invented players. GATE: PASSED — hand-checkable overlap/flex, nonstandard-slot, tie, reserve, slot-25, missing/zero/negative, partial-lineup, alternate-roster, invalid-input, immutability, no-network, and seeded exhaustive-oracle cases passed as part of the 256-test credential-free suite.
 
-M2.2 Implement week progression, actual ESPN matchup schedule, points-for/against accumulation, standings, and tie rules. GATE: synthetic schedule results agree with hand-calculated examples.
+M2.2 [COMPLETE — 18 October 2026] Resolve canonical regular-season pairings using frozen legal lineups and supplied finite realized scores; preserve negative values and vacancies, accumulate symmetric W/L/T/PF/PA changes from copied standings, and return immutable transition records. Ranking uses exact winning percentage and the configured supported PF first tiebreak while retaining unresolved groups rather than inventing deeper ordering. The owner-confirmed `NONE` regular tie behavior is supported; alternative tie rules fail only when needed. GATE: PASSED — hand-calculated multi-matchup and consecutive-week cases plus tie, negative-score, missing-score, malformed schedule/lineup/standings, unsupported-rule, deterministic-order, immutability, and no-network regressions passed in the complete 281-test credential-free suite. M2.3 remains unstarted.
 
 M2.3 Implement essential future waiver/add-drop policy in real priority order with shared pool and repeated passes, reflecting actual league rules; no speculative manager trades or discretionary adds. GATE: contested pickup, bye, shortage and release/reentry tests.
 
@@ -140,7 +140,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete, M2.1 is complete, and M2.2 and every later work package remain planned rather than implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete, M2.1-M2.2 are complete, and M2.3 and every later work package remain planned rather than implemented.
 
 ### 12.2 Practical development method
 

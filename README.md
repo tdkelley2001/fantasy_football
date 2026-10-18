@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1's deterministic exact projected-lineup optimizer is complete, while M2.2 and later work packages remain **NOT STARTED**. Schema-v2 canonical contracts, the live-accepted ESPN adapter, immutable SQLite persistence, deterministic quality diagnostics, and read-only snapshot management are implemented. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1's exact projected-lineup optimizer and M2.2's deterministic regular-season weekly engine are complete, while M2.3 and later work packages remain **NOT STARTED**. Schema-v2 canonical contracts, the live-accepted ESPN adapter, immutable SQLite persistence, deterministic quality diagnostics, and read-only snapshot management are implemented. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -166,6 +166,28 @@ print(lineup.total_projected_points, lineup.assignments, lineup.vacancies)
 ```
 
 The exact dynamic program expands only ESPN-configured starter capacity, never observed-but-unconfigured eligibility categories. Bench players may start when eligible; reserve/IR occupants and players with nonpositive effective projections may not. Shortages return an explicit best partial lineup with zero-point vacancies. Results are deterministic under reordered inputs, and optimization never refreshes ESPN data or mutates the snapshot.
+
+## Deterministic weekly matchups
+
+M2.2 consumes frozen lineups and caller-supplied realized scores. It resolves only canonical regular-season matchups and returns copied cumulative standings; it does not fetch ESPN data, generate scores, or mutate the snapshot:
+
+```python
+from fantasy_football.weekly_engine import (
+    RealizedPlayerScore,
+    initialize_standings,
+    resolve_regular_season_week,
+)
+
+standings = initialize_standings(snapshot)
+lineups = tuple(optimize_starting_lineup(snapshot, team.team_id, 8) for team in snapshot.teams)
+scores = tuple(
+    RealizedPlayerScore(player_id, snapshot.season, 8, points)
+    for player_id, points in supplied_realized_points.items()
+)
+transition = resolve_regular_season_week(snapshot, 8, standings, lineups, scores)
+```
+
+Assigned starters require finite realized scores; vacancies add zero and negative results remain negative. The current league's confirmed `NONE` rule permits regular-season ties. Ranking uses exact winning percentage and configured total PF for identical records, while unresolved deeper ties remain explicit instead of receiving arbitrary seeds.
 
 ## Historical implementation
 
