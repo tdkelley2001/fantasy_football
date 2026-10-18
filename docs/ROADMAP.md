@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0 is **COMPLETE**. M1 is **IN PROGRESS**: M1.1–M1.3 are **COMPLETE**, and M1.4–M1.5 are **NOT STARTED**. Every M2-M7 work package is **NOT STARTED**; M7 remains deferred. No legacy implementation is credited toward these statuses.
+M0 is **COMPLETE**. M1 is **IN PROGRESS**: M1.1–M1.4 are **COMPLETE**, and M1.5 is **NOT STARTED**. Every M2-M7 work package is **NOT STARTED**; M7 remains deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -58,7 +58,7 @@ M1.2 [COMPLETE — 17 October 2026] Build explicit ESPN-to-canonical adapter wit
 
 M1.3 [COMPLETE — 17 October 2026] Persist one authoritative deterministic canonical JSON document plus gzip-compressed deterministic JSON captured-response evidence in a local append-only SQLite store. Each successful publication receives a UUID and atomically commits metadata, canonical bytes, and every required source; reads verify schema versions, SHA-256 checksums, identities, source completeness, decompression, deserialization, and canonical validation. WAL/FULL durability, foreign keys, immutable-row triggers, indefinite retention, deterministic newest selection, rollback after partial insertion, reopen, duplicate-ID, and corruption behavior are tested. GATE: PASSED — full credential-free suite and bounded live publish/reopen results are recorded in `SNAPSHOT_STORAGE.md`.
 
-M1.4 Validate unique player ownership, league/team counts, player-week availability and week/schedule coverage; distinguish absent values from zeros. GATE: intentional malformed fixtures raise precise errors.
+M1.4 [COMPLETE — 18 October 2026] Reuse the authoritative structural validator and derive a deterministic immutable quality report for identity, horizon, roster ownership, required/observed player-week coverage, schedules, sources, projection classes and percentages, plus week/position/ownership breakdowns. Missing projections and other expected data characteristics remain metrics rather than warning floods. Rule gaps retain affected capabilities and provenance; new validation rejects empty/duplicate capability metadata. Routine persisted loads now verify only the requested snapshot, while explicit database-wide SQLite/foreign-key diagnostics remain available. Publication distinguishes rollback-capable pre-commit failures from immutable post-commit verification failures. GATE: PASSED — adversarial fixtures and the complete credential-free suite passed 223 tests; M1.5 remains unstarted.
 
 M1.5 Add reproducible snapshot load/list/inspect commands, stable snapshot ID and minimal diagnostics. GATE: two loads of one snapshot reproduce identical canonical state.
 
@@ -140,7 +140,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1.1–M1.3 are complete. M1.4 and every later work package remain planned rather than implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1.1–M1.4 are complete. M1.5 and every later work package remain planned rather than implemented.
 
 ### 12.2 Practical development method
 

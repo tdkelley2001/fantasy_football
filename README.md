@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 is **COMPLETE**. M1 is in progress: M1.1's schema-v2 canonical contracts, M1.2's live-accepted ESPN adapter, and M1.3's immutable SQLite snapshot persistence are complete. M1.4 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 is **COMPLETE**. M1 is in progress: M1.1's schema-v2 canonical contracts, M1.2's live-accepted ESPN adapter, M1.3's immutable SQLite snapshot persistence, and M1.4's deterministic data-quality diagnostics are complete. M1.5 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -116,7 +116,9 @@ Schema v2 preserves observed eligibility categories independently of configured 
   --expected-team-count 14
 ```
 
-The command performs all ESPN requests before opening one SQLite write transaction, assigns a new UUID, atomically inserts the canonical document and all captured evidence, then reloads and verifies the committed snapshot. Database, WAL, and SHM files are ignored and must remain private. This is the minimal M1.3 publication workflow, not the M1.5 snapshot-management interface.
+The command performs all ESPN requests before opening one SQLite write transaction, assigns a new UUID, atomically inserts the canonical document and all captured evidence, then reloads and verifies the committed snapshot. A pre-commit failure is reported separately from a post-commit verification failure; the latter prints the permanent committed snapshot ID and is never described as rolled back. Database, WAL, and SHM files are ignored and must remain private. This is the minimal publication workflow, not the M1.5 snapshot-management interface.
+
+For programmatic inspection, call `generate_quality_report(snapshot)` from `fantasy_football.quality` on either an adapter candidate or `SnapshotStore.load(id).snapshot`. The immutable report calculates coverage from canonical records and keeps ordinary projection missingness in aggregate metrics. `SnapshotStore.check_database_integrity()` is the explicit database-wide SQLite diagnostic; ordinary snapshot loads perform complete requested-snapshot verification without scanning unrelated rows.
 
 ## Historical implementation
 

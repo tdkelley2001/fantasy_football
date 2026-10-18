@@ -476,8 +476,14 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
 
     gap_ids = _unique((gap.gap_id for gap in snapshot.rule_gaps), entity="RuleGap", field="gap_id")
     for gap in snapshot.rule_gaps:
+        _nonempty(gap.gap_id, entity="RuleGap", identifier=gap.gap_id, field="gap_id")
         _nonempty(gap.reason, entity="RuleGap", identifier=gap.gap_id, field="reason")
         _tuple(gap.affected_capabilities, entity="RuleGap", identifier=gap.gap_id, field="affected_capabilities")
+        if not gap.affected_capabilities:
+            _fail("RuleGap", gap.gap_id, "affected_capabilities", "must identify at least one downstream capability")
+        _unique(gap.affected_capabilities, entity="RuleGap capability", field="affected_capabilities")
+        for capability in gap.affected_capabilities:
+            _nonempty(capability, entity="RuleGap", identifier=gap.gap_id, field="affected_capabilities")
         _boolean(gap.manual_configuration_permitted, entity="RuleGap", identifier=gap.gap_id, field="manual_configuration_permitted")
         if gap.source_id not in source_ids:
             _fail("RuleGap", gap.gap_id, "source_id", f"unknown source {gap.source_id!r}")

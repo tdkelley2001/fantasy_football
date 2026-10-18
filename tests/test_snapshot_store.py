@@ -7,15 +7,18 @@ from uuid import UUID
 
 import pytest
 
+import fantasy_football.snapshot_store as snapshot_store_module
 from fantasy_football.canonical.model import SCHEMA_VERSION
 from fantasy_football.canonical.serialization import snapshot_to_json
 from fantasy_football.espn_adapter import AdapterResult, translate_bundle
 from fantasy_football.snapshot_store import (
     DATABASE_SCHEMA_VERSION,
+    PostCommitVerificationError,
     SnapshotIntegrityError,
     SnapshotStore,
     SnapshotStoreError,
     UnsupportedDatabaseSchemaError,
+    publish_and_verify,
 )
 from tests.adapter_fixtures import source_bundle
 
@@ -216,7 +219,7 @@ def test_canonical_and_compressed_source_corruption_are_detected(store, result) 
         second_store.load(ID_2)
 
 
-def test_detached_source_record_is_detected_by_foreign_key_verification(store, result) -> None:
+def test_explicit_database_integrity_diagnostic_detects_detached_source(store, result) -> None:
     store.publish(result, snapshot_id=ID_1, published_at_utc=PUBLISHED)
     connection = sqlite3.connect(store.path)
     connection.execute("PRAGMA foreign_keys=OFF")
@@ -230,8 +233,91 @@ def test_detached_source_record_is_detected_by_foreign_key_verification(store, r
     )
     connection.commit()
     connection.close()
+    # A requested valid snapshot remains independently loadable; the explicit
+    # database-wide diagnostic owns detection of unrelated detached records.
+    assert store.load(ID_1).metadata.snapshot_id == ID_1
+    report = store.check_database_integrity()
+    assert not report.ok
+    assert report.integrity_messages == ("ok",)
+    assert report.foreign_key_violations[0].table == "raw_responses"
     with pytest.raises(SnapshotIntegrityError, match="detached or invalid"):
-        store.load(ID_1)
+        store.require_database_integrity()
+
+
+def test_routine_load_does_not_invoke_database_wide_integrity_scan(store, result, monkeypatch) -> None:
+    store.publish(result, snapshot_id=ID_1, published_at_utc=PUBLISHED)
+
+    def fail_if_called():
+        raise AssertionError("database-wide scan must be explicit")
+
+    monkeypatch.setattr(store, "check_database_integrity", fail_if_called)
+    assert store.load(ID_1).metadata.snapshot_id == ID_1
+
+
+def test_publish_and_verify_distinguishes_committed_verification_failure(store, result, monkeypatch) -> None:
+    def fail_after_commit(snapshot_id: str):
+        raise SnapshotIntegrityError("synthetic post-commit failure")
+
+    monkeypatch.setattr(store, "verify", fail_after_commit)
+    with pytest.raises(PostCommitVerificationError, match="committed and was not rolled back") as caught:
+        publish_and_verify(store, result)
+
+    committed_id = caught.value.snapshot_id
+    assert store.newest_metadata(result.snapshot.league_id, result.snapshot.season).snapshot_id == committed_id
+
+
+def test_publish_and_verify_does_not_relabel_precommit_failure(store, result, monkeypatch) -> None:
+    def fail_before_commit(_result):
+        raise SnapshotStoreError("synthetic pre-commit failure")
+
+    monkeypatch.setattr(store, "publish", fail_before_commit)
+    with pytest.raises(SnapshotStoreError, match="synthetic pre-commit failure") as caught:
+        publish_and_verify(store, result)
+    assert not isinstance(caught.value, PostCommitVerificationError)
+
+
+def test_publication_cli_reports_post_commit_failure_with_snapshot_id(result, monkeypatch, capsys) -> None:
+    class FakeStore:
+        def __init__(self, _path):
+            pass
+
+        def initialize(self):
+            pass
+
+    monkeypatch.setattr(snapshot_store_module, "load_settings", lambda: type("S", (), {"snapshot_db_path": "unused"})())
+    monkeypatch.setattr(snapshot_store_module, "fetch_and_translate", lambda *_args, **_kwargs: result)
+    monkeypatch.setattr(snapshot_store_module, "SnapshotStore", FakeStore)
+    monkeypatch.setattr(
+        snapshot_store_module,
+        "publish_and_verify",
+        lambda *_args: (_ for _ in ()).throw(
+            PostCommitVerificationError(ID_1, SnapshotIntegrityError("synthetic verification failure"))
+        ),
+    )
+
+    assert snapshot_store_module.main(["--first-simulation-week", "8"]) == 3
+    output = capsys.readouterr().out
+    assert ID_1 in output
+    assert "committed" in output
+    assert "rolled back" in output
+
+
+def test_publication_cli_reports_precommit_failure_separately(result, monkeypatch, capsys) -> None:
+    class FakeStore:
+        def __init__(self, _path):
+            pass
+
+        def initialize(self):
+            raise SnapshotStoreError("synthetic initialization failure")
+
+    monkeypatch.setattr(snapshot_store_module, "load_settings", lambda: type("S", (), {"snapshot_db_path": "unused"})())
+    monkeypatch.setattr(snapshot_store_module, "fetch_and_translate", lambda *_args, **_kwargs: result)
+    monkeypatch.setattr(snapshot_store_module, "SnapshotStore", FakeStore)
+
+    assert snapshot_store_module.main(["--first-simulation-week", "8"]) == 2
+    output = capsys.readouterr().out
+    assert "failed before commit" in output
+    assert "synthetic initialization failure" in output
 
 
 def test_unsupported_database_and_canonical_schema_versions_fail(tmp_path, store, result) -> None:

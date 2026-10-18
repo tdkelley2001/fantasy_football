@@ -33,7 +33,8 @@ The lifecycle is:
 2. M1.3 assigns a UUID, validates the identified canonical snapshot, serializes it, reconciles every required source/reference, checks deterministic raw bytes and digests, and compresses/decompresses all sources in memory.
 3. The repository opens SQLite, validates database schema 1, and begins `BEGIN IMMEDIATE`.
 4. It inserts snapshot metadata, the complete canonical document, and all raw responses.
-5. It commits only after every insert succeeds. Any exception invokes rollback and is reported as failure.
+5. It commits only after every insert succeeds. Any exception before commit invokes rollback and is reported as a pre-commit publication failure.
+6. The publication command reloads and verifies the committed UUID. A failure in this separate step reports that the snapshot is already committed, includes its ID, and returns a distinct nonzero status; it never claims rollback and never deletes, overwrites, or retries the committed snapshot.
 
 No ESPN request occurs inside the transaction. A failed candidate never replaces, hides, or modifies a previously committed snapshot. Tests force failure after multiple inserts and verify that the new UUID is absent while the prior snapshot remains byte-for-byte unchanged. SQLite uses WAL journal mode with `synchronous=FULL`; standard SQLite commit, rollback, and crash recovery are authoritative rather than a custom staging service.
 
@@ -55,6 +56,8 @@ No ESPN request occurs inside the transaction. A failed candidate never replaces
 
 `verify()` performs the full path. `newest_metadata()` returns only metadata and uses publication time followed by UUID as an explicit tie-breaker. M1.5 will add user-facing listing and inspection; M1.3 exposes only the minimal internal publish/load/newest/verify operations.
 
+Routine `load()` and `verify()` deliberately do not run SQLite's database-wide `PRAGMA integrity_check`. They still fail for any corrupt, missing, duplicate, detached, or provenance-inconsistent record required by the requested snapshot. `check_database_integrity()` explicitly runs both `PRAGMA integrity_check` and `PRAGMA foreign_key_check` and returns their structured results; `require_database_integrity()` raises if either reports a problem. This separates requested-snapshot corruption from an unrelated database-wide defect without weakening per-snapshot verification.
+
 ## Retention, configuration, and security
 
 Every committed snapshot is retained indefinitely by default, even when content resembles an earlier refresh. There is no automatic cleanup, rolling retention, deduplication, or update API.
@@ -63,8 +66,8 @@ Every committed snapshot is retained indefinitely by default, even when content 
 
 ## Verification evidence and limitations
 
-Credential-free fixtures verify successful publish/reopen/round-trip, raw missing/zero/positive/negative projections, signed IDs, raw enums, structured rule evidence, observed slot 25, complete source retention, checksums, multiple retained refreshes, deterministic newest selection, cross-connection visibility, rollback before commit, forced mid-insert failure, duplicate UUID rejection, immutable-row triggers, corrupted canonical/source bytes, and unsupported schema versions.
+Credential-free fixtures verify successful publish/reopen/round-trip, raw missing/zero/positive/negative projections, signed IDs, raw enums, structured rule evidence, observed slot 25, complete source retention, checksums, multiple retained refreshes, deterministic newest selection, cross-connection visibility, rollback before commit, forced mid-insert failure, duplicate UUID rejection, immutable-row triggers, corrupted canonical/source bytes, unsupported schema versions, explicit database-wide foreign-key diagnostics, and the pre-commit/post-commit failure distinction.
 
-The complete credential-free repository suite passed **210 tests**. The bounded authenticated smoke test retrieved the already accepted live league horizon, published a new UUID to an ignored temporary database, closed and reopened it, then verified a 3,845,168-byte canonical document, 1,052 players, 11,572 player-weeks, observed eligibility slot 25, and all 63 captured source responses. The private temporary database was removed after verification and was not committed.
+At M1.3 completion, the credential-free repository suite passed **210 tests**. M1.4's follow-up coverage brings the complete suite to **223 tests**, including explicit database-wide checks, routine-load scope, and CLI-visible pre-/post-commit failure semantics. The bounded M1.3 authenticated smoke test retrieved the already accepted live league horizon, published a new UUID to an ignored temporary database, closed and reopened it, then verified a 3,845,168-byte canonical document, 1,052 players, 11,572 player-weeks, observed eligibility slot 25, and all 63 captured source responses. The private temporary database was removed after verification and was not committed.
 
 M1.3 does not implement migrations, snapshot deletion, a listing UI/CLI, relational analytical queries, simulation compilation, background refresh, or scheduled collection.
