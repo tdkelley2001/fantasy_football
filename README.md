@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 is **COMPLETE**. M1 is in progress: M1.1's schema-v2 canonical contracts, M1.2's live-accepted ESPN adapter, M1.3's immutable SQLite snapshot persistence, and M1.4's deterministic data-quality diagnostics are complete. M1.5 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 and M1 are **COMPLETE**. Schema-v2 canonical contracts, the live-accepted ESPN adapter, immutable SQLite persistence, deterministic quality diagnostics, and read-only snapshot management are implemented. M2 and later work packages remain **NOT STARTED**. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -116,9 +116,39 @@ Schema v2 preserves observed eligibility categories independently of configured 
   --expected-team-count 14
 ```
 
-The command performs all ESPN requests before opening one SQLite write transaction, assigns a new UUID, atomically inserts the canonical document and all captured evidence, then reloads and verifies the committed snapshot. A pre-commit failure is reported separately from a post-commit verification failure; the latter prints the permanent committed snapshot ID and is never described as rolled back. Database, WAL, and SHM files are ignored and must remain private. This is the minimal publication workflow, not the M1.5 snapshot-management interface.
+The command performs all ESPN requests before opening one SQLite write transaction, assigns a new UUID, atomically inserts the canonical document and all captured evidence, then reloads and verifies the committed snapshot. A pre-commit failure is reported separately from a post-commit verification failure; the latter prints the permanent committed snapshot ID and is never described as rolled back. Database, WAL, and SHM files are ignored and must remain private.
 
 For programmatic inspection, call `generate_quality_report(snapshot)` from `fantasy_football.quality` on either an adapter candidate or `SnapshotStore.load(id).snapshot`. The immutable report calculates coverage from canonical records and keeps ordinary projection missingness in aggregate metrics. `SnapshotStore.check_database_integrity()` is the explicit database-wide SQLite diagnostic; ordinary snapshot loads perform complete requested-snapshot verification without scanning unrelated rows.
+
+## Snapshot management
+
+All snapshot-management commands are read-only and make no ESPN requests. The global `--database` option may be omitted to use `SNAPSHOT_DB_PATH` from the normal configuration.
+
+List compact metadata newest first, optionally filtering by league and/or season:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 list
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 list --league-id 123 --season 2026 --json
+```
+
+Inspect an exact UUID, or select the newest snapshot for an explicit league and season:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 inspect --snapshot-id 00000000-0000-4000-8000-000000000001
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 inspect --league-id 123 --season 2026 --json
+```
+
+Summary inspection is sanitized and contains aggregates, projection coverage, rule limitations, age, horizon, source completeness, and integrity status. Private team/player/roster records and canonical source-request metadata require repeatable explicit detail flags: `--detail teams`, `rosters`, `players`, `projections`, `rules`, `matchups`, `nfl`, or `sources`; `--detail all` requests every supported detail. Raw captured ESPN response bodies are never printed.
+
+Verify one exact or newest-selected snapshot, or explicitly scan the entire database:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 verify --snapshot-id 00000000-0000-4000-8000-000000000001
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 verify --league-id 123 --season 2026 --json
+.\.venv\Scripts\python.exe -m fantasy_football.snapshot_cli --database outputs/fantasy_football.sqlite3 verify --database-wide
+```
+
+An explicit UUID takes precedence over league/season selectors and never falls back if missing or corrupt. Without a UUID, both league and season are required. Snapshot age is informational and is measured from retrieval completion; an old valid snapshot remains selectable for reproducibility.
 
 ## Historical implementation
 

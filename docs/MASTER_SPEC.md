@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: canonical schema v2 / SQLite schema v1 | 18 October 2026 | Status: M0 and M1.1–M1.4 complete; M1.5 not started*
+*Version: canonical schema v2 / SQLite schema v1 | 18 October 2026 | Status: M0 and M1 complete; M2 not started*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Distinguish intended functionality from verified implementation: none of the algorithms or ESPN field availability described below should be understood as already built or confirmed.
 
@@ -77,6 +77,8 @@ M1.2 implements sequential read-only retrieval, in-memory raw source capture/dig
 Fetch into temporary staging; validate critical schema, coverage and internal invariants; only then atomically mark a new immutable snapshot simulation-ready. A half-fetched, malformed or wrong-league refresh must fail and leave the last good snapshot untouched. Snapshot validators should be strict about actual missing core league data, not blindly treat every unprojected individual player as a catastrophic refresh failure. Record failure diagnostics and quality metrics.
 
 Snapshot age is displayed with clear stale-data warnings, but valid snapshots remain runnable for reproducibility and historical comparisons. Missing or corrupt core data is a blocking error, not a stale-data warning. M1.4 adds a deterministic report outside canonical schema v2: structural violations still raise precise validation errors, while ordinary missing projections, explicit zeros, finite negatives, unrostered players, and observed unconfigured eligibility categories remain aggregate information. Reports calculate total and week/position/ownership projection coverage from canonical records and disclose unresolved rule capabilities without treating snapshot validity as simulator capability readiness. Refresh and simulation are separate commands. V1 does not require scheduled background ESPN harvesting; if later useful for research, a lightweight independent scheduled collection task can be built with explicit uptime, credential and retention arrangements.
+
+M1.5 implements read-only snapshot listing, selection, inspection, and verification. Compact listings are deterministically newest-first and may filter by league and season without loading canonical objects or raw response payloads. Selection uses an exact UUID when supplied; otherwise both league and season are required to choose the newest matching snapshot. A missing or corrupt explicit UUID never falls back. Inspection performs one fully verified load, reuses M1.4 quality reporting, calculates informational age from retrieval completion, and keeps summary output sanitized. Teams, rosters, players, projections, rules, schedules, and canonical source-request metadata require explicit detail selection; raw captured response bodies are never printed. Snapshot-specific verification remains separate from explicit database-wide SQLite/foreign-key checks. These operations neither refresh ESPN nor mutate stored state.
 
 ### 3.5 Persistence and security
 
@@ -340,7 +342,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### M0 — ESPN feasibility and historical-data audit [COMPLETE]. Diagnostic scripts, documented actual API/endpoint coverage, historical projection provenance, complete league settings/waiver/bracket inventory, data dictionary, known gaps, and M1 handoff. PASS: each critical field is verified or explicitly addressed with a defensible path; material gaps and uncertainty are documented. M1 recommendation: GO WITH EXPLICIT UNRESOLVED METADATA.
 
-#### M1 — Canonical snapshots and validation [IN PROGRESS]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, authoritative SQLite storage, fixture tests. PASS: deterministic snapshot round-trip, no data corruption on failed refresh, complete identifiable league state and usable future inputs.
+#### M1 — Canonical snapshots and validation [COMPLETE]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, authoritative SQLite storage, deterministic quality reporting, and sanitized snapshot-management CLI. PASS: deterministic snapshot round-trip and selection, no data corruption on failed refresh or read-only inspection, complete identifiable league state and usable future inputs.
 
 #### M2 — Structurally complete full-season simulator [NOT STARTED]. Legal projected-optimal weekly lineups, essential waiver processing/real shared pool, matchups, dynamic standings, exact six-team championship and eight-team consolation, initial report and deterministic tests. PASS: every path is legal and yields coherent championship/placement outcomes; known ESPN settings are honored; provisional models labeled.
 
@@ -386,7 +388,7 @@ M1.3 [COMPLETE — 17 October 2026] Persist the complete canonical JSON authorit
 
 M1.4 [COMPLETE — 18 October 2026] Preserve the canonical validator as structural authority and derive deterministic immutable quality reports without changing schema v2. Reports cover identity, horizon, ownership, required/observed player-week records, schedules, sources, projection classes and percentages, plus scoring-week/default-position/ownership breakdowns. Expected missingness is informational, unresolved rules disclose affected capabilities, and malformed rule-gap capability metadata fails validation. M1.3 follow-ups distinguish post-commit verification failure and move database-wide integrity scans to an explicit diagnostic. GATE: PASSED with focused adversarial tests and 223 passing credential-free repository tests.
 
-M1.5 Add reproducible snapshot load/list/inspect commands, stable snapshot ID and minimal diagnostics. GATE: two loads of one snapshot reproduce identical canonical state.
+M1.5 [COMPLETE — 18 October 2026] Implement compact deterministic listing, exact/scoped-newest validated selection, sanitized quality inspection, explicit detailed entity views, snapshot verification, and database-wide verification without ESPN requests or state mutation. Explicit UUIDs take precedence and never fall back; age is retrieval-based information, unresolved capabilities remain visible, and raw evidence bodies stay private. GATE: PASSED — two loads reproduce identical canonical bytes/state and the complete credential-free suite passed 235 tests. M1 is complete; M2 remains unstarted.
 
 #### M2 — Complete deterministic season-path reference simulator
 
@@ -466,7 +468,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1.1–M1.4 are complete. M1.5 and every later work package remain not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete. M2 and every later work package remain not started.
 
 ### 12.2 Practical development method
 

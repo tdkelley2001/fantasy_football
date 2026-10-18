@@ -66,6 +66,13 @@ class SnapshotMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class SnapshotListItem:
+    metadata: SnapshotMetadata
+    first_simulation_week: int
+    final_simulation_week: int
+
+
+@dataclass(frozen=True, slots=True)
 class StoredRawResponse:
     response: CapturedResponse
     uncompressed_byte_length: int
@@ -464,6 +471,63 @@ class SnapshotStore:
                 (league_id, season),
             ).fetchone()
             return None if row is None else _metadata(row)
+        finally:
+            connection.close()
+
+    def list_snapshots(
+        self,
+        *,
+        league_id: int | None = None,
+        season: int | None = None,
+    ) -> tuple[SnapshotListItem, ...]:
+        """Return compact metadata newest first without loading raw source evidence."""
+
+        if league_id is not None and (isinstance(league_id, bool) or not isinstance(league_id, int) or league_id <= 0):
+            raise SnapshotStoreError(f"league_id filter must be a positive integer; observed {league_id!r}")
+        if season is not None and (isinstance(season, bool) or not isinstance(season, int) or season < 2000):
+            raise SnapshotStoreError(f"season filter must be an integer >= 2000; observed {season!r}")
+        predicates: list[str] = []
+        parameters: list[int] = []
+        if league_id is not None:
+            predicates.append("s.league_id=?")
+            parameters.append(league_id)
+        if season is not None:
+            predicates.append("s.season=?")
+            parameters.append(season)
+        where = "" if not predicates else "WHERE " + " AND ".join(predicates)
+        connection = self._connect()
+        try:
+            self._verify_database_schema(connection)
+            try:
+                rows = connection.execute(
+                    f"""SELECT s.*,
+                               json_extract(CAST(d.canonical_json AS TEXT), '$.first_simulation_week') AS first_simulation_week,
+                               json_extract(CAST(d.canonical_json AS TEXT), '$.final_simulation_week') AS final_simulation_week
+                        FROM snapshots s
+                        LEFT JOIN canonical_documents d ON d.snapshot_id=s.snapshot_id
+                        {where}
+                        ORDER BY s.published_at_utc DESC, s.snapshot_id DESC""",
+                    parameters,
+                ).fetchall()
+            except sqlite3.DatabaseError as exc:
+                raise SnapshotIntegrityError(f"snapshot metadata listing failed: {exc}") from exc
+            items: list[SnapshotListItem] = []
+            for row in rows:
+                first = row["first_simulation_week"]
+                final = row["final_simulation_week"]
+                if (
+                    isinstance(first, bool)
+                    or not isinstance(first, int)
+                    or isinstance(final, bool)
+                    or not isinstance(final, int)
+                    or first <= 0
+                    or final < first
+                ):
+                    raise SnapshotIntegrityError(
+                        f"snapshot {row['snapshot_id']} has missing or invalid simulation horizon metadata"
+                    )
+                items.append(SnapshotListItem(_metadata(row), first, final))
+            return tuple(items)
         finally:
             connection.close()
 

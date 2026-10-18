@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-M1.3 is complete. `fantasy_football.snapshot_store` persists validated M1.2 adapter results in one private local SQLite database. The exact deterministic canonical JSON bytes are the sole authoritative normalized snapshot representation. SQL does not duplicate teams, players, player-weeks, rosters, rules, or matchups as competing authoritative records.
+M1.3 persistence and M1.5 read-only snapshot management are complete. `fantasy_football.snapshot_store` persists validated M1.2 adapter results in one private local SQLite database. The exact deterministic canonical JSON bytes are the sole authoritative normalized snapshot representation. SQL does not duplicate teams, players, player-weeks, rosters, rules, or matchups as competing authoritative records.
 
 Canonical document schema version and database schema version are independent. The current supported versions are canonical schema **2** and SQLite schema **1**. Unsupported versions fail explicitly; the store does not silently migrate or rewrite documents.
 
@@ -54,9 +54,19 @@ No ESPN request occurs inside the transaction. A failed candidate never replaces
 - source checksum and request metadata agreement with canonical provenance; and
 - valid JSON payload and sanitized parameter metadata.
 
-`verify()` performs the full path. `newest_metadata()` returns only metadata and uses publication time followed by UUID as an explicit tie-breaker. M1.5 will add user-facing listing and inspection; M1.3 exposes only the minimal internal publish/load/newest/verify operations.
+`verify()` performs the full path. `newest_metadata()` returns only metadata and uses publication time followed by UUID as an explicit tie-breaker.
 
 Routine `load()` and `verify()` deliberately do not run SQLite's database-wide `PRAGMA integrity_check`. They still fail for any corrupt, missing, duplicate, detached, or provenance-inconsistent record required by the requested snapshot. `check_database_integrity()` explicitly runs both `PRAGMA integrity_check` and `PRAGMA foreign_key_check` and returns their structured results; `require_database_integrity()` raises if either reports a problem. This separates requested-snapshot corruption from an unrelated database-wide defect without weakening per-snapshot verification.
+
+## Listing, selection, and inspection
+
+`SnapshotStore.list_snapshots()` returns immutable compact records in publication-time-descending, UUID-descending order with optional league and season filters. It reads snapshot metadata and extracts only the first/final simulation weeks from the canonical JSON through SQLite; it does not instantiate every canonical snapshot or decompress raw evidence. This required no database schema change.
+
+`snapshot_cli.select_snapshot()` gives an explicit canonical UUID precedence. Otherwise it requires both league ID and season and loads the newest matching UUID. The returned `LoadedSnapshot` has passed the complete snapshot-specific verification path. Missing, invalid, or corrupt explicit UUIDs fail without substitution. Repeated selection of one UUID reproduces identical canonical bytes and typed state.
+
+The `list`, `inspect`, and `verify` commands are provided by `python -m fantasy_football.snapshot_cli`. Summary inspection reuses `generate_quality_report()` and reports retrieval/publication timestamps, retrieval-based age, horizon, entity and player-week counts, overall/weekly projection coverage, source completeness, rule limitations, affected capabilities, and snapshot integrity. Age has no rejection threshold. Snapshot verification and `verify --database-wide` are deliberately different operations.
+
+Default list and inspection output contains sanitized aggregates only. Detailed teams, standings, rosters, players, projections, rules, schedules, and canonical source-request metadata require explicit `--detail` options. Even detailed and JSON modes never emit compressed or decoded raw ESPN response bodies. Read-only commands neither publish, refresh, mutate, delete, deduplicate, nor automatically replace snapshots.
 
 ## Retention, configuration, and security
 
@@ -68,6 +78,6 @@ Every committed snapshot is retained indefinitely by default, even when content 
 
 Credential-free fixtures verify successful publish/reopen/round-trip, raw missing/zero/positive/negative projections, signed IDs, raw enums, structured rule evidence, observed slot 25, complete source retention, checksums, multiple retained refreshes, deterministic newest selection, cross-connection visibility, rollback before commit, forced mid-insert failure, duplicate UUID rejection, immutable-row triggers, corrupted canonical/source bytes, unsupported schema versions, explicit database-wide foreign-key diagnostics, and the pre-commit/post-commit failure distinction.
 
-At M1.3 completion, the credential-free repository suite passed **210 tests**. M1.4's follow-up coverage brings the complete suite to **223 tests**, including explicit database-wide checks, routine-load scope, and CLI-visible pre-/post-commit failure semantics. The bounded M1.3 authenticated smoke test retrieved the already accepted live league horizon, published a new UUID to an ignored temporary database, closed and reopened it, then verified a 3,845,168-byte canonical document, 1,052 players, 11,572 player-weeks, observed eligibility slot 25, and all 63 captured source responses. The private temporary database was removed after verification and was not committed.
+At M1.3 completion, the credential-free repository suite passed **210 tests**. M1.4 increased it to **223 tests**. M1.5 completes M1 with **235 passing tests**, including multiple league/season selection, deterministic listing/JSON, privacy, opt-in detail, no-network behavior, repeated byte-identical loads, corruption, explicit database verification, and read-only nonmutation. The bounded M1.3 authenticated smoke test retrieved the already accepted live league horizon, published a new UUID to an ignored temporary database, closed and reopened it, then verified a 3,845,168-byte canonical document, 1,052 players, 11,572 player-weeks, observed eligibility slot 25, and all 63 captured source responses. The private temporary database was removed after verification and was not committed.
 
-M1.3 does not implement migrations, snapshot deletion, a listing UI/CLI, relational analytical queries, simulation compilation, background refresh, or scheduled collection.
+M1 does not implement migrations, snapshot deletion, relational analytical queries, simulation compilation, background refresh, scheduled collection, or a dashboard. Detailed CLI output is intentionally small in scope rather than a query language.
