@@ -242,7 +242,11 @@ def _validate_lineups(
 ) -> dict[int, OptimizedLineup]:
     if not isinstance(lineups, tuple):
         raise WeeklyEngineError("frozen lineups must be an immutable tuple")
-    owners = {entry.player_id: entry.team_id for entry in roster_entries}
+    roster_by_player = {entry.player_id: entry for entry in roster_entries}
+    owners = {player_id: entry.team_id for player_id, entry in roster_by_player.items()}
+    reserve_slot_ids = {
+        rule.slot_id for rule in snapshot.rules.lineup_slots if rule.kind is SlotKind.RESERVE
+    }
     players = {player.player_id: player for player in snapshot.players}
     player_weeks = {
         record.player_id: record
@@ -303,6 +307,12 @@ def _validate_lineups(
             if owners.get(assignment.player_id) != lineup.team_id:
                 raise WeeklyEngineError(
                     f"OptimizedLineup team {lineup.team_id}: player {assignment.player_id} is not owned by that team"
+                )
+            modeled_entry = roster_by_player[assignment.player_id]
+            if modeled_entry.lineup_slot_id in reserve_slot_ids:
+                raise WeeklyEngineError(
+                    f"OptimizedLineup team {lineup.team_id}: player {assignment.player_id} occupies configured "
+                    f"reserve slot {modeled_entry.lineup_slot_id} in the supplied modeled roster and cannot start"
                 )
             player_week = player_weeks[assignment.player_id]
             if (

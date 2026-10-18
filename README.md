@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1's exact projected-lineup optimizer and M2.2's deterministic regular-season weekly engine are complete, while M2.3 and later work packages remain **NOT STARTED**. Schema-v2 canonical contracts, the live-accepted ESPN adapter, immutable SQLite persistence, deterministic quality diagnostics, and read-only snapshot management are implemented. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1, M2.2, and the narrow M2.3a evidence/IR-legality package are complete. M2.3b and later work packages remain **NOT STARTED**. Schema-v2 canonical contracts remain unchanged; evolving rosters, transactions, waiver processing, and schema v3 are not implemented. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
 
 ## Authoritative documentation
 
@@ -15,6 +15,7 @@ M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1's exact projected-lineup
 - [Missing projection policy](docs/MISSING_PROJECTION_POLICY.md) — approved raw-versus-effective representation, week 6 evidence, methodology, and limitations.
 - [M0.4 league-rules audit](docs/ESPN_LEAGUE_RULES_AUDIT.md) — roster/IR, waiver, trade, standings, championship, consolation, provenance, and explicit configuration gaps.
 - [M0.5 historical projection audit](docs/ESPN_HISTORICAL_PROJECTION_AUDIT.md) — bounded historical coverage, projection/actual matching, as-of integrity, leakage risks, and M3 feasibility.
+- [Undroppable-player evidence audit](docs/ESPN_UNDROPPABLE_AUDIT.md) — league and player field provenance, bounded live coverage, conservative legality semantics, and the proposed schema-v3 handoff.
 - [ESPN data dictionary](docs/ESPN_DATA_DICTIONARY.md) — proposed M1 logical fields, raw paths, identifier namespaces, transformations, evidence, and validation tiers.
 - [M0 feasibility and M1 handoff](docs/M0_FEASIBILITY_AND_M1_HANDOFF.md) — readiness matrix, rule-gap register, approved forecast/calibration policies, and the M1 recommendation.
 - [Canonical model](docs/CANONICAL_MODEL.md) — M1.1 schema-v2 entities, slot namespaces, identifiers, ownership and projection contracts, validation boundary, serialization, and deferred work.
@@ -95,6 +96,14 @@ M0.6 provides a credential-free evidence manifest and reproduction guide. It lis
 ```
 
 `--check-config` validates local configuration only. The report always states whether live verification occurred, lists the credential requirements for each diagnostic, and preserves unresolved rules.
+
+M2.3a adds a bounded, read-only undroppable-player evidence diagnostic. The first simulation week is explicit so the audit can reconcile the current player universe against every required future view:
+
+```powershell
+.\.venv\Scripts\python.exe -m fantasy_football.undroppable_audit --first-simulation-week 8
+```
+
+Add `--json` for the sanitized aggregate report. The command reports Boolean coverage only; it does not print player identities, league IDs, manager information, or raw payloads. It does not alter canonical schema v2 or authorize any transaction.
 
 ## M1.2 live validation
 
@@ -188,6 +197,8 @@ transition = resolve_regular_season_week(snapshot, 8, standings, lineups, scores
 ```
 
 Assigned starters require finite realized scores; vacancies add zero and negative results remain negative. The current league's confirmed `NONE` rule permits regular-season ties. Ranking uses exact winning percentage and configured total PF for identical records, while unresolved deeper ties remain explicit instead of receiving arbitrary seeds.
+
+M2.3a closes a defensive legality gap: a frozen starter is rejected while their entry in the supplied modeled roster still occupies a configured reserve/IR slot. An explicitly supplied alternate roster may start a formerly reserved player only after that modeled state places the player in an ordinary configured slot. The weekly engine never performs or authorizes IR activation itself.
 
 ## Historical implementation
 
