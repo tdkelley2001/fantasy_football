@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
+from datetime import datetime
 from enum import StrEnum
 import json
 from typing import Iterable
@@ -34,6 +35,12 @@ class IRPolicy(StrEnum):
     STRICT = "strict"
 
 
+class IREligibility(StrEnum):
+    ELIGIBLE = "eligible"
+    INELIGIBLE = "ineligible"
+    UNKNOWN = "unknown"
+
+
 class TransactionPhase(StrEnum):
     WAIVER = "waiver"
     FREE_AGENT = "free_agent"
@@ -60,6 +67,27 @@ class PlayerAvailability:
     hold_until_cycle: int | None
     prohibited_cycle_id: int | None
     source_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseAuthorization:
+    """Player-specific authorization for a known acquisition-state boundary."""
+
+    player_id: int
+    eligible_cycle_id: int
+    resulting_status: AcquisitionAvailability
+    source_id: str
+    clearance_at_utc: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class IREligibilityEvidence:
+    """Player/week-specific evidence used only by strict IR legality checks."""
+
+    player_id: int
+    scoring_week: int
+    eligibility: IREligibility
+    source_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,8 +128,11 @@ class EvolvingLeagueState:
     availability: tuple[PlayerAvailability, ...]
     current_waiver_priority: tuple[int, ...]
     initial_window_waiver_priority: tuple[int, ...]
-    acquisition_counts: tuple[tuple[int, int], ...]
+    current_matchup_period_id: int
+    season_acquisition_counts: tuple[tuple[int, int | None], ...]
+    matchup_acquisition_counts: tuple[tuple[int, int | None], ...]
     ir_policy: IRPolicy
+    ir_eligibility_evidence: tuple[IREligibilityEvidence, ...]
     ledger: tuple[TransactionRecord, ...]
     assumption_ids: tuple[str, ...]
 
@@ -137,6 +168,23 @@ def _sorted_availability(items: Iterable[PlayerAvailability]) -> tuple[PlayerAva
     return tuple(sorted(items, key=lambda item: item.player_id))
 
 
+def _matchup_period_id(snapshot: LeagueSnapshot, scoring_week: int) -> int:
+    matches = tuple(item.matchup_period_id for item in snapshot.matchup_periods if scoring_week in item.scoring_weeks)
+    if len(matches) != 1:
+        _fail(f"scoring_week={scoring_week} must belong to exactly one matchup period; observed {matches}")
+    return matches[0]
+
+
+def _parse_utc(value: str, field: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        _fail(f"{field} must be an ISO-8601 timestamp")
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        _fail(f"{field} must include a UTC offset")
+    return parsed
+
+
 def _assert_snapshot(state: EvolvingLeagueState, snapshot: LeagueSnapshot) -> None:
     if snapshot.snapshot_id != state.source_snapshot_id or snapshot.schema_version != state.source_schema_version:
         _fail("evolving state source snapshot identity or schema version does not match")
@@ -153,6 +201,12 @@ def validate_evolving_state(state: EvolvingLeagueState, snapshot: LeagueSnapshot
         _fail("ir_policy must be projection_based or strict")
     if not snapshot.first_simulation_week <= state.scoring_week <= snapshot.final_simulation_week:
         _fail(f"scoring_week={state.scoring_week} is outside the snapshot horizon")
+    expected_period = _matchup_period_id(snapshot, state.scoring_week)
+    if state.current_matchup_period_id != expected_period:
+        _fail(
+            f"current_matchup_period_id={state.current_matchup_period_id} does not contain "
+            f"scoring_week={state.scoring_week}"
+        )
     team_ids = {item.team_id for item in snapshot.teams}
     if set(state.current_waiver_priority) != team_ids or len(state.current_waiver_priority) != len(team_ids):
         _fail("current waiver priority must be a complete unique team permutation")
@@ -196,11 +250,36 @@ def validate_evolving_state(state: EvolvingLeagueState, snapshot: LeagueSnapshot
             _fail(f"owned player {player_id} has non-rostered availability {item.status.value}")
         if item.hold_until_cycle is not None and item.hold_until_cycle < state.cycle_id:
             _fail(f"player {player_id} has an expired holding cycle that was not advanced")
-    count_teams = [team_id for team_id, _ in state.acquisition_counts]
-    if len(count_teams) != len(set(count_teams)) or set(count_teams) != team_ids:
-        _fail("acquisition counts must contain every team exactly once")
-    if any(count < 0 for _, count in state.acquisition_counts):
-        _fail("acquisition counts cannot be negative")
+        for field, value in (
+            ("hold_until_cycle", item.hold_until_cycle),
+            ("prohibited_cycle_id", item.prohibited_cycle_id),
+        ):
+            if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+                _fail(f"player {player_id} {field} must be a nonnegative integer or null")
+        if item.clearance_at_utc is not None:
+            _parse_utc(item.clearance_at_utc, f"player {player_id} clearance_at_utc")
+    for name, counts in (
+        ("season acquisition counts", state.season_acquisition_counts),
+        ("matchup acquisition counts", state.matchup_acquisition_counts),
+    ):
+        count_teams = [team_id for team_id, _ in counts]
+        if len(count_teams) != len(set(count_teams)) or set(count_teams) != team_ids:
+            _fail(f"{name} must contain every team exactly once")
+        if any(count is not None and (not isinstance(count, int) or isinstance(count, bool) or count < 0) for _, count in counts):
+            _fail(f"{name} must be nonnegative integers or unknown")
+    source_ids = {item.source_id for item in snapshot.sources}
+    evidence_keys: set[tuple[int, int]] = set()
+    for evidence in state.ir_eligibility_evidence:
+        key = (evidence.player_id, evidence.scoring_week)
+        if key in evidence_keys:
+            _fail(f"duplicate strict IR evidence for player={evidence.player_id}, week={evidence.scoring_week}")
+        evidence_keys.add(key)
+        if evidence.player_id not in players or evidence.source_id not in source_ids:
+            _fail(f"strict IR evidence for player={evidence.player_id} references an unknown player or source")
+        if not snapshot.first_simulation_week <= evidence.scoring_week <= snapshot.final_simulation_week:
+            _fail(f"strict IR evidence week={evidence.scoring_week} is outside the snapshot horizon")
+        if not isinstance(evidence.eligibility, IREligibility):
+            _fail("strict IR evidence eligibility is malformed")
     if tuple(record.sequence for record in state.ledger) != tuple(range(1, len(state.ledger) + 1)):
         _fail("transaction ledger sequences must be contiguous from one")
 
@@ -211,6 +290,9 @@ def initialize_evolving_state(
     scoring_week: int,
     ir_policy: IRPolicy,
     cycle_id: int = 1,
+    season_acquisition_counts: dict[int, int] | None = None,
+    matchup_acquisition_counts: dict[int, int] | None = None,
+    ir_eligibility_evidence: tuple[IREligibilityEvidence, ...] = (),
 ) -> EvolvingLeagueState:
     validate_snapshot(snapshot)
     if snapshot.schema_version != SCHEMA_VERSION:
@@ -232,6 +314,15 @@ def initialize_evolving_state(
             player.acquisition_status, AcquisitionAvailability.UNRESOLVED
         )
         availability.append(PlayerAvailability(player.player_id, status, None, None, None, None))
+    team_ids = tuple(sorted(queue))
+    def initial_counts(provided: dict[int, int] | None, finite_limit: int | None):
+        if provided is not None and set(provided) != set(team_ids):
+            _fail("provided acquisition counts must contain every team exactly once")
+        return tuple(
+            (team_id, provided[team_id] if provided is not None else (0 if finite_limit is None else None))
+            for team_id in team_ids
+        )
+
     state = EvolvingLeagueState(
         snapshot.snapshot_id,
         snapshot.schema_version,
@@ -242,8 +333,11 @@ def initialize_evolving_state(
         _sorted_availability(availability),
         queue,
         queue,
-        tuple((team_id, 0) for team_id in sorted(queue)),
+        _matchup_period_id(snapshot, scoring_week),
+        initial_counts(season_acquisition_counts, snapshot.rules.acquisition.season_limit),
+        initial_counts(matchup_acquisition_counts, snapshot.rules.acquisition.matchup_limit),
         ir_policy,
+        tuple(sorted(ir_eligibility_evidence, key=lambda item: (item.player_id, item.scoring_week))),
         (),
         ("snapshot_frozen_undroppable_v1", "weekly_transaction_window_v1"),
     )
@@ -343,10 +437,52 @@ def drop_player(
 
 
 def _check_acquisition_count(state: EvolvingLeagueState, snapshot: LeagueSnapshot, team_id: int) -> None:
-    counts = dict(state.acquisition_counts)
-    limit = snapshot.rules.acquisition.matchup_limit
-    if limit is not None and counts[team_id] >= limit:
-        _fail(f"team {team_id} has reached acquisition limit {limit}")
+    for label, counts, limit in (
+        ("season", dict(state.season_acquisition_counts), snapshot.rules.acquisition.season_limit),
+        ("matchup-period", dict(state.matchup_acquisition_counts), snapshot.rules.acquisition.matchup_limit),
+    ):
+        if limit is None:
+            continue
+        count = counts[team_id]
+        if count is None:
+            _fail(f"team {team_id} {label} acquisition count is unknown; finite limit {limit} cannot be authorized")
+        if count >= limit:
+            _fail(f"team {team_id} has reached {label} acquisition limit {limit}")
+
+
+def _strict_ir_evidence_map(state: EvolvingLeagueState) -> dict[int, IREligibilityEvidence]:
+    return {
+        item.player_id: item for item in state.ir_eligibility_evidence
+        if item.scoring_week == state.scoring_week
+    }
+
+
+def record_ir_eligibility_evidence(
+    state: EvolvingLeagueState,
+    snapshot: LeagueSnapshot,
+    evidence: IREligibilityEvidence,
+) -> EvolvingLeagueState:
+    """Record an explicit player/week strict-mode determination without inventing one."""
+
+    validate_evolving_state(state, snapshot)
+    if evidence.scoring_week != state.scoring_week:
+        _fail(
+            f"strict IR evidence week={evidence.scoring_week} does not match decision week={state.scoring_week}"
+        )
+    if evidence.player_id not in _player_map(snapshot):
+        _fail(f"strict IR evidence references unknown player {evidence.player_id}")
+    if evidence.source_id not in {item.source_id for item in snapshot.sources}:
+        _fail(f"strict IR evidence references unknown source {evidence.source_id!r}")
+    retained = tuple(
+        item for item in state.ir_eligibility_evidence
+        if (item.player_id, item.scoring_week) != (evidence.player_id, evidence.scoring_week)
+    )
+    result = replace(
+        state,
+        ir_eligibility_evidence=tuple(sorted(retained + (evidence,), key=lambda item: (item.player_id, item.scoring_week))),
+    )
+    validate_evolving_state(result, snapshot)
+    return result
 
 
 def add_player(
@@ -378,16 +514,27 @@ def add_player(
         reserve_ids = {
             item.slot_id for item in snapshot.rules.lineup_slots if item.kind is SlotKind.RESERVE
         }
-        unresolved = tuple(
-            sorted(
-                item.player_id for item in state.roster_entries
-                if item.team_id == team_id and item.lineup_slot_id in reserve_ids
-            )
-        )
+        reserve_players = tuple(sorted(
+            item.player_id for item in state.roster_entries
+            if item.team_id == team_id and item.lineup_slot_id in reserve_ids
+        ))
+        evidence = _strict_ir_evidence_map(state)
+        unresolved = tuple(player_id for player_id in reserve_players if (
+            player_id not in evidence or evidence[player_id].eligibility is IREligibility.UNKNOWN
+        ))
         if unresolved:
             _fail(
                 f"team {team_id} strict IR acquisition legality is unresolved for reserve occupant(s) {unresolved}; "
                 "separately verified evidence is required"
+            )
+        ineligible = tuple(
+            player_id for player_id in reserve_players
+            if evidence[player_id].eligibility is IREligibility.INELIGIBLE
+        )
+        if ineligible:
+            _fail(
+                f"team {team_id} has IR-ineligible reserve occupant(s) {ineligible}; "
+                "explicit roster correction is required before acquisition"
             )
     owners = {item.player_id: item.team_id for item in state.roster_entries}
     blockers = tuple(
@@ -401,12 +548,17 @@ def add_player(
         )
     entry = RosterEntry(player_id, team_id, lineup_slot_id, team_id)
     rostered = PlayerAvailability(player_id, AcquisitionAvailability.ROSTERED, None, None, None, available.source_id)
-    counts = dict(state.acquisition_counts)
-    counts[team_id] += 1
+    season_counts = dict(state.season_acquisition_counts)
+    matchup_counts = dict(state.matchup_acquisition_counts)
+    if season_counts[team_id] is not None:
+        season_counts[team_id] += 1
+    if matchup_counts[team_id] is not None:
+        matchup_counts[team_id] += 1
     result = replace(
         state,
         roster_entries=_sorted_roster(state.roster_entries + (entry,)),
-        acquisition_counts=tuple(sorted(counts.items())),
+        season_acquisition_counts=tuple(sorted(season_counts.items())),
+        matchup_acquisition_counts=tuple(sorted(matchup_counts.items())),
     )
     result = _replace_availability(result, rostered)
     result = _append(
@@ -484,7 +636,6 @@ def activate_from_ir(
     player_id: int,
     ordinary_slot_id: int,
     drop_player_id: int | None = None,
-    evidence_source_id: str | None = None,
 ) -> EvolvingLeagueState:
     validate_evolving_state(state, snapshot)
     entry = next((item for item in state.roster_entries if item.player_id == player_id), None)
@@ -500,8 +651,15 @@ def activate_from_ir(
         if projection <= 0:
             _fail(f"player {player_id} lacks the positive projection required by projection_based activation")
     else:
-        if evidence_source_id not in {item.source_id for item in snapshot.sources}:
-            _fail("strict IR activation requires a valid separately verified evidence source")
+        evidence = _strict_ir_evidence_map(state).get(player_id)
+        if evidence is None or evidence.eligibility is IREligibility.UNKNOWN:
+            _fail(
+                f"strict IR activation eligibility is unresolved for player={player_id}, week={state.scoring_week}"
+            )
+        if evidence.eligibility is IREligibility.ELIGIBLE:
+            _fail(
+                f"strict IR evidence says player={player_id} remains IR-eligible in week={state.scoring_week}"
+            )
     candidate = state if drop_player_id is None else drop_player(
         state, snapshot, team_id=team_id, player_id=drop_player_id,
         phase=TransactionPhase.ROSTER_CORRECTION,
@@ -523,7 +681,10 @@ def activate_from_ir(
         team_id=team_id, player_id=player_id, related_player_id=drop_player_id,
         prior_team_id=team_id, resulting_team_id=team_id, prior_slot_id=entry.lineup_slot_id,
         resulting_slot_id=ordinary_slot_id,
-        evidence_source_id=evidence_source_id,
+        evidence_source_id=(
+            _strict_ir_evidence_map(state)[player_id].source_id
+            if state.ir_policy is IRPolicy.STRICT else None
+        ),
         assumption_ids=(f"ir_policy:{state.ir_policy.value}",),
     )
     validate_evolving_state(result, snapshot)
@@ -609,25 +770,59 @@ def release_held_player(
     snapshot: LeagueSnapshot,
     *,
     player_id: int,
-    evidence_source_id: str,
+    authorization: ReleaseAuthorization,
+    boundary_at_utc: str | None = None,
 ) -> EvolvingLeagueState:
-    """Release a held player only when the caller supplies verified boundary evidence."""
+    """Release a held player using player- and boundary-specific authorization."""
 
     validate_evolving_state(state, snapshot)
     available = _availability_map(state).get(player_id)
     if available is None or available.status is not AcquisitionAvailability.HOLD:
         _fail(f"player {player_id} is not held")
-    if evidence_source_id not in {item.source_id for item in snapshot.sources}:
-        _fail(f"unknown release evidence source {evidence_source_id!r}")
+    if authorization.player_id != player_id:
+        _fail(
+            f"release authorization player={authorization.player_id} does not match held player={player_id}"
+        )
+    if (
+        not isinstance(authorization.eligible_cycle_id, int)
+        or isinstance(authorization.eligible_cycle_id, bool)
+        or authorization.eligible_cycle_id < 0
+    ):
+        _fail("release authorization eligible_cycle_id must be a nonnegative integer")
+    if authorization.source_id not in {item.source_id for item in snapshot.sources}:
+        _fail(f"unknown release evidence source {authorization.source_id!r}")
+    if authorization.resulting_status not in {
+        AcquisitionAvailability.FREE_AGENT, AcquisitionAvailability.WAIVERS
+    }:
+        _fail("release authorization must resolve to free_agent or waivers")
+    if authorization.eligible_cycle_id <= (available.prohibited_cycle_id or -1):
+        _fail(f"player {player_id} cannot reenter prohibited acquisition cycle {available.prohibited_cycle_id}")
+    if state.cycle_id < authorization.eligible_cycle_id:
+        _fail(
+            f"player {player_id} cannot be released before authorized cycle {authorization.eligible_cycle_id}"
+        )
+    if available.hold_until_cycle is not None and state.cycle_id < available.hold_until_cycle:
+        _fail(f"player {player_id} remains held until cycle {available.hold_until_cycle}")
+    required_clearance = authorization.clearance_at_utc or available.clearance_at_utc
+    if authorization.clearance_at_utc and available.clearance_at_utc:
+        if _parse_utc(authorization.clearance_at_utc, "authorization.clearance_at_utc") < _parse_utc(
+            available.clearance_at_utc, "availability.clearance_at_utc"
+        ):
+            _fail(f"player {player_id} authorization precedes the known clearance timestamp")
+    if required_clearance is not None:
+        if boundary_at_utc is None:
+            _fail(f"player {player_id} has a known clearance timestamp but no decision-boundary time")
+        if _parse_utc(boundary_at_utc, "boundary_at_utc") < _parse_utc(required_clearance, "clearance_at_utc"):
+            _fail(f"player {player_id} cannot be released before clearance {required_clearance}")
     released = PlayerAvailability(
-        player_id, AcquisitionAvailability.FREE_AGENT, None, None, None, evidence_source_id
+        player_id, authorization.resulting_status, None, None, None, authorization.source_id
     )
     result = _replace_availability(state, released)
     result = _append(
         result, phase=TransactionPhase.CYCLE_BOUNDARY,
         action=TransactionAction.AVAILABILITY_RELEASE, team_id=None, player_id=player_id,
         prior_availability=available.status, resulting_availability=released.status,
-        evidence_source_id=evidence_source_id,
+        evidence_source_id=authorization.source_id,
     )
     validate_evolving_state(result, snapshot)
     return result
@@ -643,7 +838,17 @@ def advance_cycle(
     validate_evolving_state(state, snapshot)
     if cycle_id <= state.cycle_id or scoring_week < state.scoring_week:
         _fail("cycle and scoring week cannot move backward")
-    result = replace(state, cycle_id=cycle_id, scoring_week=scoring_week)
+    next_period = _matchup_period_id(snapshot, scoring_week)
+    matchup_counts = state.matchup_acquisition_counts
+    if next_period != state.current_matchup_period_id:
+        matchup_counts = tuple((team_id, 0) for team_id, _ in matchup_counts)
+    result = replace(
+        state,
+        cycle_id=cycle_id,
+        scoring_week=scoring_week,
+        current_matchup_period_id=next_period,
+        matchup_acquisition_counts=matchup_counts,
+    )
     result = _append(
         result, phase=TransactionPhase.CYCLE_BOUNDARY, action=TransactionAction.CYCLE_ADVANCE,
         team_id=None, player_id=None,
