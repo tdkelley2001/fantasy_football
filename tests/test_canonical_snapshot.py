@@ -20,6 +20,7 @@ from fantasy_football.canonical.model import (
     ProjectionSource,
     RosterEntry,
     RuleInterpretation,
+    SCHEMA_VERSION,
     SlotKind,
 )
 from fantasy_football.canonical.serialization import (
@@ -355,7 +356,7 @@ def test_incompatible_schema_and_malformed_timestamp_are_rejected() -> None:
     with pytest.raises(CanonicalSerializationError, match="unsupported schema_version"):
         snapshot_from_json(json.dumps(data))
 
-    data["schema_version"] = 2
+    data["schema_version"] = SCHEMA_VERSION
     data["retrieval_started_at_utc"] = "not-a-time"
     with pytest.raises(CanonicalSerializationError, match="not a valid ISO-8601"):
         snapshot_from_json(json.dumps(data))

@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1, M2.2, and the narrow M2.3a evidence/IR-legality package are complete. M2.3b and later work packages remain **NOT STARTED**. Schema-v2 canonical contracts remain unchanged; evolving rosters, transactions, waiver processing, and schema v3 are not implemented. Simulator-specific rule gaps remain preserved without defaults. The former application, research artifacts, and tests remain recoverable from the archival Git reference `archive/legacy-pre-clean-sheet-2026-10-15`.
+M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1, M2.2, and M2.3a-b are complete. M2.3c and later work packages remain **NOT STARTED**. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. Immutable evolving roster/transaction legality exists, but transaction valuation, automatic selection, and weekly waiver-cycle processing do not. Simulator-specific rule gaps remain preserved without defaults.
 
 ## Authoritative documentation
 
@@ -18,7 +18,7 @@ M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1, M2.2, and the narrow M2
 - [Undroppable-player evidence audit](docs/ESPN_UNDROPPABLE_AUDIT.md) — league and player field provenance, bounded live coverage, conservative legality semantics, and the proposed schema-v3 handoff.
 - [ESPN data dictionary](docs/ESPN_DATA_DICTIONARY.md) — proposed M1 logical fields, raw paths, identifier namespaces, transformations, evidence, and validation tiers.
 - [M0 feasibility and M1 handoff](docs/M0_FEASIBILITY_AND_M1_HANDOFF.md) — readiness matrix, rule-gap register, approved forecast/calibration policies, and the M1 recommendation.
-- [Canonical model](docs/CANONICAL_MODEL.md) — M1.1 schema-v2 entities, slot namespaces, identifiers, ownership and projection contracts, validation boundary, serialization, and deferred work.
+- [Canonical model](docs/CANONICAL_MODEL.md) — schema-v3 entities, historical v2 compatibility, slot/protection provenance, evolving-state legality, validation, and serialization.
 - [ESPN-to-canonical adapter](docs/ESPN_CANONICAL_ADAPTER.md) — M1.2 retrieval, translation, reconciliation, YAML rule-gap configuration, testing, and live acceptance evidence.
 - [Snapshot storage](docs/SNAPSHOT_STORAGE.md) — M1.3 SQLite schema, canonical authority, source evidence, atomic publication, integrity checks, retention, and verification.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
@@ -103,7 +103,7 @@ M2.3a adds a bounded, read-only undroppable-player evidence diagnostic. The firs
 .\.venv\Scripts\python.exe -m fantasy_football.undroppable_audit --first-simulation-week 8
 ```
 
-Add `--json` for the sanitized aggregate report. The command reports Boolean coverage only; it does not print player identities, league IDs, manager information, or raw payloads. It does not alter canonical schema v2 or authorize any transaction.
+Add `--json` for the sanitized aggregate report. The command reports Boolean coverage only; it does not print player identities, league IDs, manager information, or raw payloads.
 
 ## M1.2 live validation
 
@@ -199,6 +199,28 @@ transition = resolve_regular_season_week(snapshot, 8, standings, lineups, scores
 Assigned starters require finite realized scores; vacancies add zero and negative results remain negative. The current league's confirmed `NONE` rule permits regular-season ties. Ranking uses exact winning percentage and configured total PF for identical records, while unresolved deeper ties remain explicit instead of receiving arbitrary seeds.
 
 M2.3a closes a defensive legality gap: a frozen starter is rejected while their entry in the supplied modeled roster still occupies a configured reserve/IR slot. An explicitly supplied alternate roster may start a formerly reserved player only after that modeled state places the player in an ordinary configured slot. The weekly engine never performs or authorizes IR activation itself.
+
+## Immutable evolving roster state
+
+M2.3b exposes pure transaction-legality primitives in `fantasy_football.evolving_state`. Start a path from a published schema-v3 snapshot and pass the resulting `state.roster_entries` to M2.1 and M2.2:
+
+```python
+from fantasy_football.evolving_state import IRPolicy, initialize_evolving_state
+
+state = initialize_evolving_state(
+    snapshot,
+    scoring_week=snapshot.first_simulation_week,
+    ir_policy=IRPolicy.PROJECTION_BASED,
+)
+lineup = optimize_starting_lineup(
+    snapshot,
+    team_id=1,
+    scoring_week=state.scoring_week,
+    roster_entries=state.roster_entries,
+)
+```
+
+Available primitives cover explicit add, drop, compound replacement, IR placement/activation, waiver-priority transitions, evidence-backed hold release, and cycle advancement. They validate legality but never choose a transaction. Raw live `player.droppable` polarity remains unverified against an individual ESPN UI control, so automatic drops from current live-adapter snapshots fail until that interpretation is reviewed or corroborated. M2.3c valuation and M2.3d cycle orchestration are not implemented.
 
 ## Historical implementation
 

@@ -14,7 +14,7 @@ from typing import Callable, Sequence
 from urllib.parse import parse_qsl, urlsplit
 from uuid import UUID, uuid4
 
-from fantasy_football.canonical.model import LeagueSnapshot, SCHEMA_VERSION
+from fantasy_football.canonical.model import LeagueSnapshot, SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from fantasy_football.canonical.serialization import snapshot_from_json, snapshot_to_json
 from fantasy_football.canonical.validation import CanonicalValidationError, validate_snapshot
 from fantasy_football.config import SettingsError, load_settings
@@ -339,6 +339,11 @@ class SnapshotStore:
             raise SnapshotStoreError("snapshot_id must use canonical lowercase UUID text")
         if result.snapshot.snapshot_id is not None:
             raise SnapshotStoreError("adapter candidate already has a snapshot_id; publication assigns identity")
+        if result.snapshot.schema_version != SCHEMA_VERSION:
+            raise SnapshotStoreError(
+                f"new publications require canonical schema {SCHEMA_VERSION}; "
+                f"observed {result.snapshot.schema_version}"
+            )
         _utc_text(published_at_utc)
         if published_at_utc < result.snapshot.retrieval_finished_at_utc:
             raise SnapshotStoreError("publication timestamp precedes snapshot retrieval completion")
@@ -547,9 +552,10 @@ class SnapshotStore:
                 raise SnapshotIntegrityError(f"snapshot {snapshot_id} has missing or duplicate canonical document")
             row = rows[0]
             metadata = _metadata(row)
-            if metadata.canonical_schema_version != SCHEMA_VERSION:
+            if metadata.canonical_schema_version not in SUPPORTED_SCHEMA_VERSIONS:
                 raise SnapshotIntegrityError(
-                    f"snapshot {snapshot_id} uses unsupported canonical schema {metadata.canonical_schema_version}; expected {SCHEMA_VERSION}"
+                    f"snapshot {snapshot_id} uses unsupported canonical schema {metadata.canonical_schema_version}; "
+                    f"expected one of {SUPPORTED_SCHEMA_VERSIONS}"
                 )
             canonical_bytes = bytes(row["canonical_json"])
             if len(canonical_bytes) != metadata.canonical_byte_length or _sha256(canonical_bytes) != metadata.canonical_sha256:

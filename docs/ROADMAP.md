@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0 and M1 are **COMPLETE**. M2.1, M2.2, and M2.3a are **COMPLETE**; M2.3 overall remains **IN PROGRESS**, while M2.3b-M2.5 and M3-M7 are **NOT STARTED**, with M7 deferred. No legacy implementation is credited toward these statuses.
+M0 and M1 are **COMPLETE**. M2.1, M2.2, and M2.3a-b are **COMPLETE**; M2.3 overall remains **IN PROGRESS**, while M2.3c-M2.5 and M3-M7 are **NOT STARTED**, with M7 deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -16,7 +16,7 @@ Dependencies are sequential within each milestone and across the M0 → M7 miles
 
 #### M1 — Canonical snapshots and validation [COMPLETE]. ESPN adapter, standardized league/roster/player-week state, immutable staged and validated refresh, authoritative SQLite storage, deterministic quality reporting, and sanitized snapshot-management CLI. PASS: deterministic snapshot round-trip and selection, no data corruption on failed refresh or read-only inspection, complete identifiable league state and usable future inputs.
 
-#### M2 — Structurally complete full-season simulator [IN PROGRESS]. M2.1 lineups, M2.2 regular-season transitions, and M2.3a evidence/IR defensive legality are complete. Evolving roster state, essential transactions, valuation, waiver-cycle execution, postseason progression, and the deterministic full-season path remain unstarted. PASS: every path is legal and yields coherent championship/placement outcomes; known ESPN settings are honored; provisional models labeled.
+#### M2 — Structurally complete full-season simulator [IN PROGRESS]. M2.1 lineups, M2.2 regular-season transitions, and M2.3a-b evidence plus immutable transaction legality are complete. V(R), transaction selection, waiver-cycle execution, postseason progression, and the deterministic full-season path remain unstarted. PASS: every path is legal and yields coherent championship/placement outcomes; known ESPN settings are honored; provisional models labeled.
 
 #### M3 — Calibrated probabilistic and efficient baseline [NOT STARTED]. Historical ESPN error audit and chosen distribution, adaptive all-team precision, seeded common random numbers, compact high-performance/parallel engine, fast/detailed modes, progressive estimates and detailed-run recovery. PASS: reasonable calibration evidence or explicit limitations, interval/convergence tests, reproducible multiprocessing/resume, representative throughput measurements.
 
@@ -72,7 +72,7 @@ M2.3 [IN PROGRESS] Implement only reactive essential future acquisitions and leg
 
 M2.3a [COMPLETE — 18 October 2026] Audit `isUsingUndroppableList` and raw player `droppable` evidence, specify the proposed schema-v3/provenance contract without migrating schema v2, document the approved M2.3 architecture, and reject frozen starters still occupying reserve in the supplied modeled roster. GATE: PASSED — bounded live retrieval verified complete Boolean field coverage across 1,052 current players, all 235 rostered players, and 11 future-week views; the complete credential-free suite passed 299 tests, including enabled/disabled/missing/malformed/contradictory evidence and IR activation/placement regressions. Direct per-player raw-value-to-UI correlation remains an explicit M2.3b review item.
 
-M2.3b [NOT STARTED] Implement the explicitly approved canonical schema/version contract plus immutable evolving ownership, roster occupancy, waiver priority, dropped-player holding, transaction ledger, IR-policy state, and drop-legality primitives. GATE: schema/version round-trip, old-snapshot immutability, ownership/capacity/IR/undroppable/lock invariants, and deterministic state transitions.
+M2.3b [COMPLETE — 18 October 2026] Implement canonical schema v3 plus immutable evolving ownership, roster occupancy, acquisition availability, current/frozen waiver priority, acquisition counts, dropped-player holding, transaction ledger, two-mode IR-policy state, and pure legality primitives. New publications require v3 while v2 documents remain byte-stable and readable; v2 cannot authorize drops. GATE: PASSED — all 319 credential-free tests pass, including deterministic v2/v3 serialization, persistence compatibility, ownership/capacity/eligibility/protection/IR/holding/priority adversarial cases, atomic failure behavior, and M2.1/M2.2 integration. Live raw-polarity-to-UI correlation remains unverified, so enabled-list automatic drops from live adapter snapshots remain capability-blocked pending approval.
 
 M2.3c [NOT STARTED] Implement unified remaining-season V(R) for both additions and drops using equal week weights, legal optimal lineups, shared eligibility-aware competition, and conservative replacement access without nested Monte Carlo. GATE: hand-checkable scarcity/bye/flex/competition cases and exact-small-allocation comparisons.
 
@@ -150,7 +150,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete; M2.1, M2.2, and M2.3a are complete; M2.3b and every later work package remain planned rather than implemented.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0 and M1 are complete; M2.1, M2.2, and M2.3a-b are complete; M2.3c and every later work package remain planned rather than implemented.
 
 ### 12.2 Practical development method
 

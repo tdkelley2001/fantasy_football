@@ -16,7 +16,7 @@ from fantasy_football.canonical.model import (
     MatchupPhase,
     ProjectionClass,
     ProjectionSource,
-    SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
     SlotKind,
 )
 
@@ -110,10 +110,13 @@ def _json_value(value: object, *, entity: str, identifier: object, field: str) -
 
 
 def validate_snapshot(snapshot: LeagueSnapshot) -> None:
-    """Validate schema-v2 structure and cross-entity invariants without mutation."""
+    """Validate supported canonical structure and cross-entity invariants without mutation."""
 
-    if snapshot.schema_version != SCHEMA_VERSION:
-        _fail("LeagueSnapshot", snapshot.snapshot_id, "schema_version", f"expected {SCHEMA_VERSION}, observed {snapshot.schema_version}")
+    if snapshot.schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        _fail(
+            "LeagueSnapshot", snapshot.snapshot_id, "schema_version",
+            f"expected one of {SUPPORTED_SCHEMA_VERSIONS}, observed {snapshot.schema_version}",
+        )
     _integer(snapshot.league_id, entity="LeagueSnapshot", identifier=snapshot.snapshot_id, field="league_id", minimum=1)
     _nonempty(snapshot.league_name, entity="LeagueSnapshot", identifier=snapshot.snapshot_id, field="league_name")
     _integer(snapshot.season, entity="LeagueSnapshot", identifier=snapshot.snapshot_id, field="season", minimum=2000)
@@ -157,6 +160,28 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             _fail("SourceReference", source.source_id, "payload_sha256", "must be 64 lowercase hexadecimal characters")
 
     rules = snapshot.rules
+    if snapshot.schema_version == 2:
+        if rules.undroppable_list_enabled is not None or rules.undroppable_list_source_id is not None:
+            _fail("LeagueRules", "league", "undroppable_list", "schema v2 cannot contain schema-v3 protection fields")
+    else:
+        if rules.undroppable_list_enabled is not None:
+            _boolean(
+                rules.undroppable_list_enabled,
+                entity="LeagueRules", identifier="league", field="undroppable_list_enabled",
+            )
+        if rules.undroppable_list_source_id is not None:
+            if rules.undroppable_list_source_id not in source_ids:
+                _fail(
+                    "LeagueRules", "league", "undroppable_list_source_id",
+                    f"unknown source {rules.undroppable_list_source_id!r}",
+                )
+            if rules.undroppable_list_enabled is None:
+                _fail(
+                    "LeagueRules", "league", "undroppable_list_source_id",
+                    "cannot be populated when the setting is unknown",
+                )
+        elif rules.undroppable_list_enabled is not None:
+            _fail("LeagueRules", "league", "undroppable_list_source_id", "known setting requires provenance")
     for field in ("scoring", "lineup_slots", "position_limits", "interpretations"):
         _tuple(getattr(rules, field), entity="LeagueRules", identifier="league", field=field)
     _integer(rules.team_count, entity="LeagueRules", identifier="league", field="team_count", minimum=1)
@@ -290,6 +315,28 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             _fail("Player", player.player_id, "eligible_lineup_slot_ids", f"IDs absent from observed eligibility namespace {sorted(unknown)}")
         _integer(player.nfl_team_id, entity="Player", identifier=player.player_id, field="nfl_team_id", minimum=0)
         _nonempty(player.acquisition_status, entity="Player", identifier=player.player_id, field="acquisition_status")
+        if snapshot.schema_version == 2:
+            if player.is_undroppable is not None or player.undroppable_source_id is not None:
+                _fail("Player", player.player_id, "is_undroppable", "schema v2 cannot contain schema-v3 protection fields")
+        else:
+            if player.is_undroppable is not None:
+                _boolean(
+                    player.is_undroppable,
+                    entity="Player", identifier=player.player_id, field="is_undroppable",
+                )
+            if player.undroppable_source_id is not None:
+                if player.undroppable_source_id not in source_ids:
+                    _fail(
+                        "Player", player.player_id, "undroppable_source_id",
+                        f"unknown source {player.undroppable_source_id!r}",
+                    )
+                if player.is_undroppable is None:
+                    _fail(
+                        "Player", player.player_id, "undroppable_source_id",
+                        "cannot be populated when protection is unknown",
+                    )
+            elif player.is_undroppable is not None:
+                _fail("Player", player.player_id, "undroppable_source_id", "known protection requires provenance")
 
     eligibility_evidence = {slot_id for player in snapshot.players for slot_id in player.eligible_lineup_slot_ids}
     if observed_slot_ids != eligibility_evidence:

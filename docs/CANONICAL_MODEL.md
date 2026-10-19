@@ -1,10 +1,10 @@
-# Canonical Snapshot Contract — Schema Version 2
+# Canonical Snapshot Contract — Schema Version 3
 
 ## Scope
 
 M1.1 defines the immutable ESPN-independent contract between ingestion, persistence, and simulation. M1.2 translates live ESPN responses into this contract, and M1.3 assigns publication IDs and persists complete documents. The canonical package itself does not fetch ESPN data, access SQLite, compile simulation arrays, or implement league behavior.
 
-The implementation is in `src/fantasy_football/canonical/` and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror. The current serialized contract is schema version 2.
+The implementation is in `src/fantasy_football/canonical/` and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror. New snapshots use schema version 3; version-aware reading preserves existing schema-v2 documents.
 
 Schema v2 adds immutable `LineupSlotNamespace.observed_slot_ids`, derived from the exact union of raw player eligibility evidence. This namespace is distinct from `LeagueRules.lineup_slots`, which contains only ESPN-configured capacities. An observed but unconfigured category such as slot 25 remains preserved but is not a legal roster destination. Occupied slots must have positive configured capacity and appear in the player's raw eligibility. Schema-v1 JSON is intentionally incompatible and rejected because it cannot express this distinction.
 
@@ -25,6 +25,8 @@ Schema v2 adds immutable `LineupSlotNamespace.observed_slot_ids`, derived from t
 | `SourceReference` | Stable request/reference ID, HTTPS endpoint, raw view, parameters, UTC retrieval time, optional SHA-256 payload digest |
 | `RuleInterpretation` | Raw field/value, optional normalized meaning, evidence status, source, and optional audited manual configuration provenance; values may be JSON scalars or immutable structured JSON |
 | `RuleGap` | Named unresolved gap, reason, affected future capabilities, source, and whether audited manual configuration is permitted |
+
+Schema v3 adds nullable `LeagueRules.undroppable_list_enabled` and its source ID plus nullable `Player.is_undroppable` and its source ID. Known values require valid source references; absence remains null. Raw ESPN `droppable` polarity is inverted only by the adapter (`true` means canonical `is_undroppable=false`). The separate `undroppable_player_mapping` interpretation records whether that semantic mapping is understood. Current live translation leaves it `unverified`, so automatic dropping is capability-blocked even though the raw Boolean is retained.
 
 Default-position IDs and lineup-slot IDs remain separate namespaces even where their integers happen to overlap. Player IDs may be negative; zero is invalid. NFL team ID zero is allowed only on `Player` as the unassigned sentinel and is never interpreted as a bye.
 
@@ -87,7 +89,7 @@ An unresolved consolation ladder or tie rule is valid canonical metadata. It blo
 
 ## Deterministic quality reporting
 
-`generate_quality_report(snapshot)` first invokes the authoritative canonical validator, then returns a frozen report separate from schema v2. It reports identity and horizon counts, rostered/unrostered counts, required and observed player-week coverage, schedule/source counts, and projection categories. Percentages use player-week records as their denominator. Projection breakdowns are calculated independently by scoring week, raw default-position ID, and current ownership state.
+`generate_quality_report(snapshot)` first invokes the authoritative canonical validator, then returns a frozen report separate from the canonical document. It reports identity and horizon counts, rostered/unrostered counts, required and observed player-week coverage, schedule/source counts, and projection categories. Percentages use player-week records as their denominator. Projection breakdowns are calculated independently by scoring week, raw default-position ID, and current ownership state.
 
 Missing raw projections, explicit ESPN zeros, finite negatives, positive effective projections, unrostered players, and observed-but-unconfigured eligibility categories are data characteristics rather than structural failures. They appear as aggregate metrics or information diagnostics, not one warning per record. Rule gaps produce one deterministic warning with their affected capabilities, source, and manual-configuration eligibility; non-understood rule interpretations remain visible as limitations. Passing canonical validation does not assert that those capabilities are ready—callers still use `require_understood_rules()` for the specific rule IDs they require.
 
@@ -95,7 +97,7 @@ For the sanitized fixture, the overall projection summary contains 15 records: 1
 
 ## Serialization
 
-`snapshot_to_json` and `snapshot_from_json` implement schema version `2`:
+`snapshot_to_json` and `snapshot_from_json` implement schema versions `2` and `3`:
 
 - JSON is indented, human-readable, and ends with a newline;
 - object keys and all identity-bearing record collections have deterministic ordering;
@@ -103,9 +105,31 @@ For the sanitized fixture, the overall projection summary contains 15 records: 1
 - null, explicit numeric zero, negative IDs, negative projections, raw enums, gaps, and evidence states round-trip unchanged;
 - JSON nonfinite numbers are prohibited;
 - deserialization reconstructs typed immutable records and performs full validation; and
-- any schema version other than `2` fails explicitly.
+- v3 requires the league/player protection keys even when their values are null;
+- v2 rejects v3 protection keys and reserializes without adding them; and
+- any schema version other than `2` or `3` fails explicitly.
 
-This remains an interchange contract: `snapshot_store.py` owns SQLite, compressed evidence, transactions, publication UUIDs, and whole-document checksums without adding persistence behavior to canonical entities.
+This remains an interchange contract: `snapshot_store.py` owns SQLite, compressed evidence, publication UUIDs, and whole-document checksums without adding simulation-path state to canonical entities. New publication requires v3. Existing v2 bytes, IDs, and checksums remain immutable and readable for their previously supported capabilities, but they cannot authorize automatic drops.
+
+## Evolving transaction state
+
+`fantasy_football.evolving_state` is a separate immutable simulation-path contract, not part of canonical JSON. `EvolvingLeagueState` records its source snapshot ID/version, scoring week and cycle, authoritative modeled `RosterEntry` tuple, per-player acquisition availability, current and frozen-initial waiver queues, acquisition counts, explicit IR policy, transaction ledger, and named V1 assumptions. Every operation returns a new validated value; ownership is never duplicated into an independently mutable owner map.
+
+Availability distinguishes rostered, immediate free agent, waivers, holding restriction, and unresolved. A dropped player enters `hold` and is prohibited from same-cycle reentry. Because exact clearance time/timezone remains unresolved, cycle advancement never silently releases that player; `release_held_player` requires an explicit retained source reference. Successful traditional claims may explicitly move a team to the bottom while the window's initial queue remains frozen. Free-agent additions do not themselves alter either queue.
+
+Pure primitives cover add, drop, compound replace, supported IR placement, explicit activation, priority movement/reset, evidence-backed hold release, and cycle advancement. They validate dynamic slot and position capacities, eligibility, ownership, acquisition limits, availability, undroppable evidence, and same-cycle restrictions. They do not select desirable transactions or orchestrate a weekly claim cycle. Compound calls build a candidate value and expose nothing if a later step fails.
+
+The current acquisition counter enforces the configured matchup limit from the modeled path start. A finite season limit cannot be authoritative until a source supplies the team's already-used season count. Individual game-lock evaluation, exact waiver clearance clock/timezone, multiple-claim ordering, and dropped-player reentry timing remain unresolved and block only operations that require those facts. M2.3b deliberately provides no fallback.
+
+IR policy is explicit. `projection_based` reports a positive-projection reserve occupant as an acquisition-blocking correction until explicit activation; `strict` does not infer recovery from projection alone. Placement still requires supported injury evidence (`OUT` or `IR` in the currently verified contract), and neither policy starts or activates an IR occupant implicitly. Scenario state serializes deterministically through `state_to_json()` for audit/testing but is not an authoritative stored snapshot format.
+
+### Replaceable V1 assumptions
+
+- Undroppable designations are frozen from the source snapshot for the entire modeled path; ESPN may change its list later.
+- `projection_based` IR recovery is a model policy, not an ESPN injury rule. `strict` is available when projection evidence must not be used.
+- Transactions occur in modeled weekly pregame windows rather than at individual real-world manager timestamps.
+- Exact future clearance timing is not simplified: it remains unresolved and requires explicit evidence before a hold is released.
+- Reverse-initial-waiver-priority immediate free-agent processing is approved for future M2.3d but is not implemented here and is not an ESPN rule.
 
 ## Representative fixture and tests
 
@@ -123,6 +147,6 @@ An alternate fixture test removes IR and adds multiple flex slots, demonstrating
 
 ## Implemented and deferred boundaries
 
-M1.2 implements verified ESPN translation, M1.3 implements immutable document persistence, and M1.4 implements deterministic non-authoritative quality reporting plus the narrow rule-gap invariants above. M1.5 remains responsible for user-facing snapshot listing and inspection commands. Simulation compilation and league behavior remain later milestones.
+M1.2 implements ESPN translation, M1.3 implements immutable document persistence, and M1.4/M1.5 implement quality reporting and inspection. M2.3b implements schema v3 and the evolving-state legality primitives above. V(R), transaction selection, complete weekly waiver/free-agent execution, and lookahead remain M2.3c–e.
 
 The M1.2 slot-25 finding is resolved in schema v2 through the observed eligibility namespace described above. No raw eligibility evidence is dropped and no absent capacity is fabricated.

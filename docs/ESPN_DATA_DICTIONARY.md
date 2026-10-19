@@ -34,6 +34,7 @@ Every M1 source record should carry endpoint, view, request parameters, retrieva
 | `lineup_lock_type` | `rosterSettings.lineupLocktimeType`; enum string | C | Preserve raw and interpret only known value; **Verified live** | C: unknown enum retained unsupported; lineup legality |
 | `roster_lock_type` | `rosterSettings.rosterLocktimeType`; enum string | C | Same; **Verified live** | C: transaction timing |
 | `move_limit` | `rosterSettings.moveLimit`; integer/sentinel | C | Preserve `-1` meaning observed no limit; **Verified live** | C: validate recognized sentinel; transaction legality |
+| `undroppable_list_enabled` | `rosterSettings.isUsingUndroppableList`; Boolean | O; absence is unknown, not false | Preserve exact Boolean with source ID; **Verified live** | C: determines whether player protection applies; schema v3 |
 | `scoring_item.stat_id` | `settings.scoringSettings.scoringItems[].statId`; integer ESPN scoring-stat namespace | R | Preserve; **Verified live** | S: unique within scoring configuration; scoring identity |
 | `scoring_item.points` | same item `.points`; finite number | R | Preserve precision; **Verified live** | S: finite, including valid zero/negative; score calculation |
 | `scoring_item.overrides` | same item `.pointsOverrides`; mapping | O; absence differs from empty mapping | Preserve raw until M1 interpretation; **Verified live historical/current** | C/W: schema validation and raw retention; scoring reconstruction |
@@ -71,6 +72,7 @@ Every M1 source record should carry endpoint, view, request parameters, retrieva
 | `observed_lineup_slot_ids` | union of raw `player.eligibleSlots[]` across the retrieved player universe | R derived evidence | Preserve sorted immutable identifiers without adding absent capacity records; **Verified live + tests** | S: exactly reconciles player eligibility; distinct from configured `lineupSlotCounts`; source for schema-v2 namespace |
 | `nfl_team_id` | `player.proTeamId`; integer NFL-team namespace; zero can mean none | R for player-pool entry | Preserve; **Verified live** | S/C: nonzero must reference NFL universe; zero is not a bye |
 | `injury_status` | `player.injuryStatus`; enum/string | O; absent remains absent | Preserve raw; **Verified live** | W/C: availability evidence only; no future injury model |
+| `is_undroppable` | `player.droppable`; Boolean | O; absence remains unknown | Canonical polarity is proposed inverse of raw value; raw path/type/coverage **Verified live**, exact UI polarity **Unverified** | C: known value requires source ID; automatic drops require understood mapping and enabled-list handling |
 
 ## Ownership and free-agent/waiver state
 

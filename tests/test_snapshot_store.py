@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import hashlib
 import sqlite3
 from uuid import UUID
 
@@ -48,7 +49,7 @@ def test_publish_load_and_reopen_preserves_complete_canonical_and_sources(store,
     assert UUID(metadata.snapshot_id).version == 4
     assert loaded.canonical_json.decode("utf-8") == snapshot_to_json(loaded.snapshot)
     assert loaded.snapshot.snapshot_id == ID_1
-    assert loaded.metadata.canonical_schema_version == SCHEMA_VERSION == 2
+    assert loaded.metadata.canonical_schema_version == SCHEMA_VERSION == 3
     assert loaded.metadata.canonical_sha256 != result.report.canonical_sha256
     assert len(loaded.raw_sources) == len(result.raw_sources) == loaded.metadata.source_count
     assert {item.response.source_id for item in loaded.raw_sources} == {item.source_id for item in result.raw_sources}
@@ -57,6 +58,64 @@ def test_publish_load_and_reopen_preserves_complete_canonical_and_sources(store,
     raw_values = {item.raw_projection for item in loaded.snapshot.player_weeks}
     assert None in raw_values and 0.0 in raw_values and -1.0 in raw_values
     assert loaded.canonical_json.decode("utf-8").endswith("\n")
+
+
+def test_existing_schema_v2_document_loads_byte_for_byte_without_migration(store, result) -> None:
+    store.publish(result, snapshot_id=ID_1, published_at_utc=PUBLISHED)
+    loaded_v3 = store.load(ID_1)
+    v2_players = tuple(
+        replace(item, is_undroppable=None, undroppable_source_id=None)
+        for item in loaded_v3.snapshot.players
+    )
+    v2_rules = replace(
+        loaded_v3.snapshot.rules,
+        undroppable_list_enabled=None,
+        undroppable_list_source_id=None,
+    )
+    v2 = replace(loaded_v3.snapshot, schema_version=2, rules=v2_rules, players=v2_players)
+    original_bytes = snapshot_to_json(v2).encode("utf-8")
+    digest = hashlib.sha256(original_bytes).hexdigest()
+    connection = sqlite3.connect(store.path)
+    try:
+        # Recast the temporary fixture as a pre-v3 published database. Production APIs
+        # never perform this mutation and retain their immutable triggers.
+        connection.execute("DROP TRIGGER snapshots_no_update")
+        connection.execute("DROP TRIGGER canonical_documents_no_update")
+        connection.execute(
+            "UPDATE snapshots SET canonical_schema_version=2, canonical_sha256=?, canonical_byte_length=? WHERE snapshot_id=?",
+            (digest, len(original_bytes), ID_1),
+        )
+        connection.execute(
+            "UPDATE canonical_documents SET canonical_json=? WHERE snapshot_id=?",
+            (original_bytes, ID_1),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    historical = SnapshotStore(store.path).load(ID_1)
+    assert historical.snapshot.schema_version == 2
+    assert historical.canonical_json == original_bytes
+    assert snapshot_to_json(historical.snapshot).encode("utf-8") == original_bytes
+
+
+def test_new_publication_rejects_schema_v2_candidate(store, result) -> None:
+    snapshot = result.snapshot
+    v2 = replace(
+        snapshot,
+        schema_version=2,
+        rules=replace(
+            snapshot.rules,
+            undroppable_list_enabled=None,
+            undroppable_list_source_id=None,
+        ),
+        players=tuple(
+            replace(item, is_undroppable=None, undroppable_source_id=None)
+            for item in snapshot.players
+        ),
+    )
+    with pytest.raises(SnapshotStoreError, match="new publications require canonical schema 3"):
+        store.publish(replace(result, snapshot=v2), snapshot_id=ID_1, published_at_utc=PUBLISHED)
 
 
 def test_publish_assigns_a_new_uuid_when_none_is_supplied(store, result) -> None:
