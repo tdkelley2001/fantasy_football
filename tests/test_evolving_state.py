@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
 
 import pytest
@@ -9,10 +10,12 @@ from fantasy_football.canonical.model import (
     InterpretationStatus,
     RosterEntry,
     SCHEMA_VERSION,
+    SourceReference,
 )
 from fantasy_football.canonical.serialization import snapshot_from_json, snapshot_to_json
 from fantasy_football.evolving_state import (
     AcquisitionAvailability,
+    EvidenceBasis,
     IREligibility,
     IREligibilityEvidence,
     IRPolicy,
@@ -34,6 +37,7 @@ from fantasy_football.evolving_state import (
     reset_waiver_priority,
     state_to_json,
     validate_evolving_state,
+    validate_eligibility_evidence_artifact,
 )
 from fantasy_football.lineup_optimizer import optimize_starting_lineup
 from fantasy_football.weekly_engine import (
@@ -68,6 +72,26 @@ def _v2_payload() -> str:
         player.pop("is_undroppable")
         player.pop("undroppable_source_id")
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
+def _eligibility_artifact(snapshot, claims):
+    payload = json.dumps(
+        {"schema": "transaction_eligibility_v1", "claims": claims},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    source = SourceReference(
+        source_id="controlled-eligibility-fixture",
+        endpoint="https://example.invalid/transaction-eligibility",
+        view="transaction_eligibility_evidence_v1",
+        parameters=(
+            ("evidence_classification", "verified_by_tests"),
+            ("evidence_contract", "transaction_eligibility_v1"),
+        ),
+        retrieved_at_utc=snapshot.retrieval_finished_at_utc,
+        payload_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    return replace(snapshot, sources=snapshot.sources + (source,)), payload, source.source_id
 
 
 def test_schema_v3_round_trip_is_deterministic_and_preserves_three_states() -> None:
@@ -205,6 +229,13 @@ def test_ir_placement_requires_verified_status_not_projection() -> None:
 
 def test_projection_policy_blocks_acquisition_until_explicit_activation() -> None:
     snapshot = _player(canonical_snapshot(), 1, injury_status="OUT")
+    snapshot, payload, evidence_source = _eligibility_artifact(snapshot, [{
+        "kind": "ir", "player_id": 1, "scoring_week": 15,
+        "eligibility": "ineligible", "condition": "future_ir_eligibility_observed",
+    }])
+    evidence = validate_eligibility_evidence_artifact(
+        snapshot, source_id=evidence_source, payload=payload
+    ).ir_determinations[0]
     placed = place_on_ir(_state(snapshot), snapshot, team_id=1, player_id=1, reserve_slot_id=21)
     assert acquisition_blocking_ir_players(placed, snapshot) == (1,)
     strict = replace(placed, ir_policy=IRPolicy.STRICT)
@@ -216,7 +247,7 @@ def test_projection_policy_blocks_acquisition_until_explicit_activation() -> Non
     strict = record_ir_eligibility_evidence(
         strict,
         snapshot,
-        IREligibilityEvidence(1, 15, IREligibility.INELIGIBLE, snapshot.sources[0].source_id),
+        evidence,
     )
     strict_activated = activate_from_ir(
         strict, snapshot, team_id=1, player_id=1, ordinary_slot_id=0,
@@ -285,39 +316,57 @@ def test_waiver_priority_transitions_preserve_initial_frozen_order() -> None:
 
 def test_holding_requires_player_and_boundary_specific_authorization() -> None:
     snapshot = canonical_snapshot()
+    snapshot, payload, source_id = _eligibility_artifact(snapshot, [
+        {"kind": "release", "player_id": -101, "eligible_cycle_id": 1,
+         "resulting_status": "waivers", "condition": "holding_period_completed",
+         "clearance_at_utc": None},
+        {"kind": "release", "player_id": -101, "eligible_cycle_id": 2,
+         "resulting_status": "waivers", "condition": "holding_period_completed",
+         "clearance_at_utc": None},
+    ])
+    authorizations = validate_eligibility_evidence_artifact(
+        snapshot, source_id=source_id, payload=payload
+    ).release_authorizations
+    early_authorization, authorization = authorizations
     dropped = drop_player(_state(snapshot), snapshot, team_id=1, player_id=-101)
-    source_id = snapshot.sources[0].source_id
     with pytest.raises(TransactionStateError, match="prohibited acquisition cycle"):
         release_held_player(
             dropped,
             snapshot,
             player_id=-101,
-            authorization=ReleaseAuthorization(
-                -101, 1, AcquisitionAvailability.FREE_AGENT, source_id
-            ),
+            authorization=early_authorization,
         )
     advanced = advance_cycle(dropped, snapshot, cycle_id=2, scoring_week=16)
     assert {item.player_id: item.status for item in advanced.availability}[-101] is AcquisitionAvailability.HOLD
-    with pytest.raises(TransactionStateError, match="does not match held player"):
+    fabricated = ReleaseAuthorization(
+        -101, 2, AcquisitionAvailability.FREE_AGENT, snapshot.sources[0].source_id,
+        "holding_period_completed", EvidenceBasis.VERIFIED_SOURCE, "a" * 64,
+    )
+    with pytest.raises(TransactionStateError, match="validated evidence provider"):
         release_held_player(
             advanced,
             snapshot,
             player_id=-101,
-            authorization=ReleaseAuthorization(3, 2, AcquisitionAvailability.FREE_AGENT, source_id),
+            authorization=fabricated,
         )
     released = release_held_player(
         advanced,
         snapshot,
         player_id=-101,
-        authorization=ReleaseAuthorization(
-            -101, 2, AcquisitionAvailability.WAIVERS, source_id
-        ),
+        authorization=authorization,
     )
     assert {item.player_id: item.status for item in released.availability}[-101] is AcquisitionAvailability.WAIVERS
+    assert released.ledger[-1].evidence_source_id == source_id
+    assert released.ledger[-1].evidence_basis is EvidenceBasis.VALIDATED_FIXTURE
 
 
 def test_known_clearance_timestamp_cannot_be_bypassed() -> None:
     snapshot = canonical_snapshot()
+    snapshot, payload, source_id = _eligibility_artifact(snapshot, [{
+        "kind": "release", "player_id": -101, "eligible_cycle_id": 2,
+        "resulting_status": "free_agent", "condition": "waiver_clearance_observed",
+        "clearance_at_utc": "2026-12-24T12:00:00+00:00",
+    }])
     dropped = drop_player(_state(snapshot), snapshot, team_id=1, player_id=-101)
     held = next(item for item in dropped.availability if item.player_id == -101)
     held = replace(held, clearance_at_utc="2026-12-24T12:00:00+00:00", hold_until_cycle=2)
@@ -326,10 +375,9 @@ def test_known_clearance_timestamp_cannot_be_bypassed() -> None:
         availability=tuple(held if item.player_id == -101 else item for item in dropped.availability),
     )
     advanced = advance_cycle(dropped, snapshot, cycle_id=2, scoring_week=16)
-    authorization = ReleaseAuthorization(
-        -101, 2, AcquisitionAvailability.FREE_AGENT, snapshot.sources[0].source_id,
-        "2026-12-24T12:00:00+00:00",
-    )
+    authorization = validate_eligibility_evidence_artifact(
+        snapshot, source_id=source_id, payload=payload
+    ).release_authorizations[0]
     with pytest.raises(TransactionStateError, match="before clearance"):
         release_held_player(
             advanced, snapshot, player_id=-101, authorization=authorization,
@@ -339,30 +387,87 @@ def test_known_clearance_timestamp_cannot_be_bypassed() -> None:
 
 
 def test_strict_ir_evidence_controls_activation_and_acquisition_independently() -> None:
-    snapshot = _player(canonical_snapshot(), 1, injury_status="OUT")
-    placed = place_on_ir(_state(snapshot, policy=IRPolicy.STRICT), snapshot, team_id=1, player_id=1, reserve_slot_id=21)
-    source_id = snapshot.sources[0].source_id
-    unrelated = record_ir_eligibility_evidence(
-        placed, snapshot, IREligibilityEvidence(2, 15, IREligibility.INELIGIBLE, source_id)
+    def prepared(player_id, eligibility):
+        candidate = _player(canonical_snapshot(), 1, injury_status="OUT")
+        candidate, payload, source_id = _eligibility_artifact(candidate, [{
+            "kind": "ir", "player_id": player_id, "scoring_week": 15,
+            "eligibility": eligibility, "condition": "future_ir_eligibility_observed",
+        }])
+        evidence = validate_eligibility_evidence_artifact(
+            candidate, source_id=source_id, payload=payload
+        ).ir_determinations[0]
+        placed_state = place_on_ir(
+            _state(candidate, policy=IRPolicy.STRICT), candidate,
+            team_id=1, player_id=1, reserve_slot_id=21,
+        )
+        return candidate, record_ir_eligibility_evidence(placed_state, candidate, evidence)
+
+    base = _player(canonical_snapshot(), 1, injury_status="OUT")
+    placed = place_on_ir(
+        _state(base, policy=IRPolicy.STRICT), base, team_id=1, player_id=1, reserve_slot_id=21
     )
+    fabricated = IREligibilityEvidence(
+        1, 15, IREligibility.INELIGIBLE, base.sources[0].source_id,
+        "future_ir_eligibility_observed", EvidenceBasis.VERIFIED_SOURCE, "a" * 64,
+    )
+    with pytest.raises(TransactionStateError, match="validated evidence provider"):
+        record_ir_eligibility_evidence(placed, base, fabricated)
+    assert placed.ledger[-1].action.value == "ir_place"
+
+    snapshot, unrelated = prepared(2, "ineligible")
     with pytest.raises(TransactionStateError, match="player=1"):
         activate_from_ir(unrelated, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
 
-    eligible = record_ir_eligibility_evidence(
-        placed, snapshot, IREligibilityEvidence(1, 15, IREligibility.ELIGIBLE, source_id)
-    )
+    snapshot, eligible = prepared(1, "eligible")
     added = add_player(eligible, snapshot, team_id=1, player_id=3, lineup_slot_id=20)
     assert any(item.player_id == 3 for item in added.roster_entries)
     with pytest.raises(TransactionStateError, match="remains IR-eligible"):
         activate_from_ir(eligible, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
 
-    ineligible = record_ir_eligibility_evidence(
-        placed, snapshot, IREligibilityEvidence(1, 15, IREligibility.INELIGIBLE, source_id)
-    )
+    snapshot, ineligible = prepared(1, "ineligible")
     with pytest.raises(TransactionStateError, match="IR-ineligible"):
         add_player(ineligible, snapshot, team_id=1, player_id=3, lineup_slot_id=20)
     activated = activate_from_ir(ineligible, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
     assert next(item for item in activated.roster_entries if item.player_id == 1).lineup_slot_id == 0
+    assert activated.ledger[-1].evidence_basis is EvidenceBasis.VALIDATED_FIXTURE
+
+
+def test_projection_based_ir_authority_is_labeled_as_assumption() -> None:
+    snapshot = _player(canonical_snapshot(), 1, injury_status="OUT")
+    placed = place_on_ir(_state(snapshot), snapshot, team_id=1, player_id=1, reserve_slot_id=21)
+    activated = activate_from_ir(placed, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
+    assert activated.ledger[-1].evidence_source_id is None
+    assert activated.ledger[-1].evidence_basis is EvidenceBasis.APPROVED_ASSUMPTION
+    assert activated.ledger[-1].assumption_ids == ("ir_policy:projection_based",)
+
+
+def test_evidence_provider_rejects_tampering_and_unimplemented_live_classification() -> None:
+    snapshot, payload, source_id = _eligibility_artifact(canonical_snapshot(), [{
+        "kind": "ir", "player_id": 1, "scoring_week": 15,
+        "eligibility": "unknown", "condition": "future_ir_eligibility_observed",
+    }])
+    with pytest.raises(TransactionStateError, match="checksum"):
+        validate_eligibility_evidence_artifact(
+            snapshot, source_id=source_id, payload=payload + b" "
+        )
+    evidence_source = next(item for item in snapshot.sources if item.source_id == source_id)
+    unsupported_source = replace(
+        evidence_source,
+        parameters=(
+            ("evidence_classification", "verified_live"),
+            ("evidence_contract", "transaction_eligibility_v1"),
+        ),
+    )
+    unsupported = replace(
+        snapshot,
+        sources=tuple(
+            unsupported_source if item.source_id == source_id else item for item in snapshot.sources
+        ),
+    )
+    with pytest.raises(TransactionStateError, match="no implemented trusted evidence parser"):
+        validate_eligibility_evidence_artifact(
+            unsupported, source_id=source_id, payload=payload
+        )
 
 
 def test_season_and_matchup_acquisition_limits_are_independent_and_period_aware() -> None:
