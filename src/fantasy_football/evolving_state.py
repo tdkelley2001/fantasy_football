@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from enum import StrEnum
+import hashlib
 import json
 from typing import Iterable
 
@@ -39,6 +40,12 @@ class IREligibility(StrEnum):
     ELIGIBLE = "eligible"
     INELIGIBLE = "ineligible"
     UNKNOWN = "unknown"
+
+
+class EvidenceBasis(StrEnum):
+    VERIFIED_SOURCE = "verified_source"
+    VALIDATED_FIXTURE = "validated_fixture"
+    APPROVED_ASSUMPTION = "approved_assumption"
 
 
 class TransactionPhase(StrEnum):
@@ -77,6 +84,9 @@ class ReleaseAuthorization:
     eligible_cycle_id: int
     resulting_status: AcquisitionAvailability
     source_id: str
+    condition: str
+    evidence_basis: EvidenceBasis
+    evidence_sha256: str
     clearance_at_utc: str | None = None
 
 
@@ -88,6 +98,33 @@ class IREligibilityEvidence:
     scoring_week: int
     eligibility: IREligibility
     source_id: str
+    condition: str
+    evidence_basis: EvidenceBasis
+    evidence_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class EligibilityEvidenceBundle:
+    source_id: str
+    evidence_basis: EvidenceBasis
+    payload_sha256: str
+    release_authorizations: tuple[ReleaseAuthorization, ...]
+    ir_determinations: tuple[IREligibilityEvidence, ...]
+
+
+# Evolving state is intentionally process-local and is not deserialized as an
+# authorization store. Keeping strong references prevents forged dataclass
+# instances (and object-id reuse) from crossing the validation boundary.
+_VALIDATED_ELIGIBILITY_OBJECTS: dict[int, object] = {}
+
+
+def _register_validated(item):
+    _VALIDATED_ELIGIBILITY_OBJECTS[id(item)] = item
+    return item
+
+
+def _is_validated(item: object) -> bool:
+    return _VALIDATED_ELIGIBILITY_OBJECTS.get(id(item)) is item
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +146,7 @@ class TransactionRecord:
     priority_before: tuple[int, ...]
     priority_after: tuple[int, ...]
     evidence_source_id: str | None
+    evidence_basis: EvidenceBasis | None
     assumption_ids: tuple[str, ...]
 
     @property
@@ -183,6 +221,117 @@ def _parse_utc(value: str, field: str) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         _fail(f"{field} must include a UTC offset")
     return parsed
+
+
+def validate_eligibility_evidence_artifact(
+    snapshot: LeagueSnapshot,
+    *,
+    source_id: str,
+    payload: bytes,
+) -> EligibilityEvidenceBundle:
+    """Validate one purpose-built eligibility artifact and mint trusted determinations.
+
+    No current ESPN response has a verified parser for these future facts. The
+    only accepted classification today is ``verified_by_tests`` for controlled,
+    sanitized fixtures. A future live provider must add its own source-specific
+    parser instead of relabeling an arbitrary response with this contract.
+    """
+
+    validate_snapshot(snapshot)
+    source = next((item for item in snapshot.sources if item.source_id == source_id), None)
+    if source is None:
+        _fail(f"eligibility evidence references unknown source {source_id!r}")
+    parameters = dict(source.parameters)
+    if source.view != "transaction_eligibility_evidence_v1":
+        _fail(f"source {source_id!r} is not a transaction eligibility evidence artifact")
+    if parameters.get("evidence_contract") != "transaction_eligibility_v1":
+        _fail(f"source {source_id!r} lacks the transaction eligibility evidence contract")
+    classification = parameters.get("evidence_classification")
+    if classification != "verified_by_tests":
+        _fail(
+            f"source {source_id!r} classification {classification!r} has no implemented trusted evidence parser"
+        )
+    digest = hashlib.sha256(payload).hexdigest()
+    if source.payload_sha256 is None or digest != source.payload_sha256:
+        _fail(f"source {source_id!r} eligibility payload checksum does not match canonical provenance")
+    try:
+        document = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        _fail(f"source {source_id!r} eligibility payload is malformed JSON")
+    if not isinstance(document, dict) or document.get("schema") != "transaction_eligibility_v1":
+        _fail(f"source {source_id!r} eligibility payload has an unsupported schema")
+    claims = document.get("claims")
+    if not isinstance(claims, list):
+        _fail(f"source {source_id!r} eligibility claims must be a list")
+
+    players = _player_map(snapshot)
+    releases: list[ReleaseAuthorization] = []
+    ir_items: list[IREligibilityEvidence] = []
+    keys: set[tuple[str, int, int]] = set()
+    for index, claim in enumerate(claims):
+        if not isinstance(claim, dict):
+            _fail(f"source {source_id!r} claim[{index}] must be an object")
+        kind = claim.get("kind")
+        player_id = claim.get("player_id")
+        if not isinstance(player_id, int) or isinstance(player_id, bool) or player_id not in players:
+            _fail(f"source {source_id!r} claim[{index}] has unknown or invalid player_id")
+        condition = claim.get("condition")
+        if not isinstance(condition, str) or not condition:
+            _fail(f"source {source_id!r} claim[{index}] requires a semantic condition")
+        if kind == "release":
+            cycle = claim.get("eligible_cycle_id")
+            if not isinstance(cycle, int) or isinstance(cycle, bool) or cycle < 0:
+                _fail(f"source {source_id!r} release claim[{index}] has invalid eligible_cycle_id")
+            if condition not in {"holding_period_completed", "waiver_clearance_observed"}:
+                _fail(f"source {source_id!r} release claim[{index}] has unsupported condition {condition!r}")
+            try:
+                resulting_status = AcquisitionAvailability(claim.get("resulting_status"))
+            except ValueError:
+                _fail(f"source {source_id!r} release claim[{index}] has invalid resulting_status")
+            if resulting_status not in {AcquisitionAvailability.FREE_AGENT, AcquisitionAvailability.WAIVERS}:
+                _fail(f"source {source_id!r} release claim[{index}] must resolve to free_agent or waivers")
+            clearance = claim.get("clearance_at_utc")
+            if clearance is not None:
+                if not isinstance(clearance, str):
+                    _fail(f"source {source_id!r} release claim[{index}] clearance must be a string or null")
+                _parse_utc(clearance, f"source {source_id!r} release claim[{index}] clearance_at_utc")
+            key = (kind, player_id, cycle)
+            if key in keys:
+                _fail(f"source {source_id!r} has duplicate release claim for player={player_id}, cycle={cycle}")
+            keys.add(key)
+            releases.append(_register_validated(ReleaseAuthorization(
+                player_id, cycle, resulting_status, source_id, condition,
+                EvidenceBasis.VALIDATED_FIXTURE, digest, clearance,
+            )))
+        elif kind == "ir":
+            week = claim.get("scoring_week")
+            if not isinstance(week, int) or isinstance(week, bool) or not (
+                snapshot.first_simulation_week <= week <= snapshot.final_simulation_week
+            ):
+                _fail(f"source {source_id!r} IR claim[{index}] has invalid scoring_week")
+            if condition != "future_ir_eligibility_observed":
+                _fail(f"source {source_id!r} IR claim[{index}] has unsupported condition {condition!r}")
+            try:
+                eligibility = IREligibility(claim.get("eligibility"))
+            except ValueError:
+                _fail(f"source {source_id!r} IR claim[{index}] has invalid eligibility")
+            key = (kind, player_id, week)
+            if key in keys:
+                _fail(f"source {source_id!r} has duplicate IR claim for player={player_id}, week={week}")
+            keys.add(key)
+            ir_items.append(_register_validated(IREligibilityEvidence(
+                player_id, week, eligibility, source_id, condition,
+                EvidenceBasis.VALIDATED_FIXTURE, digest,
+            )))
+        else:
+            _fail(f"source {source_id!r} claim[{index}] has unsupported kind {kind!r}")
+    return EligibilityEvidenceBundle(
+        source_id,
+        EvidenceBasis.VALIDATED_FIXTURE,
+        digest,
+        tuple(sorted(releases, key=lambda item: (item.player_id, item.eligible_cycle_id))),
+        tuple(sorted(ir_items, key=lambda item: (item.player_id, item.scoring_week))),
+    )
 
 
 def _assert_snapshot(state: EvolvingLeagueState, snapshot: LeagueSnapshot) -> None:
@@ -280,6 +429,16 @@ def validate_evolving_state(state: EvolvingLeagueState, snapshot: LeagueSnapshot
             _fail(f"strict IR evidence week={evidence.scoring_week} is outside the snapshot horizon")
         if not isinstance(evidence.eligibility, IREligibility):
             _fail("strict IR evidence eligibility is malformed")
+        if not _is_validated(evidence):
+            _fail(
+                f"strict IR evidence for player={evidence.player_id}, week={evidence.scoring_week} "
+                "did not cross the validated evidence boundary"
+            )
+        source = next(item for item in snapshot.sources if item.source_id == evidence.source_id)
+        if evidence.evidence_basis is not EvidenceBasis.VALIDATED_FIXTURE:
+            _fail("strict IR evidence has an unsupported evidence basis")
+        if source.payload_sha256 != evidence.evidence_sha256:
+            _fail("strict IR evidence checksum disagrees with source provenance")
     if tuple(record.sequence for record in state.ledger) != tuple(range(1, len(state.ledger) + 1)):
         _fail("transaction ledger sequences must be contiguous from one")
 
@@ -362,6 +521,7 @@ def _append(
     priority_before: tuple[int, ...] | None = None,
     priority_after: tuple[int, ...] | None = None,
     evidence_source_id: str | None = None,
+    evidence_basis: EvidenceBasis | None = None,
     assumption_ids: tuple[str, ...] = (),
 ) -> EvolvingLeagueState:
     record = TransactionRecord(
@@ -370,7 +530,7 @@ def _append(
         resulting_slot_id, prior_availability, resulting_availability,
         state.current_waiver_priority if priority_before is None else priority_before,
         state.current_waiver_priority if priority_after is None else priority_after,
-        evidence_source_id, assumption_ids,
+        evidence_source_id, evidence_basis, assumption_ids,
     )
     return replace(state, ledger=state.ledger + (record,))
 
@@ -465,6 +625,8 @@ def record_ir_eligibility_evidence(
     """Record an explicit player/week strict-mode determination without inventing one."""
 
     validate_evolving_state(state, snapshot)
+    if not _is_validated(evidence):
+        _fail("strict IR assertion was not produced by a validated evidence provider")
     if evidence.scoring_week != state.scoring_week:
         _fail(
             f"strict IR evidence week={evidence.scoring_week} does not match decision week={state.scoring_week}"
@@ -685,6 +847,10 @@ def activate_from_ir(
             _strict_ir_evidence_map(state)[player_id].source_id
             if state.ir_policy is IRPolicy.STRICT else None
         ),
+        evidence_basis=(
+            _strict_ir_evidence_map(state)[player_id].evidence_basis
+            if state.ir_policy is IRPolicy.STRICT else EvidenceBasis.APPROVED_ASSUMPTION
+        ),
         assumption_ids=(f"ir_policy:{state.ir_policy.value}",),
     )
     validate_evolving_state(result, snapshot)
@@ -779,6 +945,8 @@ def release_held_player(
     available = _availability_map(state).get(player_id)
     if available is None or available.status is not AcquisitionAvailability.HOLD:
         _fail(f"player {player_id} is not held")
+    if not _is_validated(authorization):
+        _fail("release assertion was not produced by a validated evidence provider")
     if authorization.player_id != player_id:
         _fail(
             f"release authorization player={authorization.player_id} does not match held player={player_id}"
@@ -791,6 +959,11 @@ def release_held_player(
         _fail("release authorization eligible_cycle_id must be a nonnegative integer")
     if authorization.source_id not in {item.source_id for item in snapshot.sources}:
         _fail(f"unknown release evidence source {authorization.source_id!r}")
+    source = next(item for item in snapshot.sources if item.source_id == authorization.source_id)
+    if authorization.evidence_basis is not EvidenceBasis.VALIDATED_FIXTURE:
+        _fail("release authorization has an unsupported evidence basis")
+    if source.payload_sha256 != authorization.evidence_sha256:
+        _fail("release authorization checksum disagrees with source provenance")
     if authorization.resulting_status not in {
         AcquisitionAvailability.FREE_AGENT, AcquisitionAvailability.WAIVERS
     }:
@@ -823,6 +996,7 @@ def release_held_player(
         action=TransactionAction.AVAILABILITY_RELEASE, team_id=None, player_id=player_id,
         prior_availability=available.status, resulting_availability=released.status,
         evidence_source_id=authorization.source_id,
+        evidence_basis=authorization.evidence_basis,
     )
     validate_evolving_state(result, snapshot)
     return result
