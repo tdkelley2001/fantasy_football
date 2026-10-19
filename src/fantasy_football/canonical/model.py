@@ -1,4 +1,4 @@
-"""Immutable, ESPN-independent canonical records for schema version 2."""
+"""Immutable, ESPN-independent canonical records for schema versions 2 and 3."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from enum import StrEnum
 from typing import TypeAlias
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+SUPPORTED_SCHEMA_VERSIONS = (2, 3)
 JsonScalar: TypeAlias = str | int | float | bool | None
 
 
@@ -193,6 +194,8 @@ class LeagueRules:
     championship: ChampionshipRules
     consolation: ConsolationRules
     interpretations: tuple[RuleInterpretation, ...]
+    undroppable_list_enabled: bool | None = None
+    undroppable_list_source_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +222,8 @@ class Player:
     nfl_team_id: int
     injury_status: str | None
     acquisition_status: str
+    is_undroppable: bool | None = None
+    undroppable_source_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

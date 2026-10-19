@@ -90,6 +90,14 @@ def canonical_snapshot() -> LeagueSnapshot:
             status=InterpretationStatus.UNDERSTOOD,
             source_id=source.source_id,
         ),
+        RuleInterpretation(
+            rule_id="undroppable_player_mapping",
+            raw_field="players[].player.droppable",
+            raw_value="boolean",
+            normalized_value="false_is_protected",
+            status=InterpretationStatus.UNDERSTOOD,
+            source_id=source.source_id,
+        ),
     )
     rules = LeagueRules(
         team_count=4,
@@ -110,6 +118,8 @@ def canonical_snapshot() -> LeagueSnapshot:
         championship=ChampionshipRules(True, 2, False, (PostseasonRound(1, 2),), "playoff_tie"),
         consolation=ConsolationRules(None, 2, (PostseasonRound(1, 2),), "consolation_structure"),
         interpretations=interpretations,
+        undroppable_list_enabled=True,
+        undroppable_list_source_id=source.source_id,
     )
     teams = (
         FantasyTeam(1, "Alpha", 8, 5, 0, 1300.25, 1200.0, 1, 1, 1, None),
@@ -118,11 +128,11 @@ def canonical_snapshot() -> LeagueSnapshot:
         FantasyTeam(4, "Delta", 5, 8, 0, 1150.0, 1300.0, 4, 4, 4, None),
     )
     players = (
-        Player(-101, "Defense A", 16, (16, 20), 1, None, "ONTEAM"),
-        Player(1, "Quarterback A", 1, (0, 20, 21, 25), 1, "ACTIVE", "ONTEAM"),
-        Player(2, "Quarterback B", 1, (0, 20), 2, "QUESTIONABLE", "ONTEAM"),
-        Player(3, "Unassigned Player", 1, (0, 20), 0, None, "FREEAGENT"),
-        Player(4, "Available Player", 1, (0, 20), 3, "ACTIVE", "WAIVERS"),
+        Player(-101, "Defense A", 16, (16, 20), 1, None, "ONTEAM", False, source.source_id),
+        Player(1, "Quarterback A", 1, (0, 20, 21, 25), 1, "ACTIVE", "ONTEAM", True, source.source_id),
+        Player(2, "Quarterback B", 1, (0, 20), 2, "QUESTIONABLE", "ONTEAM", False, source.source_id),
+        Player(3, "Unassigned Player", 1, (0, 20), 0, None, "FREEAGENT", False, source.source_id),
+        Player(4, "Available Player", 1, (0, 20), 3, "ACTIVE", "WAIVERS", None, None),
     )
     rosters = (
         RosterEntry(-101, 1, 16, 1),

@@ -1,4 +1,4 @@
-"""Canonical snapshot contracts and deterministic schema-v2 serialization."""
+"""Canonical snapshot contracts and deterministic version-aware serialization."""
 
 from fantasy_football.canonical.model import *  # noqa: F403
 from fantasy_football.canonical.serialization import snapshot_from_json, snapshot_to_json

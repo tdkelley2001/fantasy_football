@@ -36,6 +36,7 @@ def _player(player_id: int, status: str, owner: int, value: float | None, week: 
             "eligibleSlots": slots,
             "proTeamId": abs(player_id) % 32 + 1,
             "injuryStatus": "ACTIVE",
+            "droppable": player_id != 2,
             "stats": stats,
         },
     }
@@ -88,6 +89,7 @@ def league_payload() -> dict:
                 "lineupLocktimeType": "INDIVIDUAL_GAME",
                 "rosterLocktimeType": "INDIVIDUAL_GAME",
                 "moveLimit": -1,
+                "isUsingUndroppableList": True,
             },
             "scoringSettings": {
                 "scoringType": "H2H_POINTS",

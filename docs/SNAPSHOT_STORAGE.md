@@ -4,7 +4,7 @@
 
 M1.3 persistence and M1.5 read-only snapshot management are complete. `fantasy_football.snapshot_store` persists validated M1.2 adapter results in one private local SQLite database. The exact deterministic canonical JSON bytes are the sole authoritative normalized snapshot representation. SQL does not duplicate teams, players, player-weeks, rosters, rules, or matchups as competing authoritative records.
 
-Canonical document schema version and database schema version are independent. The current supported versions are canonical schema **2** and SQLite schema **1**. Unsupported versions fail explicitly; the store does not silently migrate or rewrite documents.
+Canonical document schema version and database schema version are independent. New publications use canonical schema **3**, version-aware reads retain canonical schema **2**, and SQLite remains schema **1**. Unsupported versions fail explicitly; the store does not silently migrate or rewrite documents.
 
 ## Database schema
 
@@ -19,7 +19,9 @@ Indexes support deterministic newest selection by `(league_id, season, published
 
 ## Identity, serialization, and checksums
 
-Each publication attempt that reaches persistence receives a newly generated UUID. It is not derived from content, so identical refreshes remain separately retained. The UUID is applied immutably to the final `LeagueSnapshot`; that identified snapshot is validated and serialized with the schema-v2 serializer before the write transaction. SHA-256 covers the exact UTF-8 canonical JSON bytes, including the UUID.
+Each publication attempt that reaches persistence receives a newly generated UUID. It is not derived from content, so identical refreshes remain separately retained. The UUID is applied immutably to the final `LeagueSnapshot`; new publication requires schema v3 and serialization occurs before the write transaction. SHA-256 covers the exact UTF-8 canonical JSON bytes, including the UUID.
+
+Existing v2 rows, canonical bytes, publication IDs, checksums, and raw evidence are never rewritten. The same SQLite-v1 layout stores both document versions because the canonical version is already explicit in metadata and JSON. Loading v2 reconstructs the historical typed contract and reserializes byte-for-byte without adding v3 protection fields. Its previously supported inspection and reproducibility behavior remains available, while automatic-drop authorization rejects it precisely because it lacks player-level protection evidence. No database migration is required.
 
 The canonical serializer determines collection and key ordering. Persistence decodes and re-encodes the prepared document before publication to prove deterministic byte round-tripping. Retrieval and publication timestamps remain distinct, and publication cannot precede retrieval completion.
 
@@ -81,3 +83,5 @@ Credential-free fixtures verify successful publish/reopen/round-trip, raw missin
 At M1.3 completion, the credential-free repository suite passed **210 tests**. M1.4 increased it to **223 tests**. M1.5 completes M1 with **235 passing tests**, including multiple league/season selection, deterministic listing/JSON, privacy, opt-in detail, no-network behavior, repeated byte-identical loads, corruption, explicit database verification, and read-only nonmutation. The bounded M1.3 authenticated smoke test retrieved the already accepted live league horizon, published a new UUID to an ignored temporary database, closed and reopened it, then verified a 3,845,168-byte canonical document, 1,052 players, 11,572 player-weeks, observed eligibility slot 25, and all 63 captured source responses. The private temporary database was removed after verification and was not committed.
 
 M1 does not implement migrations, snapshot deletion, relational analytical queries, simulation compilation, background refresh, scheduled collection, or a dashboard. Detailed CLI output is intentionally small in scope rather than a query language.
+
+M2.3b adds canonical schema-v3 publication and historical v2 read compatibility without changing SQLite schema 1. The complete credential-free repository suite passed 319 tests, including a temporary historical-v2 database fixture whose canonical bytes remained identical across load and serialization and a new-publication gate rejecting v2 candidates. This is version-aware reading, not an in-place migration.

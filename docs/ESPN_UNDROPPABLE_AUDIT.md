@@ -77,4 +77,10 @@ Affected M2.3b components are `canonical/model.py`, validation, serialization, a
 
 Credential-free tests cover enabled, disabled, missing, malformed, protected, explicitly droppable, unknown, incomplete, and contradictory evidence. Fixture tests prove parser behavior only. The 18 October authenticated run establishes the live counts above.
 
-The remaining direct verification method is simple and bounded: locally identify one raw `droppable=false` and one raw `true` rostered player, then confirm “Can't Drop” versus an available Drop action in the ESPN interface without committing the identities. Until review, this limitation must remain visible in the M2.3b handoff.
+## M2.3b follow-up — 18 October 2026
+
+Official ESPN documentation was rechecked and confirms that players on the Undroppable Players List cannot be sent to waivers/free agency and display “Can't Drop.” The authenticated read-only source continues to provide complete raw Boolean coverage, but the available tooling does not expose the authenticated interactive player card/drop control. No individual private `droppable=false` and `droppable=true` records were correlated directly to those UI states.
+
+Therefore the exact raw polarity mapping remains **Unverified**, not verified live. Schema v3 retains the proposed inversion and exact source provenance alongside an `unverified` `undroppable_player_mapping` interpretation. The M2.3b transaction gate refuses automatic drops in enabled-list leagues until that interpretation is explicitly approved or independently corroborated. Fixture tests using an `understood` interpretation verify legality behavior only; they are not live semantic evidence.
+
+The remaining direct verification method is simple and bounded: locally identify one raw `droppable=false` and one raw `true` rostered player, then confirm “Can't Drop” versus an available Drop action in the ESPN interface without committing the identities.

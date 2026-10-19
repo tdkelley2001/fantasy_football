@@ -1,4 +1,4 @@
-"""Deterministic, human-inspectable JSON for canonical schema version 2."""
+"""Deterministic, human-inspectable JSON for supported canonical schemas."""
 
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ from fantasy_football.canonical.model import (
     RuleGap,
     RuleInterpretation,
     SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
     ScoringRule,
     SlotKind,
     SourceReference,
@@ -101,6 +102,12 @@ def snapshot_to_json(snapshot: LeagueSnapshot) -> str:
 
     validate_snapshot(snapshot)
     data = _encode(snapshot)
+    if snapshot.schema_version == 2:
+        data["rules"].pop("undroppable_list_enabled", None)
+        data["rules"].pop("undroppable_list_source_id", None)
+        for player in data["players"]:
+            player.pop("is_undroppable", None)
+            player.pop("undroppable_source_id", None)
     _sort_records(data)
     return json.dumps(data, indent=2, sort_keys=True, allow_nan=False) + "\n"
 
@@ -170,7 +177,7 @@ def _round(data: Mapping[str, Any]) -> PostseasonRound:
     return PostseasonRound(round_number=data["round_number"], matchup_period_id=data["matchup_period_id"])
 
 
-def _rules(data: Mapping[str, Any]) -> LeagueRules:
+def _rules(data: Mapping[str, Any], *, schema_version: int) -> LeagueRules:
     acquisition = _mapping(data["acquisition"], "rules.acquisition")
     trades = _mapping(data["trades"], "rules.trades")
     standings = _mapping(data["standings"], "rules.standings")
@@ -200,6 +207,8 @@ def _rules(data: Mapping[str, Any]) -> LeagueRules:
             enabled=consolation.get("enabled"), participant_count=consolation.get("participant_count"),
             rounds=_records(consolation["rounds"], "rules.consolation.rounds", _round), structure_rule_id=consolation.get("structure_rule_id")),
         interpretations=_records(data["interpretations"], "rules.interpretations", _interpretation),
+        undroppable_list_enabled=data.get("undroppable_list_enabled") if schema_version >= 3 else None,
+        undroppable_list_source_id=data.get("undroppable_list_source_id") if schema_version >= 3 else None,
     )
 
 
@@ -213,12 +222,14 @@ def _decode(data: Mapping[str, Any]) -> LeagueSnapshot:
         lineup_slot_namespace=LineupSlotNamespace(
             observed_slot_ids=tuple(_mapping(data["lineup_slot_namespace"], "lineup_slot_namespace")["observed_slot_ids"])
         ),
-        rules=_rules(_mapping(data["rules"], "rules")),
+        rules=_rules(_mapping(data["rules"], "rules"), schema_version=data["schema_version"]),
         teams=_records(data["teams"], "teams", lambda item: FantasyTeam(**item)),
         players=_records(data["players"], "players", lambda item: Player(
             player_id=item["player_id"], display_name=item.get("display_name"), default_position_id=item["default_position_id"],
             eligible_lineup_slot_ids=tuple(item["eligible_lineup_slot_ids"]), nfl_team_id=item["nfl_team_id"],
-            injury_status=item.get("injury_status"), acquisition_status=item["acquisition_status"])),
+            injury_status=item.get("injury_status"), acquisition_status=item["acquisition_status"],
+            is_undroppable=item.get("is_undroppable") if data["schema_version"] >= 3 else None,
+            undroppable_source_id=item.get("undroppable_source_id") if data["schema_version"] >= 3 else None)),
         roster_entries=_records(data["roster_entries"], "roster_entries", lambda item: RosterEntry(**item)),
         player_weeks=_records(data["player_weeks"], "player_weeks", lambda item: PlayerWeek(
             player_id=item["player_id"], season=item["season"], scoring_week=item["scoring_week"], raw_projection=item.get("raw_projection"),
@@ -253,8 +264,25 @@ def snapshot_from_json(payload: str) -> LeagueSnapshot:
         raise CanonicalSerializationError(f"invalid canonical JSON: {exc.msg}") from exc
     data = _mapping(raw, "snapshot")
     version = data.get("schema_version")
-    if version != SCHEMA_VERSION:
-        raise CanonicalSerializationError(f"unsupported schema_version={version!r}; expected {SCHEMA_VERSION}")
+    if version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise CanonicalSerializationError(
+            f"unsupported schema_version={version!r}; expected one of {SUPPORTED_SCHEMA_VERSIONS}"
+        )
+    rules_data = _mapping(data.get("rules"), "rules")
+    player_rows = _list(data.get("players"), "players")
+    v3_rule_fields = {"undroppable_list_enabled", "undroppable_list_source_id"}
+    v3_player_fields = {"is_undroppable", "undroppable_source_id"}
+    if version == 2:
+        if v3_rule_fields.intersection(rules_data) or any(
+            v3_player_fields.intersection(_mapping(item, f"players[{index}]"))
+            for index, item in enumerate(player_rows)
+        ):
+            raise CanonicalSerializationError("schema-v2 document contains schema-v3 protection fields")
+    elif not v3_rule_fields.issubset(rules_data) or any(
+        not v3_player_fields.issubset(_mapping(item, f"players[{index}]"))
+        for index, item in enumerate(player_rows)
+    ):
+        raise CanonicalSerializationError("schema-v3 document is missing required protection fields")
     try:
         snapshot = _decode(data)
         validate_snapshot(snapshot)
@@ -263,5 +291,5 @@ def snapshot_from_json(payload: str) -> LeagueSnapshot:
     except CanonicalValidationError:
         raise
     except (KeyError, TypeError, ValueError) as exc:
-        raise CanonicalSerializationError(f"malformed schema-v{SCHEMA_VERSION} snapshot: {exc}") from exc
+        raise CanonicalSerializationError(f"malformed schema-v{version} snapshot: {exc}") from exc
     return snapshot

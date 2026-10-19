@@ -1,8 +1,8 @@
-# M1.2 ESPN-to-Canonical Adapter
+# ESPN-to-Canonical Adapter — Canonical Schema v3
 
 ## Status
 
-M1.2 is **COMPLETE as of 17 October 2026**. The targeted M1.1 amendment introduced canonical schema version 2, preserving an observed eligibility-slot namespace separately from configured league capacities. The credential-free suite and repeated authenticated read-only live acceptance both passed.
+M1.2 is **COMPLETE as of 17 October 2026**. M2.3b advances new adapter output to canonical schema version 3 while retaining the schema-v2 eligibility-slot correction and historical read support.
 
 On 17 October 2026, a read-only live run used explicit `first_simulation_week=8` because scoring week 7 was already active. The adapter retrieved the current league, current player authority, future week pages, and NFL calendar sequentially. Translation stopped before producing a snapshot because 97 players exposed raw eligible lineup-slot ID `25`, while `settings.rosterSettings.lineupSlotCounts` defined only IDs `0–24`.
 
@@ -42,6 +42,8 @@ The adapter implements the approved canonical policy without using `espn-api`'s 
 ## Rule translation and manual configuration
 
 Verified raw scoring, roster, acquisition, trade, standings, championship, and consolation fields translate into dynamic canonical rule records. Unknown or unresolved operational semantics remain `unverified`, `unsupported`, or `missing`; no waiver, tie, or consolation default is introduced.
+
+Schema v3 also reads `settings.rosterSettings.isUsingUndroppableList` and raw current-player `player.droppable`. League and player values are nullable and carry exact request source IDs. Current pool, roster copy, and future views must agree on presence and known Boolean value. Raw `droppable=true` is represented as canonical `is_undroppable=false`, and raw `false` as `true`; absence stays null. The adapter retains `undroppable_player_mapping` as **unverified** because no private individual raw record was directly correlated to the ESPN “Can't Drop” UI. Consequently, live v3 ingestion preserves the proposed mapping but deterministic automatic-drop authorization remains blocked pending approval/corroboration.
 
 Optional YAML configuration is restricted to audited gaps and requires:
 
@@ -85,7 +87,7 @@ Adversarial tests cover incomplete and overlapping pages, inconsistent universes
 
 The approved correction distinguishes the **observed raw lineup-slot identifier namespace** from **configured lineup-slot capacities**. `LeagueSnapshot.lineup_slot_namespace` is derived exactly from the union of player eligibility evidence. `LineupSlotRule` continues to mean an explicitly present ESPN capacity. Player eligibility validates against the observed namespace; roster occupancy continues to require an explicitly configured positive-capacity slot.
 
-The serialized contract is now schema version 2. Schema-v1 documents are rejected rather than silently interpreted because they lack the namespace field. No universal ESPN slot mapping is introduced; meanings remain unknown unless separately verified.
+Schema v2 introduced this slot namespace. Schema v3 retains it unchanged and adds undroppable evidence. Schema v1 remains rejected. No universal ESPN slot mapping is introduced; meanings remain unknown unless separately verified.
 
 ## Live acceptance result
 

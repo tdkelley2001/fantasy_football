@@ -1,4 +1,4 @@
-"""Read-only ESPN retrieval and pure translation into canonical schema v2."""
+"""Read-only ESPN retrieval and pure translation into canonical schema v3."""
 
 from __future__ import annotations
 
@@ -488,6 +488,12 @@ def _translate_rules(
     acquisition = _mapping(root.get("acquisitionSettings"), "settings.acquisitionSettings")
     trades = _mapping(root.get("tradeSettings"), "settings.tradeSettings")
     schedule = _mapping(root.get("scheduleSettings"), "settings.scheduleSettings")
+    undroppable_raw = roster.get("isUsingUndroppableList")
+    undroppable_enabled = (
+        None
+        if "isUsingUndroppableList" not in roster
+        else _bool(undroppable_raw, "roster settings", "isUsingUndroppableList")
+    )
 
     slots: list[LineupSlotRule] = []
     for raw_id, value in _mapping(roster.get("lineupSlotCounts"), "rosterSettings.lineupSlotCounts").items():
@@ -674,6 +680,8 @@ def _translate_rules(
             structure_rule_id="consolation_structure",
         ),
         interpretations=interpretations,
+        undroppable_list_enabled=undroppable_enabled,
+        undroppable_list_source_id=source_id if undroppable_enabled is not None else None,
     )
     return rules, gaps
 
@@ -798,6 +806,11 @@ def _translate_players_and_weeks(
     bundle: EspnSourceBundle,
 ) -> tuple[tuple[Player, ...], tuple[PlayerWeek, ...], tuple[int, ...]]:
     current, current_lengths = _parse_pool_pages(bundle.current_player_pages, label="current player pool")
+    current_source_by_player: dict[int, str] = {}
+    for page in bundle.current_player_pages:
+        for value in _list(page.response.payload.get("players"), f"current offset={page.offset}.players"):
+            player_id = _int(_mapping(value, "current player wrapper").get("id"), "current player wrapper", "id", nonzero=True)
+            current_source_by_player[player_id] = page.response.source_id
     weeks = tuple(range(bundle.first_simulation_week, _bundle_final_week(bundle) + 1))
     pages_by_week: dict[int, list[PlayerPage]] = {week: [] for week in weeks}
     for page in bundle.future_player_pages:
@@ -844,7 +857,19 @@ def _translate_players_and_weeks(
             slots,
             _int(player.get("proTeamId"), f"current player_id={player_id}", "proTeamId", minimum=0),
         )
-        players.append(Player(player_id, name, identity[0], identity[1], identity[2], injury, status))
+        if "droppable" not in player:
+            is_undroppable = None
+            protection_source_id = None
+        else:
+            droppable = _bool(player.get("droppable"), f"current player_id={player_id}", "player.droppable")
+            is_undroppable = not droppable
+            protection_source_id = current_source_by_player[player_id]
+        players.append(
+            Player(
+                player_id, name, identity[0], identity[1], identity[2], injury, status,
+                is_undroppable, protection_source_id,
+            )
+        )
         for week in weeks:
             future_wrapper = future[week][player_id]
             future_player = _mapping(future_wrapper.get("player"), f"future player_id={player_id}, week={week}.player")
@@ -855,6 +880,20 @@ def _translate_players_and_weeks(
             )
             if future_identity != identity:
                 raise EspnAdapterError(f"future player_id={player_id}, week={week}: identity or eligibility conflicts with current source")
+            if "droppable" in future_player:
+                future_droppable = _bool(
+                    future_player.get("droppable"),
+                    f"future player_id={player_id}, week={week}",
+                    "player.droppable",
+                )
+                if is_undroppable is None or is_undroppable == future_droppable:
+                    raise EspnAdapterError(
+                        f"future player_id={player_id}, week={week}: player.droppable conflicts with current source"
+                    )
+            elif is_undroppable is not None:
+                raise EspnAdapterError(
+                    f"future player_id={player_id}, week={week}: player.droppable is missing but current source is known"
+                )
             raw_projection = _player_projection(future_wrapper, player_id=player_id, season=bundle.season, week=week)
             weeks_result.append(_projection_record(player_id, bundle.season, week, raw_projection, source_by_player_week[(player_id, week)]))
     return tuple(players), tuple(sorted(weeks_result, key=lambda item: (item.player_id, item.scoring_week))), current_lengths
@@ -1030,6 +1069,29 @@ def _ownership_reconciliation(
         )
 
 
+def _undroppable_roster_reconciliation(
+    players: Sequence[Player], raw: Mapping[str, Any]
+) -> None:
+    canonical = {item.player_id: item.is_undroppable for item in players}
+    for team_index, raw_team in enumerate(_list(raw.get("teams"), "league.teams")):
+        team = _mapping(raw_team, f"teams[{team_index}]")
+        roster = _mapping(team.get("roster"), f"teams[{team_index}].roster")
+        for entry_index, raw_entry in enumerate(_list(roster.get("entries"), "roster.entries")):
+            entry = _mapping(raw_entry, f"roster.entries[{entry_index}]")
+            player_id = _int(entry.get("playerId"), "roster entry", "playerId", nonzero=True)
+            pool = _mapping(entry.get("playerPoolEntry"), f"roster player_id={player_id}.playerPoolEntry")
+            player = _mapping(pool.get("player"), f"roster player_id={player_id}.player")
+            observed = None
+            if "droppable" in player:
+                observed = not _bool(
+                    player.get("droppable"), f"roster player_id={player_id}", "player.droppable"
+                )
+            if canonical.get(player_id) != observed:
+                raise EspnAdapterError(
+                    f"roster player_id={player_id}: player.droppable conflicts with current player pool"
+                )
+
+
 def translate_bundle(
     bundle: EspnSourceBundle,
     *,
@@ -1067,6 +1129,21 @@ def translate_bundle(
     teams = _translate_teams(initial, expected_count=rules.team_count)
     rosters = _translate_rosters(initial)
     players, player_weeks, page_lengths = _translate_players_and_weeks(bundle)
+    _undroppable_roster_reconciliation(players, initial)
+    mapping_source_id = bundle.current_player_pages[0].response.source_id
+    rules = replace(
+        rules,
+        interpretations=rules.interpretations + (
+            RuleInterpretation(
+                "undroppable_player_mapping",
+                "players[].player.droppable",
+                "boolean",
+                None,
+                InterpretationStatus.UNVERIFIED,
+                mapping_source_id,
+            ),
+        ),
+    )
     observed_slot_ids = tuple(sorted({
         slot_id for player in players for slot_id in player.eligible_lineup_slot_ids
     }))
@@ -1129,7 +1206,7 @@ def translate_bundle(
         rule_gaps=gaps,
         validation=ValidationMetadata(
             validated_at_utc=bundle.retrieval_finished_at_utc,
-            validator_version="m1.2-schema-v2",
+            validator_version="m2.3b-schema-v3",
             warnings=warnings,
         ),
     )

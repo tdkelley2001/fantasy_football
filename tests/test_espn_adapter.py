@@ -47,6 +47,22 @@ def test_translate_sanitized_bundle_to_complete_valid_snapshot() -> None:
     assert interpretations["playoff_tie"].normalized_value == "higher_seed"
     assert {item.gap_id for item in snapshot.rule_gaps}.isdisjoint({"regular_tie", "playoff_tie"})
     assert len(result.raw_sources) == 12
+    assert snapshot.schema_version == 3
+    assert snapshot.rules.undroppable_list_enabled is True
+    assert snapshot.rules.undroppable_list_source_id == "league-initial"
+    protection = {item.player_id: item.is_undroppable for item in snapshot.players}
+    assert protection[2] is True
+    assert protection[5] is False
+    assert interpretations["undroppable_player_mapping"].status is InterpretationStatus.UNVERIFIED
+    assert interpretations["undroppable_player_mapping"].source_id.startswith("player-current-")
+
+
+def test_contradictory_roster_undroppable_evidence_fails() -> None:
+    bundle = source_bundle()
+    player = bundle.league_initial.payload["teams"][0]["roster"]["entries"][0]["playerPoolEntry"]["player"]
+    player["droppable"] = not player["droppable"]
+    with pytest.raises(EspnAdapterError, match="player.droppable conflicts"):
+        translate_bundle(bundle)
 
 
 def test_identical_source_bundle_translates_deterministically() -> None:
