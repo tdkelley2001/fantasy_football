@@ -13,7 +13,10 @@ from fantasy_football.canonical.model import (
 from fantasy_football.canonical.serialization import snapshot_from_json, snapshot_to_json
 from fantasy_football.evolving_state import (
     AcquisitionAvailability,
+    IREligibility,
+    IREligibilityEvidence,
     IRPolicy,
+    ReleaseAuthorization,
     TransactionPhase,
     TransactionStateError,
     acquisition_blocking_ir_players,
@@ -25,6 +28,7 @@ from fantasy_football.evolving_state import (
     drop_player,
     initialize_evolving_state,
     place_on_ir,
+    record_ir_eligibility_evidence,
     release_held_player,
     replace_player,
     reset_waiver_priority,
@@ -207,11 +211,15 @@ def test_projection_policy_blocks_acquisition_until_explicit_activation() -> Non
     assert acquisition_blocking_ir_players(strict, snapshot) == ()
     with pytest.raises(TransactionStateError, match="strict IR acquisition legality is unresolved"):
         add_player(strict, snapshot, team_id=1, player_id=3, lineup_slot_id=20)
-    with pytest.raises(TransactionStateError, match="separately verified evidence source"):
+    with pytest.raises(TransactionStateError, match="activation eligibility is unresolved"):
         activate_from_ir(strict, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
+    strict = record_ir_eligibility_evidence(
+        strict,
+        snapshot,
+        IREligibilityEvidence(1, 15, IREligibility.INELIGIBLE, snapshot.sources[0].source_id),
+    )
     strict_activated = activate_from_ir(
         strict, snapshot, team_id=1, player_id=1, ordinary_slot_id=0,
-        evidence_source_id=snapshot.sources[0].source_id,
     )
     assert next(item for item in strict_activated.roster_entries if item.player_id == 1).lineup_slot_id == 0
     activated = activate_from_ir(placed, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
@@ -275,14 +283,124 @@ def test_waiver_priority_transitions_preserve_initial_frozen_order() -> None:
         reset_waiver_priority(moved, snapshot, ordered_team_ids=(1, 1, 2, 3))
 
 
-def test_holding_requires_explicit_evidence_to_release() -> None:
+def test_holding_requires_player_and_boundary_specific_authorization() -> None:
     snapshot = canonical_snapshot()
     dropped = drop_player(_state(snapshot), snapshot, team_id=1, player_id=-101)
+    source_id = snapshot.sources[0].source_id
+    with pytest.raises(TransactionStateError, match="prohibited acquisition cycle"):
+        release_held_player(
+            dropped,
+            snapshot,
+            player_id=-101,
+            authorization=ReleaseAuthorization(
+                -101, 1, AcquisitionAvailability.FREE_AGENT, source_id
+            ),
+        )
     advanced = advance_cycle(dropped, snapshot, cycle_id=2, scoring_week=16)
     assert {item.player_id: item.status for item in advanced.availability}[-101] is AcquisitionAvailability.HOLD
-    with pytest.raises(TransactionStateError, match="unknown release evidence"):
-        release_held_player(advanced, snapshot, player_id=-101, evidence_source_id="missing")
+    with pytest.raises(TransactionStateError, match="does not match held player"):
+        release_held_player(
+            advanced,
+            snapshot,
+            player_id=-101,
+            authorization=ReleaseAuthorization(3, 2, AcquisitionAvailability.FREE_AGENT, source_id),
+        )
     released = release_held_player(
-        advanced, snapshot, player_id=-101, evidence_source_id=snapshot.sources[0].source_id
+        advanced,
+        snapshot,
+        player_id=-101,
+        authorization=ReleaseAuthorization(
+            -101, 2, AcquisitionAvailability.WAIVERS, source_id
+        ),
     )
-    assert {item.player_id: item.status for item in released.availability}[-101] is AcquisitionAvailability.FREE_AGENT
+    assert {item.player_id: item.status for item in released.availability}[-101] is AcquisitionAvailability.WAIVERS
+
+
+def test_known_clearance_timestamp_cannot_be_bypassed() -> None:
+    snapshot = canonical_snapshot()
+    dropped = drop_player(_state(snapshot), snapshot, team_id=1, player_id=-101)
+    held = next(item for item in dropped.availability if item.player_id == -101)
+    held = replace(held, clearance_at_utc="2026-12-24T12:00:00+00:00", hold_until_cycle=2)
+    dropped = replace(
+        dropped,
+        availability=tuple(held if item.player_id == -101 else item for item in dropped.availability),
+    )
+    advanced = advance_cycle(dropped, snapshot, cycle_id=2, scoring_week=16)
+    authorization = ReleaseAuthorization(
+        -101, 2, AcquisitionAvailability.FREE_AGENT, snapshot.sources[0].source_id,
+        "2026-12-24T12:00:00+00:00",
+    )
+    with pytest.raises(TransactionStateError, match="before clearance"):
+        release_held_player(
+            advanced, snapshot, player_id=-101, authorization=authorization,
+            boundary_at_utc="2026-12-24T11:59:59+00:00",
+        )
+    assert advanced.ledger == dropped.ledger + advanced.ledger[-1:]
+
+
+def test_strict_ir_evidence_controls_activation_and_acquisition_independently() -> None:
+    snapshot = _player(canonical_snapshot(), 1, injury_status="OUT")
+    placed = place_on_ir(_state(snapshot, policy=IRPolicy.STRICT), snapshot, team_id=1, player_id=1, reserve_slot_id=21)
+    source_id = snapshot.sources[0].source_id
+    unrelated = record_ir_eligibility_evidence(
+        placed, snapshot, IREligibilityEvidence(2, 15, IREligibility.INELIGIBLE, source_id)
+    )
+    with pytest.raises(TransactionStateError, match="player=1"):
+        activate_from_ir(unrelated, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
+
+    eligible = record_ir_eligibility_evidence(
+        placed, snapshot, IREligibilityEvidence(1, 15, IREligibility.ELIGIBLE, source_id)
+    )
+    added = add_player(eligible, snapshot, team_id=1, player_id=3, lineup_slot_id=20)
+    assert any(item.player_id == 3 for item in added.roster_entries)
+    with pytest.raises(TransactionStateError, match="remains IR-eligible"):
+        activate_from_ir(eligible, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
+
+    ineligible = record_ir_eligibility_evidence(
+        placed, snapshot, IREligibilityEvidence(1, 15, IREligibility.INELIGIBLE, source_id)
+    )
+    with pytest.raises(TransactionStateError, match="IR-ineligible"):
+        add_player(ineligible, snapshot, team_id=1, player_id=3, lineup_slot_id=20)
+    activated = activate_from_ir(ineligible, snapshot, team_id=1, player_id=1, ordinary_slot_id=0)
+    assert next(item for item in activated.roster_entries if item.player_id == 1).lineup_slot_id == 0
+
+
+def test_season_and_matchup_acquisition_limits_are_independent_and_period_aware() -> None:
+    snapshot = canonical_snapshot()
+    acquisition = replace(snapshot.rules.acquisition, season_limit=3, matchup_limit=1)
+    snapshot = replace(snapshot, rules=replace(snapshot.rules, acquisition=acquisition))
+    counts = {team_id: 0 for team_id in (1, 2, 3, 4)}
+    state = initialize_evolving_state(
+        snapshot,
+        scoring_week=15,
+        ir_policy=IRPolicy.PROJECTION_BASED,
+        season_acquisition_counts=counts,
+        matchup_acquisition_counts=counts,
+    )
+    added = add_player(state, snapshot, team_id=1, player_id=3, lineup_slot_id=20)
+    with pytest.raises(TransactionStateError, match="matchup-period acquisition limit"):
+        add_player(added, snapshot, team_id=1, player_id=4, lineup_slot_id=20, phase=TransactionPhase.WAIVER)
+    week16 = advance_cycle(added, snapshot, cycle_id=2, scoring_week=16)
+    assert dict(week16.matchup_acquisition_counts)[1] == 0
+    week16 = replace(
+        week16,
+        season_acquisition_counts=tuple((team, 3 if team == 2 else count) for team, count in week16.season_acquisition_counts),
+    )
+    with pytest.raises(TransactionStateError, match="season acquisition limit"):
+        add_player(week16, snapshot, team_id=2, player_id=4, lineup_slot_id=20, phase=TransactionPhase.WAIVER)
+    assert dict(week16.matchup_acquisition_counts)[2] == 0
+    week17 = advance_cycle(week16, snapshot, cycle_id=3, scoring_week=17)
+    assert week17.matchup_acquisition_counts == week16.matchup_acquisition_counts
+    assert week17.season_acquisition_counts == week16.season_acquisition_counts
+
+
+def test_unknown_initial_counts_block_only_finite_limit_authorization() -> None:
+    snapshot = canonical_snapshot()
+    snapshot = replace(
+        snapshot,
+        rules=replace(snapshot.rules, acquisition=replace(snapshot.rules.acquisition, season_limit=10)),
+    )
+    state = _state(snapshot)
+    assert dict(state.season_acquisition_counts)[1] is None
+    with pytest.raises(TransactionStateError, match="season acquisition count is unknown"):
+        add_player(state, snapshot, team_id=1, player_id=3, lineup_slot_id=20)

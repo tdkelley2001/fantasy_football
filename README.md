@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1, M2.2, and M2.3a-b are complete. M2.3c and later work packages remain **NOT STARTED**. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. Immutable evolving roster/transaction legality exists, but transaction valuation, automatic selection, and weekly waiver-cycle processing do not. Simulator-specific rule gaps remain preserved without defaults.
+M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1, M2.2, and M2.3a are complete; the corrected M2.3b implementation is awaiting review. M2.3c and later work packages remain **NOT STARTED**. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. Immutable evolving roster/transaction legality exists, but transaction valuation, automatic selection, and weekly waiver-cycle processing do not. Simulator-specific rule gaps remain preserved without defaults.
 
 ## Authoritative documentation
 
@@ -220,7 +220,7 @@ lineup = optimize_starting_lineup(
 )
 ```
 
-Available primitives cover explicit add, drop, compound replacement, IR placement/activation, waiver-priority transitions, evidence-backed hold release, and cycle advancement. They validate legality but never choose a transaction. Raw live `player.droppable` polarity remains unverified against an individual ESPN UI control, so automatic drops from current live-adapter snapshots fail until that interpretation is reviewed or corroborated. M2.3c valuation and M2.3d cycle orchestration are not implemented.
+Available primitives cover explicit add, drop, compound replacement, IR placement/activation, waiver-priority transitions, semantically authorized hold release, and cycle advancement. Release authorization is player- and boundary-specific; strict IR evidence is player- and week-specific; and season and matchup-period acquisition limits are counted independently. Matchup counters reset only when the canonical matchup period changes, not on every scoring week. They validate legality but never choose a transaction. Raw live `player.droppable` polarity remains unverified against an individual ESPN UI control, so automatic drops from current live-adapter snapshots fail until that interpretation is reviewed or corroborated. Exact ESPN clearance timing and future strict-IR eligibility also remain unresolved where no evidence is supplied. M2.3c valuation and M2.3d cycle orchestration are not implemented.
 
 ## Historical implementation
 
