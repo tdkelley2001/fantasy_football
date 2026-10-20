@@ -59,6 +59,15 @@ class OptimizedLineup:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateLineup:
+    """Exact assignment over an explicitly supplied player universe."""
+
+    assignments: tuple[LineupAssignment, ...]
+    vacant_slots: tuple[StartingSlot, ...]
+    total_projected_points: float
+
+
+@dataclass(frozen=True, slots=True)
 class _Candidate:
     player_id: int
     projection: float
@@ -183,6 +192,85 @@ def _vacancy_reason(
     return VacancyReason.ELIGIBLE_PLAYERS_ASSIGNED_ELSEWHERE
 
 
+def optimize_candidate_lineup(
+    snapshot: LeagueSnapshot,
+    scoring_week: int,
+    player_ids: tuple[int, ...],
+    *,
+    limited_player_ids: frozenset[int] = frozenset(),
+    maximum_limited_players: int | None = None,
+) -> CandidateLineup:
+    """Apply the M2.1 exact objective to a caller-defined player universe."""
+
+    players = {player.player_id: player for player in snapshot.players}
+    if len(player_ids) != len(set(player_ids)):
+        raise LineupOptimizationError("candidate player IDs must be unique")
+    week_records = {
+        record.player_id: record for record in snapshot.player_weeks
+        if record.season == snapshot.season and record.scoring_week == scoring_week
+    }
+    slots = _starting_slots(snapshot)
+    candidates: list[_Candidate] = []
+    for player_id in sorted(player_ids):
+        if player_id not in players or player_id not in week_records:
+            raise LineupOptimizationError(
+                f"candidate player {player_id} lacks canonical identity or week={scoring_week} projection"
+            )
+        record = week_records[player_id]
+        if not record.projected_lineup_available:
+            continue
+        eligible_indices = tuple(
+            index for index, slot in enumerate(slots)
+            if slot.lineup_slot_id in players[player_id].eligible_lineup_slot_ids
+        )
+        if eligible_indices:
+            candidates.append(_Candidate(
+                player_id,
+                record.effective_projection,
+                Decimal.from_float(record.effective_projection),
+                eligible_indices,
+            ))
+
+    empty_assignment: tuple[int | None, ...] = (None,) * len(slots)
+    if maximum_limited_players is not None and maximum_limited_players < 0:
+        raise LineupOptimizationError("maximum_limited_players cannot be negative")
+    states: dict[tuple[int, int], _State] = {(0, 0): _State(Decimal(0), empty_assignment)}
+    for candidate in candidates:
+        updated = dict(states)
+        for (mask, limited_count), state in states.items():
+            next_limited_count = limited_count + (candidate.player_id in limited_player_ids)
+            if maximum_limited_players is not None and next_limited_count > maximum_limited_players:
+                continue
+            for slot_index in candidate.eligible_slot_indices:
+                bit = 1 << slot_index
+                if mask & bit:
+                    continue
+                assignment = list(state.assignment)
+                assignment[slot_index] = candidate.player_id
+                proposed = _State(
+                    state.exact_total + candidate.exact_projection,
+                    tuple(assignment),
+                )
+                target_key = (mask | bit, next_limited_count)
+                if _prefer_projected_points(proposed, updated.get(target_key)):
+                    updated[target_key] = proposed
+        states = updated
+    best: _State | None = None
+    for state in states.values():
+        if _prefer_projected_points(state, best):
+            best = state
+    assert best is not None
+    assignments = tuple(
+        LineupAssignment(slot, player_id, week_records[player_id].effective_projection)
+        for slot, player_id in zip(slots, best.assignment, strict=True)
+        if player_id is not None
+    )
+    vacancies = tuple(
+        slot for slot, player_id in zip(slots, best.assignment, strict=True) if player_id is None
+    )
+    return CandidateLineup(assignments, vacancies, math.fsum(item.effective_projection for item in assignments))
+
+
 def optimize_starting_lineup(
     snapshot: LeagueSnapshot,
     team_id: int,
@@ -228,59 +316,11 @@ def optimize_starting_lineup(
     team_entries = tuple(sorted((entry for entry in modeled_roster if entry.team_id == team_id), key=lambda item: item.player_id))
     projections = {entry.player_id: week_records[entry.player_id].effective_projection for entry in team_entries}
 
-    candidates: list[_Candidate] = []
-    for entry in team_entries:
-        if entry.lineup_slot_id in reserve_slot_ids:
-            continue
-        record = week_records[entry.player_id]
-        if not record.projected_lineup_available:
-            continue
-        player = players[entry.player_id]
-        eligible_indices = tuple(
-            index for index, slot in enumerate(slots) if slot.lineup_slot_id in player.eligible_lineup_slot_ids
-        )
-        if eligible_indices:
-            candidates.append(
-                _Candidate(
-                    entry.player_id,
-                    record.effective_projection,
-                    Decimal.from_float(record.effective_projection),
-                    eligible_indices,
-                )
-            )
-    candidates.sort(key=lambda item: item.player_id)
-
-    empty_assignment: tuple[int | None, ...] = (None,) * len(slots)
-    states: dict[int, _State] = {0: _State(Decimal(0), empty_assignment)}
-    for candidate in candidates:
-        updated = dict(states)
-        for mask, state in states.items():
-            for slot_index in candidate.eligible_slot_indices:
-                bit = 1 << slot_index
-                if mask & bit:
-                    continue
-                assignment = list(state.assignment)
-                assignment[slot_index] = candidate.player_id
-                proposed = _State(
-                    state.exact_total + candidate.exact_projection,
-                    tuple(assignment),
-                )
-                target_mask = mask | bit
-                if _prefer_projected_points(proposed, updated.get(target_mask)):
-                    updated[target_mask] = proposed
-        states = updated
-
-    best: _State | None = None
-    for state in states.values():
-        if _prefer_projected_points(state, best):
-            best = state
-    assert best is not None
-
-    assignments = tuple(
-        LineupAssignment(slot, player_id, week_records[player_id].effective_projection)
-        for slot, player_id in zip(slots, best.assignment, strict=True)
-        if player_id is not None
+    candidate_ids = tuple(
+        entry.player_id for entry in team_entries if entry.lineup_slot_id not in reserve_slot_ids
     )
+    candidate_lineup = optimize_candidate_lineup(snapshot, scoring_week, candidate_ids)
+    assignments = candidate_lineup.assignments
     vacancies = tuple(
         LineupVacancy(
             slot,
@@ -292,10 +332,9 @@ def optimize_starting_lineup(
                 projections=projections,
             ),
         )
-        for slot, player_id in zip(slots, best.assignment, strict=True)
-        if player_id is None
+        for slot in candidate_lineup.vacant_slots
     )
-    total = math.fsum(item.effective_projection for item in assignments)
+    total = candidate_lineup.total_projected_points
     filled = len(assignments)
     required = len(slots)
     return OptimizedLineup(
