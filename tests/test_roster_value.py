@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal
 import random
 import time
 
@@ -25,6 +26,7 @@ from fantasy_football.evolving_state import (
     add_player,
     initialize_evolving_state,
 )
+from fantasy_football.lineup_optimizer import optimize_candidate_lineup, optimize_starting_lineup
 from fantasy_football.roster_value import (
     ReplacementAccessContext,
     RosterValuationError,
@@ -229,6 +231,149 @@ def _large_valuation_snapshot(candidate_count: int = 240):
     )
 
 
+def _multi_position_overlap_snapshot(rng: random.Random):
+    """Valid four-team RB/WR/TE/FLEX universe with shared shortages."""
+    snapshot = canonical_snapshot()
+    source_id = snapshot.sources[0].source_id
+    rules = replace(
+        snapshot.rules,
+        lineup_slots=(
+            LineupSlotRule(2, 1, SlotKind.STARTER, "RB"),
+            LineupSlotRule(4, 1, SlotKind.STARTER, "WR"),
+            LineupSlotRule(6, 1, SlotKind.STARTER, "TE"),
+            LineupSlotRule(23, 1, SlotKind.STARTER, "FLEX"),
+            LineupSlotRule(20, 10, SlotKind.BENCH, "Bench"),
+            LineupSlotRule(21, 1, SlotKind.RESERVE, "IR"),
+        ),
+        position_limits=tuple(PositionLimit(position_id, 10) for position_id in (2, 4, 6)),
+    )
+    primary = ((2, 2, (2, 23, 20)), (4, 4, (4, 23, 20)), (6, 6, (6, 23, 20)))
+    # Target and two opponents always have real shortages; their exact positions vary.
+    omitted = {
+        1: {rng.choice((2, 4, 6))},
+        2: {rng.choice((2, 4, 6))},
+        3: {rng.choice((2, 4, 6))},
+        4: set(),
+    }
+    players: list[Player] = []
+    rosters: list[RosterEntry] = []
+    projections: dict[int, float] = {}
+    player_id = 1000
+    for team_id in range(1, 5):
+        for position_id, slot_id, eligible in primary:
+            player_id += 1
+            if slot_id in omitted[team_id]:
+                continue
+            players.append(Player(
+                player_id, f"Owned {team_id}-{slot_id}", position_id, eligible,
+                team_id, "ACTIVE", "ONTEAM", False, source_id,
+            ))
+            rosters.append(RosterEntry(player_id, team_id, slot_id, team_id))
+            projections[player_id] = float(rng.randint(5, 12))
+        player_id += 1
+        players.append(Player(
+            player_id, f"Flex {team_id}", 4, (4, 23, 20), team_id,
+            "ACTIVE", "ONTEAM", False, source_id,
+        ))
+        rosters.append(RosterEntry(player_id, team_id, 23, team_id))
+        projections[player_id] = float(rng.randint(5, 12))
+
+    eligibility = (
+        (2, (2, 23, 20)),
+        (4, (4, 23, 20)),
+        (6, (6, 23, 20)),
+        (2, (2, 4, 23, 20)),
+        (4, (4, 6, 23, 20)),
+        (4, (2, 4, 6, 23, 20)),
+    )
+    # Guaranteed restricted/high and flexible/lower candidates plus random scarcity.
+    specs = [
+        (5000, 2, (2, 23, 20), 15.0),
+        (5001, 4, (2, 4, 6, 23, 20), 12.0),
+    ]
+    for index in range(rng.randint(1, 3)):
+        position_id, eligible = rng.choice(eligibility)
+        specs.append((5010 + index, position_id, eligible, float(rng.choice((6, 9, 12, 15)))))
+    for pool_id, position_id, eligible, projection in specs:
+        players.append(Player(
+            pool_id, f"Pool {pool_id}", position_id, eligible, 1,
+            "ACTIVE", "FREEAGENT", False, source_id,
+        ))
+        projections[pool_id] = projection
+    player_weeks = tuple(
+        PlayerWeek(
+            current_id, 2026, week, projection, ProjectionClass.PRESENT,
+            projection, ProjectionSource.ESPN, source_id,
+        )
+        for current_id, projection in sorted(projections.items())
+        for week in (15, 16, 17)
+    )
+    return replace(
+        snapshot,
+        lineup_slot_namespace=LineupSlotNamespace((2, 4, 6, 20, 23)),
+        rules=rules,
+        players=tuple(sorted(players, key=lambda item: item.player_id)),
+        roster_entries=tuple(sorted(rosters, key=lambda item: (item.team_id, item.player_id))),
+        player_weeks=player_weeks,
+    ), tuple(pool_id for pool_id, _position, _eligible, _projection in specs)
+
+
+def _exact_assignment_points(snapshot, week, assignments) -> Decimal:
+    projections = {
+        record.player_id: record.effective_projection for record in snapshot.player_weeks
+        if record.season == snapshot.season and record.scoring_week == week
+    }
+    return sum((Decimal.from_float(projections[item.player_id]) for item in assignments), Decimal(0))
+
+
+def _assert_production_matches_oracle(
+    snapshot, state, *, target_team_id: int, context: ReplacementAccessContext
+):
+    week = 15
+    pool, statuses, _ = _available_pool(
+        snapshot, state, target_team_id=target_team_id, week=week, context=context,
+    )
+    reserve_slots = {
+        rule.slot_id for rule in snapshot.rules.lineup_slots if rule.kind is SlotKind.RESERVE
+    }
+    target_owned = tuple(sorted(
+        entry.player_id for entry in state.roster_entries
+        if entry.team_id == target_team_id and entry.lineup_slot_id not in reserve_slots
+    ))
+    target_lineup = optimize_starting_lineup(
+        snapshot, target_team_id, week, roster_entries=state.roster_entries
+    )
+    production, vacancies, _lineups, _explored = _allocate_opponents(
+        snapshot, state, target_team_id=target_team_id, week=week, pool=pool,
+        statuses=statuses, context=context, target_owned_ids=target_owned,
+        target_vacancy_count=target_lineup.vacancy_count,
+    )
+    oracle = exhaustive_allocation_oracle(
+        snapshot, state, target_team_id=target_team_id, week=week, pool=pool,
+        statuses=statuses, context=context,
+    )
+    consumed = {player_id for _index, player_id in production.assignments}
+    remaining = tuple(player_id for player_id in pool if player_id not in consumed)
+    production_target = optimize_candidate_lineup(
+        snapshot,
+        week,
+        tuple(sorted(target_owned + remaining)),
+        limited_player_ids=frozenset(remaining),
+        maximum_limited_players=target_lineup.vacancy_count,
+    )
+    production_pairs = tuple(sorted(
+        (vacancies[index].team_id, player_id) for index, player_id in production.assignments
+    ))
+    production_target_points = float(_exact_assignment_points(
+        snapshot, week, production_target.assignments
+    ))
+    assert production.mask.bit_count() == oracle.opponent_coverage
+    assert float(production.exact_improvement) == oracle.opponent_improvement
+    assert production_target_points == oracle.target_attainable_points
+    assert production_pairs == oracle.assignments
+    return production, oracle, target_lineup, vacancies
+
+
 def test_equal_weight_multiweek_value_and_replacement_diagnostics() -> None:
     snapshot = _valuation_snapshot()
     state = _state(snapshot)
@@ -324,29 +469,45 @@ def test_overlap_defect_preserves_weaker_intermediate_for_global_optimum() -> No
 
 
 def test_equal_opponent_objectives_choose_target_adverse_residual_pool() -> None:
-    snapshot = _overlap_snapshot(((100, (0,), 10.0), (200, (0, 23), 10.0)))
-    source_id = snapshot.sources[0].source_id
-    team_two_flex = Player(22, "Team 2 WR", 4, (23, 20), 2, "ACTIVE", "ONTEAM", False, source_id)
-    snapshot = replace(
-        snapshot,
-        players=tuple(sorted(
-            tuple(player for player in snapshot.players if player.player_id != 12) + (team_two_flex,),
-            key=lambda item: item.player_id,
-        )),
-        roster_entries=tuple(
-            entry for entry in snapshot.roster_entries if entry.player_id != 12
-        ) + (RosterEntry(22, 2, 23, 2),),
-        player_weeks=tuple(sorted(
-            tuple(record for record in snapshot.player_weeks if record.player_id != 12) + tuple(PlayerWeek(
-                22, 2026, week, 8.0, ProjectionClass.PRESENT, 8.0,
-                ProjectionSource.ESPN, source_id,
-            ) for week in (15, 16, 17)),
-            key=lambda item: (item.player_id, item.scoring_week),
-        )),
-    )
-    result = value_roster(snapshot, _state(snapshot), 1)
-    assert result.weeks[0].opponent_replacement_assignments[0].player_id == 200
-    assert result.weeks[0].remaining_vacancy_count == 1
+    rng = random.Random(23033)
+    for _ in range(12):
+        tied_projection = float(rng.randint(6, 20))
+        snapshot = _overlap_snapshot((
+            (100, (0,), tied_projection),
+            (200, (0, 23), tied_projection),
+            (300, (0,), tied_projection - 1.0),
+        ))
+        source_id = snapshot.sources[0].source_id
+        team_two_flex = Player(22, "Team 2 WR", 4, (23, 20), 2, "ACTIVE", "ONTEAM", False, source_id)
+        snapshot = replace(
+            snapshot,
+            players=tuple(sorted(
+                tuple(player for player in snapshot.players if player.player_id != 12) + (team_two_flex,),
+                key=lambda item: item.player_id,
+            )),
+            roster_entries=tuple(
+                entry for entry in snapshot.roster_entries if entry.player_id != 12
+            ) + (RosterEntry(22, 2, 23, 2),),
+            player_weeks=tuple(sorted(
+                tuple(record for record in snapshot.player_weeks if record.player_id != 12) + tuple(PlayerWeek(
+                    22, 2026, week, 8.0, ProjectionClass.PRESENT, 8.0,
+                    ProjectionSource.ESPN, source_id,
+                ) for week in (15, 16, 17)),
+                key=lambda item: (item.player_id, item.scoring_week),
+            )),
+        )
+        production, oracle, target_lineup, vacancies = _assert_production_matches_oracle(
+            snapshot,
+            _state(snapshot),
+            target_team_id=1,
+            context=ReplacementAccessContext.FUTURE_CONSERVATIVE,
+        )
+        production_pairs = {
+            (vacancies[index].team_id, player_id) for index, player_id in production.assignments
+        }
+        assert target_lineup.vacancy_count == 1
+        assert (2, 200) in production_pairs
+        assert oracle.target_attainable_points == max(12.0, tied_projection)
 
 
 def test_production_allocator_matches_independent_exhaustive_oracle_seeded() -> None:
@@ -378,29 +539,54 @@ def test_production_allocator_matches_independent_exhaustive_oracle_seeded() -> 
             ))
         state = replace(state, availability=tuple(availability))
         target_team_id = rng.choice((1, 4))
-        pool, statuses, _ = _available_pool(
-            snapshot, state, target_team_id=target_team_id, week=15,
+        _assert_production_matches_oracle(
+            snapshot,
+            state,
+            target_team_id=target_team_id,
             context=ReplacementAccessContext.CURRENT_WAIVER,
         )
-        target_owned = tuple(entry.player_id for entry in state.roster_entries if entry.team_id == target_team_id)
-        production, vacancies, _lineups, _explored = _allocate_opponents(
-            snapshot, state, target_team_id=target_team_id, week=15, pool=pool, statuses=statuses,
-            context=ReplacementAccessContext.CURRENT_WAIVER,
-            target_owned_ids=target_owned, target_vacancy_count=0,
+
+
+def test_randomized_multi_position_target_adverse_equivalence() -> None:
+    rng = random.Random(23032)
+    simultaneous_cases = 0
+    multiple_opponent_cases = 0
+    for case_index in range(40):
+        snapshot, pool_ids = _multi_position_overlap_snapshot(rng)
+        state = _state(snapshot)
+        availability = []
+        for item in state.availability:
+            if item.player_id not in pool_ids:
+                availability.append(item)
+                continue
+            status = rng.choice((
+                AcquisitionAvailability.FREE_AGENT,
+                AcquisitionAvailability.FREE_AGENT,
+                AcquisitionAvailability.WAIVERS,
+                AcquisitionAvailability.HOLD,
+                AcquisitionAvailability.UNRESOLVED,
+            ))
+            availability.append(replace(
+                item,
+                status=status,
+                prohibited_cycle_id=state.cycle_id if status is AcquisitionAvailability.HOLD else None,
+            ))
+        state = replace(state, availability=tuple(availability))
+        context = (
+            ReplacementAccessContext.CURRENT_WAIVER
+            if case_index % 2 else ReplacementAccessContext.FUTURE_CONSERVATIVE
         )
-        oracle = exhaustive_allocation_oracle(
-            snapshot, state, target_team_id=target_team_id, week=15, pool=pool, statuses=statuses,
-            context=ReplacementAccessContext.CURRENT_WAIVER,
+        production, _oracle, target_lineup, vacancies = _assert_production_matches_oracle(
+            snapshot, state, target_team_id=1, context=context,
         )
-        production_pairs = tuple(sorted((vacancies[index].team_id, player_id) for index, player_id in production.assignments))
-        assert production.mask.bit_count() == oracle.opponent_coverage
-        assert float(production.exact_improvement) == pytest.approx(oracle.opponent_improvement)
-        assert production_pairs == oracle.assignments
-        assert value_roster(
-            snapshot, state, target_team_id, access_context=ReplacementAccessContext.CURRENT_WAIVER
-        ).weeks[0].projected_lineup_points == pytest.approx(
-            oracle.target_attainable_points
-        )
+        assert target_lineup.vacancy_count > 0
+        opponent_teams = {vacancy.team_id for vacancy in vacancies}
+        if production.mask.bit_count() > 0 and target_lineup.vacancy_count > 0:
+            simultaneous_cases += 1
+        if len(opponent_teams) > 1:
+            multiple_opponent_cases += 1
+    assert simultaneous_cases > 0
+    assert multiple_opponent_cases == 40
 
 
 def test_material_and_immaterial_unresolved_availability_are_distinguished() -> None:
