@@ -7,11 +7,17 @@ import time
 import pytest
 
 from fantasy_football.canonical.model import (
+    FantasyTeam,
+    FantasyMatchup,
+    LineupSlotNamespace,
+    LineupSlotRule,
     Player,
     PlayerWeek,
+    PositionLimit,
     ProjectionClass,
     ProjectionSource,
     RosterEntry,
+    SlotKind,
 )
 from fantasy_football.evolving_state import (
     AcquisitionAvailability,
@@ -22,7 +28,10 @@ from fantasy_football.evolving_state import (
 from fantasy_football.roster_value import (
     ReplacementAccessContext,
     RosterValuationError,
+    _allocate_opponents,
+    _available_pool,
     compare_roster_values,
+    exhaustive_allocation_oracle,
     value_hypothetical_roster,
     value_roster,
 )
@@ -89,6 +98,137 @@ def _state(snapshot):
     return initialize_evolving_state(snapshot, scoring_week=15, ir_policy=IRPolicy.PROJECTION_BASED)
 
 
+def _overlap_snapshot(pool_specs=((100, (0,), 10.0), (200, (23,), 9.0), (300, (0,), 20.0))):
+    """Alternate valid league with concurrent QB and FLEX vacancies."""
+    snapshot = canonical_snapshot()
+    source_id = snapshot.sources[0].source_id
+    rules = replace(
+        snapshot.rules,
+        lineup_slots=(
+            LineupSlotRule(0, 1, SlotKind.STARTER, "QB"),
+            LineupSlotRule(23, 1, SlotKind.STARTER, "FLEX"),
+            LineupSlotRule(20, 8, SlotKind.BENCH, "Bench"),
+            LineupSlotRule(21, 1, SlotKind.RESERVE, "IR"),
+        ),
+        position_limits=(PositionLimit(1, 8), PositionLimit(2, 8), PositionLimit(4, 8)),
+    )
+
+
+    players = [
+        Player(11, "Target QB", 1, (0, 20), 1, "ACTIVE", "ONTEAM", False, source_id),
+        Player(12, "Target WR", 4, (23, 20), 1, "ACTIVE", "ONTEAM", False, source_id),
+        Player(31, "Team 3 QB", 1, (0, 20), 3, "ACTIVE", "ONTEAM", False, source_id),
+        Player(32, "Team 3 WR", 4, (23, 20), 3, "ACTIVE", "ONTEAM", False, source_id),
+        Player(41, "Team 4 QB", 1, (0, 20), 4, "ACTIVE", "ONTEAM", False, source_id),
+        Player(42, "Team 4 WR", 4, (23, 20), 4, "ACTIVE", "ONTEAM", False, source_id),
+    ]
+    for player_id, eligible, _projection in pool_specs:
+        position = 1 if 0 in eligible else 4
+        players.append(Player(
+            player_id, f"Pool {player_id}", position, tuple(sorted(set(eligible + (20,)))),
+            2, "ACTIVE", "FREEAGENT", False, source_id,
+        ))
+    rosters = (
+        RosterEntry(11, 1, 0, 1), RosterEntry(12, 1, 23, 1),
+        RosterEntry(31, 3, 0, 3), RosterEntry(32, 3, 23, 3),
+        RosterEntry(41, 4, 0, 4), RosterEntry(42, 4, 23, 4),
+    )
+    player_weeks = []
+    projections = {11: 12.0, 12: 11.0, 31: 8.0, 32: 8.0, 41: 8.0, 42: 8.0}
+    projections.update({player_id: projection for player_id, _eligible, projection in pool_specs})
+    for week in (15, 16, 17):
+        for player_id, projection in projections.items():
+            player_weeks.append(PlayerWeek(
+                player_id, 2026, week, projection, ProjectionClass.PRESENT,
+                projection, ProjectionSource.ESPN, source_id,
+            ))
+    return replace(
+        snapshot,
+        lineup_slot_namespace=LineupSlotNamespace((0, 20, 23)),
+        rules=rules,
+        players=tuple(sorted(players, key=lambda item: item.player_id)),
+        roster_entries=rosters,
+        player_weeks=tuple(sorted(player_weeks, key=lambda item: (item.player_id, item.scoring_week))),
+    )
+
+
+def _large_valuation_snapshot(candidate_count: int = 240):
+    snapshot = canonical_snapshot()
+    source_id = snapshot.sources[0].source_id
+    slots = (
+        LineupSlotRule(0, 1, SlotKind.STARTER, "QB"),
+        LineupSlotRule(2, 1, SlotKind.STARTER, "RB"),
+        LineupSlotRule(4, 1, SlotKind.STARTER, "WR"),
+        LineupSlotRule(6, 1, SlotKind.STARTER, "TE"),
+        LineupSlotRule(23, 1, SlotKind.STARTER, "FLEX"),
+        LineupSlotRule(20, 20, SlotKind.BENCH, "Bench"),
+        LineupSlotRule(21, 2, SlotKind.RESERVE, "IR"),
+    )
+    rules = replace(
+        snapshot.rules, team_count=14, lineup_slots=slots,
+        position_limits=tuple(PositionLimit(position_id, 20) for position_id in (1, 2, 4, 6)),
+    )
+    teams = tuple(FantasyTeam(
+        team_id, f"Team {team_id}", 0, 0, 0, 0.0, 0.0, team_id, None, team_id, None,
+    ) for team_id in range(1, 15))
+    players, rosters, player_weeks = [], [], []
+    position_slots = ((1, (0, 20)), (2, (2, 23, 20)), (4, (4, 23, 20)), (6, (6, 23, 20)))
+    omitted = {1: 6, 2: 0, 3: 2, 4: 4}
+    next_id = 1000
+    for team_id in range(1, 15):
+        for position_id, eligible in position_slots:
+            next_id += 1
+            is_rostered = omitted.get(team_id) != eligible[0]
+            players.append(Player(
+                next_id, f"Owned {team_id}-{position_id}", position_id, eligible,
+                ((team_id - 1) % 4) + 1, "ACTIVE",
+                "ONTEAM" if is_rostered else "FREEAGENT", False, source_id,
+            ))
+            if is_rostered:
+                rosters.append(RosterEntry(next_id, team_id, eligible[0], team_id))
+            for week in (15, 16, 17):
+                player_weeks.append(PlayerWeek(
+                    next_id, 2026, week, 5.0 + position_id, ProjectionClass.PRESENT,
+                    5.0 + position_id, ProjectionSource.ESPN, source_id,
+                ))
+        next_id += 1
+        players.append(Player(
+            next_id, f"Flex {team_id}", 4, (4, 23, 20), ((team_id - 1) % 4) + 1,
+            "ACTIVE", "ONTEAM", False, source_id,
+        ))
+        rosters.append(RosterEntry(next_id, team_id, 23, team_id))
+        for week in (15, 16, 17):
+            player_weeks.append(PlayerWeek(
+                next_id, 2026, week, 7.0, ProjectionClass.PRESENT, 7.0,
+                ProjectionSource.ESPN, source_id,
+            ))
+    for index in range(candidate_count):
+        position_id, eligible = position_slots[index % len(position_slots)]
+        player_id = 5000 + index
+        projection = 30.0 - (index / 100.0)
+        players.append(Player(
+            player_id, f"Pool {index}", position_id, eligible, (index % 4) + 1,
+            "ACTIVE", "FREEAGENT", False, source_id,
+        ))
+        for week in (15, 16, 17):
+            player_weeks.append(PlayerWeek(
+                player_id, 2026, week, projection, ProjectionClass.PRESENT,
+                projection, ProjectionSource.ESPN, source_id,
+            ))
+    return replace(
+        snapshot,
+        lineup_slot_namespace=LineupSlotNamespace((0, 2, 4, 6, 20, 23)),
+        rules=rules, teams=teams,
+        players=tuple(sorted(players, key=lambda item: item.player_id)),
+        roster_entries=tuple(sorted(rosters, key=lambda item: (item.team_id, item.player_id))),
+        player_weeks=tuple(sorted(player_weeks, key=lambda item: (item.player_id, item.scoring_week))),
+        fantasy_matchups=tuple(
+            FantasyMatchup(100 + index, 1, home, away)
+            for index, (home, away) in enumerate(zip(range(1, 8), range(8, 15)), start=1)
+        ) + tuple(item for item in snapshot.fantasy_matchups if item.matchup_period_id != 1),
+    )
+
+
 def test_equal_weight_multiweek_value_and_replacement_diagnostics() -> None:
     snapshot = _valuation_snapshot()
     state = _state(snapshot)
@@ -146,7 +286,158 @@ def test_held_and_unresolved_players_are_not_assumed_accessible() -> None:
     result = value_roster(snapshot, state, 1)
     assert result.total_value == pytest.approx(33.0)
     assert result.is_complete is False
-    assert result.unresolved_inputs == ("hold", "unresolved")
+    assert result.unresolved_inputs == ("player:-301:unresolved_acquisition_status",)
+    assert all(dict(week.inaccessible_player_counts)["hold"] == 1 for week in result.weeks)
+    assert all(dict(week.inaccessible_player_counts)["unresolved"] >= 1 for week in result.weeks)
+
+
+def test_held_irrelevant_player_does_not_make_value_incomplete() -> None:
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    source_id = snapshot.sources[0].source_id
+    irrelevant = Player(900, "Held QB", 1, (0, 20), 1, "ACTIVE", "FREEAGENT", False, source_id)
+    records = tuple(PlayerWeek(
+        900, 2026, week, 50.0, ProjectionClass.PRESENT, 50.0, ProjectionSource.ESPN, source_id
+    ) for week in (15, 16, 17))
+    snapshot = replace(
+        snapshot,
+        players=tuple(sorted(snapshot.players + (irrelevant,), key=lambda item: item.player_id)),
+        player_weeks=tuple(sorted(snapshot.player_weeks + records, key=lambda item: (item.player_id, item.scoring_week))),
+    )
+    state = _state(snapshot)
+    state = replace(state, availability=tuple(
+        replace(item, status=AcquisitionAvailability.HOLD, prohibited_cycle_id=state.cycle_id)
+        if item.player_id == 900 else item for item in state.availability
+    ))
+    result = value_roster(snapshot, state, 1)
+    assert result.is_complete is True
+    assert result.unresolved_inputs == ()
+    assert all(dict(week.inaccessible_player_counts)["hold"] == 1 for week in result.weeks)
+
+
+def test_overlap_defect_preserves_weaker_intermediate_for_global_optimum() -> None:
+    snapshot = _overlap_snapshot()
+    state = _state(snapshot)
+    result = value_roster(snapshot, state, 1)
+    assignments = result.weeks[0].opponent_replacement_assignments
+    assert {(item.team_id, item.player_id) for item in assignments} == {(2, 200), (2, 300)}
+    assert sum(item.effective_projection for item in assignments) == pytest.approx(29.0)
+
+
+def test_equal_opponent_objectives_choose_target_adverse_residual_pool() -> None:
+    snapshot = _overlap_snapshot(((100, (0,), 10.0), (200, (0, 23), 10.0)))
+    source_id = snapshot.sources[0].source_id
+    team_two_flex = Player(22, "Team 2 WR", 4, (23, 20), 2, "ACTIVE", "ONTEAM", False, source_id)
+    snapshot = replace(
+        snapshot,
+        players=tuple(sorted(
+            tuple(player for player in snapshot.players if player.player_id != 12) + (team_two_flex,),
+            key=lambda item: item.player_id,
+        )),
+        roster_entries=tuple(
+            entry for entry in snapshot.roster_entries if entry.player_id != 12
+        ) + (RosterEntry(22, 2, 23, 2),),
+        player_weeks=tuple(sorted(
+            tuple(record for record in snapshot.player_weeks if record.player_id != 12) + tuple(PlayerWeek(
+                22, 2026, week, 8.0, ProjectionClass.PRESENT, 8.0,
+                ProjectionSource.ESPN, source_id,
+            ) for week in (15, 16, 17)),
+            key=lambda item: (item.player_id, item.scoring_week),
+        )),
+    )
+    result = value_roster(snapshot, _state(snapshot), 1)
+    assert result.weeks[0].opponent_replacement_assignments[0].player_id == 200
+    assert result.weeks[0].remaining_vacancy_count == 1
+
+
+def test_production_allocator_matches_independent_exhaustive_oracle_seeded() -> None:
+    rng = random.Random(23031)
+    eligibility = ((0,), (23,), (0, 23))
+    for _ in range(60):
+        specs = tuple(
+            (100 + index, rng.choice(eligibility), float(rng.randint(1, 20)))
+            for index in range(rng.randint(1, 6))
+        )
+        snapshot = _overlap_snapshot(specs)
+        state = _state(snapshot)
+        availability = []
+        for item in state.availability:
+            if item.player_id not in {player_id for player_id, _eligible, _projection in specs}:
+                availability.append(item)
+                continue
+            status = rng.choice((
+                AcquisitionAvailability.FREE_AGENT,
+                AcquisitionAvailability.FREE_AGENT,
+                AcquisitionAvailability.WAIVERS,
+                AcquisitionAvailability.HOLD,
+                AcquisitionAvailability.UNRESOLVED,
+            ))
+            availability.append(replace(
+                item,
+                status=status,
+                prohibited_cycle_id=state.cycle_id if status is AcquisitionAvailability.HOLD else None,
+            ))
+        state = replace(state, availability=tuple(availability))
+        target_team_id = rng.choice((1, 4))
+        pool, statuses, _ = _available_pool(
+            snapshot, state, target_team_id=target_team_id, week=15,
+            context=ReplacementAccessContext.CURRENT_WAIVER,
+        )
+        target_owned = tuple(entry.player_id for entry in state.roster_entries if entry.team_id == target_team_id)
+        production, vacancies, _lineups, _explored = _allocate_opponents(
+            snapshot, state, target_team_id=target_team_id, week=15, pool=pool, statuses=statuses,
+            context=ReplacementAccessContext.CURRENT_WAIVER,
+            target_owned_ids=target_owned, target_vacancy_count=0,
+        )
+        oracle = exhaustive_allocation_oracle(
+            snapshot, state, target_team_id=target_team_id, week=15, pool=pool, statuses=statuses,
+            context=ReplacementAccessContext.CURRENT_WAIVER,
+        )
+        production_pairs = tuple(sorted((vacancies[index].team_id, player_id) for index, player_id in production.assignments))
+        assert production.mask.bit_count() == oracle.opponent_coverage
+        assert float(production.exact_improvement) == pytest.approx(oracle.opponent_improvement)
+        assert production_pairs == oracle.assignments
+        assert value_roster(
+            snapshot, state, target_team_id, access_context=ReplacementAccessContext.CURRENT_WAIVER
+        ).weeks[0].projected_lineup_points == pytest.approx(
+            oracle.target_attainable_points
+        )
+
+
+def test_material_and_immaterial_unresolved_availability_are_distinguished() -> None:
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    source_id = snapshot.sources[0].source_id
+    irrelevant = Player(900, "Unknown Bench Only", 16, (20,), 1, "ACTIVE", "FREEAGENT", False, source_id)
+    records = tuple(PlayerWeek(
+        900, 2026, week, 30.0, ProjectionClass.PRESENT, 30.0, ProjectionSource.ESPN, source_id
+    ) for week in (15, 16, 17))
+    snapshot = replace(
+        snapshot,
+        lineup_slot_namespace=LineupSlotNamespace((0, 16, 20, 21, 25)),
+        players=tuple(sorted(snapshot.players + (irrelevant,), key=lambda item: item.player_id)),
+        player_weeks=tuple(sorted(snapshot.player_weeks + records, key=lambda item: (item.player_id, item.scoring_week))),
+    )
+    state = _state(snapshot)
+    state = replace(state, availability=tuple(
+        replace(item, status=AcquisitionAvailability.UNRESOLVED)
+        if item.player_id in {-300, 900} else item for item in state.availability
+    ))
+    result = value_roster(snapshot, state, 1)
+    assert result.is_complete is False
+    assert result.unresolved_inputs == ("player:-300:unresolved_acquisition_status",)
+    assert all(900 not in week.materially_unresolved_player_ids for week in result.weeks)
+
+
+def test_representative_14_team_exact_workload_records_runtime_and_memory() -> None:
+    snapshot = _large_valuation_snapshot()
+    state = _state(snapshot)
+    started = time.perf_counter()
+    result = value_roster(snapshot, state, 1)
+    elapsed = time.perf_counter() - started
+    assert len(result.weeks) == 3
+    assert all(week.replacement_candidate_count == 244 for week in result.weeks)
+    assert all(len(week.competing_demands) == 3 for week in result.weeks)
+    assert all(week.allocation_states_explored > 0 for week in result.weeks)
+    assert elapsed < 30.0
 
 
 def test_actual_add_and_compound_result_use_same_unified_value_without_mutation() -> None:
