@@ -67,6 +67,9 @@ class WeekRosterValue:
     competing_demands: tuple[CompetingDemand, ...]
     opponent_replacement_assignments: tuple[ReplacementAssignment, ...]
     inaccessible_player_counts: tuple[tuple[str, int], ...]
+    materially_unresolved_player_ids: tuple[int, ...]
+    replacement_candidate_count: int
+    allocation_states_explored: int
     assumptions: tuple[str, ...]
 
 
@@ -95,6 +98,25 @@ class _OpponentState:
     mask: int
     assignments: tuple[tuple[int, int], ...]  # vacancy index, player ID
     exact_improvement: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class AllocationOracleResult:
+    opponent_coverage: int
+    opponent_improvement: float
+    target_attainable_points: float
+    assignments: tuple[tuple[int, int], ...]
+    explored_leaves: int
+
+
+def _nonreserve_owned_ids(
+    snapshot: LeagueSnapshot, state: EvolvingLeagueState, team_id: int
+) -> tuple[int, ...]:
+    reserve_ids = {rule.slot_id for rule in snapshot.rules.lineup_slots if rule.kind is SlotKind.RESERVE}
+    return tuple(sorted(
+        entry.player_id for entry in state.roster_entries
+        if entry.team_id == team_id and entry.lineup_slot_id not in reserve_ids
+    ))
 
 
 def _exact_total(snapshot: LeagueSnapshot, week: int, assignments: Iterable[LineupAssignment]) -> Decimal:
@@ -170,7 +192,7 @@ def _allocate_opponents(
     context: ReplacementAccessContext,
     target_owned_ids: tuple[int, ...],
     target_vacancy_count: int,
-) -> tuple[_OpponentState, tuple[VacancyIdentity, ...], dict[int, object]]:
+) -> tuple[_OpponentState, tuple[VacancyIdentity, ...], dict[int, object], int]:
     opponent_lineups = {
         team.team_id: optimize_starting_lineup(
             snapshot, team.team_id, week, roster_entries=state.roster_entries
@@ -183,7 +205,7 @@ def _allocate_opponents(
         for vacancy in lineup.vacancies
     )
     if not vacancies or not pool:
-        return _OpponentState(0, (), Decimal(0)), vacancies, opponent_lineups
+        return _OpponentState(0, (), Decimal(0)), vacancies, opponent_lineups, 1
 
     owned_by_team = {
         team_id: tuple(
@@ -215,49 +237,85 @@ def _allocate_opponents(
             )
         return cache[key]
 
-    states: dict[int, list[_OpponentState]] = {0: [_OpponentState(0, (), Decimal(0))]}
+    states: dict[tuple[int, tuple[tuple[int, int], ...]], _OpponentState] = {
+        (0, ()): _OpponentState(0, (), Decimal(0))
+    }
+    explored_states = 1
     vacancy_indices = {
         team_id: tuple(index for index, vacancy in enumerate(vacancies) if vacancy.team_id == team_id)
         for team_id in opponent_lineups
     }
-    for player_id in pool:
-        updated = {mask: list(values) for mask, values in states.items()}
-        for mask, values in states.items():
-            for value in values:
-                by_team: dict[int, tuple[int, ...]] = {}
-                for vacancy_index, assigned_player in value.assignments:
-                    by_team.setdefault(vacancies[vacancy_index].team_id, ())
-                    by_team[vacancies[vacancy_index].team_id] += (assigned_player,)
-                for team_id, indices in vacancy_indices.items():
-                    if not _opponent_team_allowed(
-                        state, target_team_id=target_team_id, opponent_team_id=team_id,
-                        status=statuses[player_id], context=context,
-                    ):
-                        continue
-                    assigned = tuple(sorted(by_team.get(team_id, ()) + (player_id,)))
-                    prior_filled, prior_points = team_outcome(team_id, tuple(sorted(by_team.get(team_id, ()))))
-                    filled, points = team_outcome(team_id, assigned)
-                    if filled <= prior_filled:
-                        continue
-                    available_index = next((index for index in indices if not mask & (1 << index)), None)
-                    if available_index is None:
-                        continue
-                    new_mask = mask | (1 << available_index)
-                    proposed = _OpponentState(
-                        new_mask,
-                        tuple(sorted(value.assignments + ((available_index, player_id),))),
-                        value.exact_improvement - prior_points + points,
+    projection_by_player = {
+        record.player_id: Decimal.from_float(record.effective_projection)
+        for record in snapshot.player_weeks
+        if record.season == snapshot.season and record.scoring_week == week
+    }
+    ordered_pool = tuple(sorted(pool, key=lambda player_id: (-projection_by_player[player_id], player_id)))
+    full_coverage = len(vacancies)
+    for player_offset, player_id in enumerate(ordered_pool):
+        updated = dict(states)
+        for value in states.values():
+            by_team: dict[int, tuple[int, ...]] = {}
+            for vacancy_index, assigned_player in value.assignments:
+                by_team.setdefault(vacancies[vacancy_index].team_id, ())
+                by_team[vacancies[vacancy_index].team_id] += (assigned_player,)
+            for team_id in vacancy_indices:
+                if not _opponent_team_allowed(
+                    state, target_team_id=target_team_id, opponent_team_id=team_id,
+                    status=statuses[player_id], context=context,
+                ):
+                    continue
+                assigned = tuple(sorted(by_team.get(team_id, ()) + (player_id,)))
+                prior_filled, prior_points = team_outcome(team_id, tuple(sorted(by_team.get(team_id, ()))))
+                filled, points = team_outcome(team_id, assigned)
+                if filled <= prior_filled:
+                    continue
+                next_by_team = dict(by_team)
+                next_by_team[team_id] = assigned
+                canonical_assignments = tuple(sorted(
+                    (vacancy_index, assigned_player)
+                    for assigned_team, assigned_players in next_by_team.items()
+                    for vacancy_index, assigned_player in zip(
+                        vacancy_indices[assigned_team], sorted(assigned_players)
                     )
-                    incumbent = updated.get(new_mask, [])
-                    if not incumbent or proposed.exact_improvement > incumbent[0].exact_improvement:
-                        updated[new_mask] = [proposed]
-                    elif proposed.exact_improvement == incumbent[0].exact_improvement:
-                        if proposed.assignments not in {item.assignments for item in incumbent}:
-                            incumbent.append(proposed)
-        states = updated
+                ))
+                new_mask = sum(1 << vacancy_index for vacancy_index, _ in canonical_assignments)
+                proposed = _OpponentState(
+                    new_mask,
+                    canonical_assignments,
+                    value.exact_improvement - prior_points + points,
+                )
+                updated[(new_mask, proposed.assignments)] = proposed
+                explored_states += 1
+        # Exact branch-and-bound only after a complete allocation establishes the
+        # maximum possible coverage. The remaining-projection sum is an admissible
+        # upper bound: adding a player to an already optimal lineup cannot improve
+        # that lineup by more than the player's own positive projection.
+        complete = [item for item in updated.values() if item.mask.bit_count() == full_coverage]
+        if complete:
+            incumbent_points = max(item.exact_improvement for item in complete)
+            remaining_values = sorted(
+                (projection_by_player[item] for item in ordered_pool[player_offset + 1:]),
+                reverse=True,
+            )
+            pruned: dict[tuple[int, tuple[tuple[int, int], ...]], _OpponentState] = {}
+            for key, item in updated.items():
+                missing = full_coverage - item.mask.bit_count()
+                if missing == 0:
+                    if item.exact_improvement == incumbent_points:
+                        pruned[key] = item
+                    continue
+                if len(remaining_values) < missing:
+                    continue
+                optimistic = item.exact_improvement + sum(remaining_values[:missing], Decimal(0))
+                if optimistic >= incumbent_points:
+                    pruned[key] = item
+            states = pruned
+        else:
+            states = updated
 
-    max_filled = max(mask.bit_count() for mask in states)
-    finalists = [item for mask, values in states.items() if mask.bit_count() == max_filled for item in values]
+    max_filled = max(item.mask.bit_count() for item in states.values())
+    finalists = [item for item in states.values() if item.mask.bit_count() == max_filled]
     max_points = max(item.exact_improvement for item in finalists)
     finalists = [item for item in finalists if item.exact_improvement == max_points]
 
@@ -272,7 +330,171 @@ def _allocate_opponents(
         return (_exact_total(snapshot, week, combined.assignments), item.assignments)
 
     chosen = min(finalists, key=target_outcome)
-    return chosen, vacancies, opponent_lineups
+    return chosen, vacancies, opponent_lineups, explored_states
+
+
+def exhaustive_allocation_oracle(
+    snapshot: LeagueSnapshot,
+    state: EvolvingLeagueState,
+    *,
+    target_team_id: int,
+    week: int,
+    pool: tuple[int, ...],
+    statuses: dict[int, AcquisitionAvailability],
+    context: ReplacementAccessContext,
+) -> AllocationOracleResult:
+    """Independent leaf-enumeration oracle for intentionally small universes.
+
+    This deliberately does not reuse the production allocator's state transition
+    or pruning. Each player is left unassigned or assigned to one opponent; full
+    lineups are optimized only after a complete allocation has been enumerated.
+    """
+
+    opponents = tuple(sorted(team.team_id for team in snapshot.teams if team.team_id != target_team_id))
+    base_lineups = {
+        team_id: optimize_starting_lineup(snapshot, team_id, week, roster_entries=state.roster_entries)
+        for team_id in opponents
+    }
+    base_exact = {
+        team_id: _exact_total(snapshot, week, lineup.assignments)
+        for team_id, lineup in base_lineups.items()
+    }
+    owned = {team_id: _nonreserve_owned_ids(snapshot, state, team_id) for team_id in opponents}
+    target_owned = _nonreserve_owned_ids(snapshot, state, target_team_id)
+    target_base = optimize_starting_lineup(
+        snapshot, target_team_id, week, roster_entries=state.roster_entries
+    )
+    best_key: tuple[object, ...] | None = None
+    best: AllocationOracleResult | None = None
+    leaves = 0
+
+    def visit(index: int, assignments: tuple[tuple[int, int], ...]) -> None:
+        nonlocal best_key, best, leaves
+        if index < len(pool):
+            player_id = pool[index]
+            visit(index + 1, assignments)
+            for team_id in opponents:
+                if _opponent_team_allowed(
+                    state,
+                    target_team_id=target_team_id,
+                    opponent_team_id=team_id,
+                    status=statuses[player_id],
+                    context=context,
+                ):
+                    visit(index + 1, assignments + ((team_id, player_id),))
+            return
+
+        leaves += 1
+        assigned_by_team = {
+            team_id: tuple(sorted(player_id for assigned_team, player_id in assignments if assigned_team == team_id))
+            for team_id in opponents
+        }
+        coverage = 0
+        improvement = Decimal(0)
+        for team_id in opponents:
+            assigned = assigned_by_team[team_id]
+            lineup = optimize_candidate_lineup(
+                snapshot,
+                week,
+                tuple(sorted(owned[team_id] + assigned)),
+                limited_player_ids=frozenset(assigned),
+                maximum_limited_players=len(assigned),
+            )
+            filled = base_lineups[team_id].vacancy_count - len(lineup.vacant_slots)
+            # An allocation is feasible only when each allocated player fills one
+            # demonstrated mandatory vacancy; speculative bench additions are out.
+            if filled != len(assigned):
+                return
+            coverage += filled
+            improvement += _exact_total(snapshot, week, lineup.assignments) - base_exact[team_id]
+
+        consumed = {player_id for _, player_id in assignments}
+        remaining = tuple(player_id for player_id in pool if player_id not in consumed)
+        target = optimize_candidate_lineup(
+            snapshot,
+            week,
+            tuple(sorted(target_owned + remaining)),
+            limited_player_ids=frozenset(remaining),
+            maximum_limited_players=target_base.vacancy_count,
+        )
+        target_points = _exact_total(snapshot, week, target.assignments)
+        stable = tuple(sorted(assignments))
+        key = (-coverage, -improvement, target_points, stable)
+        if best_key is None or key < best_key:
+            best_key = key
+            best = AllocationOracleResult(
+                coverage,
+                float(improvement),
+                float(target_points),
+                stable,
+                leaves,
+            )
+
+    visit(0, ())
+    assert best is not None
+    return AllocationOracleResult(
+        best.opponent_coverage,
+        best.opponent_improvement,
+        best.target_attainable_points,
+        best.assignments,
+        leaves,
+    )
+
+
+def _materially_unresolved_players(
+    snapshot: LeagueSnapshot,
+    state: EvolvingLeagueState,
+    *,
+    target_team_id: int,
+    week: int,
+    accessible_pool: tuple[int, ...],
+    statuses: dict[int, AcquisitionAvailability],
+    context: ReplacementAccessContext,
+    target_owned_ids: tuple[int, ...],
+    target_vacancy_count: int,
+    baseline_target_points: Decimal,
+) -> tuple[int, ...]:
+    """Return unknown-status players that could change the target valuation."""
+
+    availability, owners = _state_maps(state)
+    week_records = {
+        record.player_id: record for record in snapshot.player_weeks
+        if record.season == snapshot.season and record.scoring_week == week
+    }
+    candidates = tuple(sorted(
+        player_id for player_id, record in week_records.items()
+        if player_id not in owners
+        and record.projected_lineup_available
+        and availability[player_id].status is AcquisitionAvailability.UNRESOLVED
+    ))
+    material: list[int] = []
+    for player_id in candidates:
+        hypothetical_pool = tuple(sorted(accessible_pool + (player_id,)))
+        hypothetical_statuses = dict(statuses)
+        hypothetical_statuses[player_id] = AcquisitionAvailability.FREE_AGENT
+        opponent, _vacancies, _lineups, _explored = _allocate_opponents(
+            snapshot,
+            state,
+            target_team_id=target_team_id,
+            week=week,
+            pool=hypothetical_pool,
+            statuses=hypothetical_statuses,
+            context=context,
+            target_owned_ids=target_owned_ids,
+            target_vacancy_count=target_vacancy_count,
+        )
+        consumed = {assigned_player for _, assigned_player in opponent.assignments}
+        remaining = tuple(item for item in hypothetical_pool if item not in consumed)
+        target = optimize_candidate_lineup(
+            snapshot,
+            week,
+            tuple(sorted(target_owned_ids + remaining)),
+            limited_player_ids=frozenset(remaining),
+            maximum_limited_players=target_vacancy_count,
+        )
+        if _exact_total(snapshot, week, target.assignments) != baseline_target_points:
+            material.append(player_id)
+    return tuple(material)
 
 
 def value_roster(
@@ -311,7 +533,7 @@ def value_roster(
         pool, statuses, inaccessible = _available_pool(
             snapshot, state, target_team_id=team_id, week=week, context=access_context
         )
-        opponent, opponent_vacancies, opponent_lineups = _allocate_opponents(
+        opponent, opponent_vacancies, opponent_lineups, explored_states = _allocate_opponents(
             snapshot, state, target_team_id=team_id, week=week, pool=pool,
             statuses=statuses, context=access_context, target_owned_ids=owned_ids,
             target_vacancy_count=owned.vacancy_count,
@@ -355,6 +577,18 @@ def value_roster(
             for assignment in combined.assignments if assignment.player_id in replacement_ids
         )
         replacement_points = combined.total_projected_points - owned.total_projected_points
+        material_unresolved = _materially_unresolved_players(
+            snapshot,
+            state,
+            target_team_id=team_id,
+            week=week,
+            accessible_pool=pool,
+            statuses=statuses,
+            context=access_context,
+            target_owned_ids=owned_ids,
+            target_vacancy_count=owned.vacancy_count,
+            baseline_target_points=_exact_total(snapshot, week, combined.assignments),
+        )
         weeks.append(WeekRosterValue(
             week,
             combined.total_projected_points,
@@ -370,13 +604,18 @@ def value_roster(
             ),
             tuple(sorted(opponent_assignments, key=lambda item: (item.team_id, item.slot, item.player_id))),
             inaccessible,
+            material_unresolved,
+            len(pool),
+            explored_states,
             ("equal_week_weight_v1", "snapshot_time_marginal_replacement_access_v1", "opponents_ahead_conservative_v1"),
         ))
     total = math.fsum(item.projected_lineup_points for item in weeks)
-    unresolved = tuple(sorted({
-        status for week in weeks for status, count in week.inaccessible_player_counts
-        if count and status in {AcquisitionAvailability.HOLD.value, AcquisitionAvailability.UNRESOLVED.value}
-    }))
+    unresolved = tuple(
+        f"player:{player_id}:unresolved_acquisition_status"
+        for player_id in sorted({
+            player_id for week in weeks for player_id in week.materially_unresolved_player_ids
+        })
+    )
     return RosterValueResult(
         team_id, snapshot.season, first_week, snapshot.final_simulation_week,
         total, tuple(weeks), not unresolved, unresolved,
