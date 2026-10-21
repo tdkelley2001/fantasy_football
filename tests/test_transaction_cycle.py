@@ -4,7 +4,18 @@ from dataclasses import replace
 
 import pytest
 
-from fantasy_football.evolving_state import IRPolicy, initialize_evolving_state
+from fantasy_football.canonical.model import (
+    Player,
+    PlayerWeek,
+    ProjectionClass,
+    ProjectionSource,
+    RosterEntry,
+)
+from fantasy_football.evolving_state import (
+    AcquisitionAvailability,
+    IRPolicy,
+    initialize_evolving_state,
+)
 from fantasy_football.transaction_cycle import (
     CycleReferenceError,
     compare_sequential_to_feasible,
@@ -35,6 +46,94 @@ def _effect(state):
         state.season_acquisition_counts,
         state.matchup_acquisition_counts,
         state.ledger,
+    )
+
+
+def _compound_ir_cycle_fixture():
+    snapshot = _overlap_snapshot(pool_specs=((200, (23,), 9.0),))
+    source_id = snapshot.sources[0].source_id
+    blocker = Player(
+        13, "Recovered QB", 1, (0, 21), 1, "ACTIVE", "ONTEAM", True, source_id
+    )
+    snapshot = replace(
+        snapshot,
+        lineup_slot_namespace=replace(
+            snapshot.lineup_slot_namespace,
+            observed_slot_ids=tuple(
+                sorted(set(snapshot.lineup_slot_namespace.observed_slot_ids + (21,)))
+            ),
+        ),
+        rules=replace(
+            snapshot.rules,
+            lineup_slots=tuple(
+                replace(rule, capacity=2) if rule.slot_id == 21 else rule
+                for rule in snapshot.rules.lineup_slots
+            ),
+        ),
+        players=tuple(
+            sorted(
+                tuple(
+                    replace(
+                        player,
+                        injury_status="OUT",
+                        is_undroppable=True,
+                        eligible_lineup_slot_ids=tuple(
+                            sorted(set(player.eligible_lineup_slot_ids + (21,)))
+                        ),
+                    )
+                    if player.player_id == 11
+                    else replace(player, acquisition_status="WAIVERS")
+                    if player.player_id == 12
+                    else player
+                    for player in snapshot.players
+                )
+                + (blocker,),
+                key=lambda item: item.player_id,
+            )
+        ),
+        roster_entries=tuple(
+            sorted(
+                tuple(
+                    entry for entry in snapshot.roster_entries if entry.player_id != 12
+                )
+                + (RosterEntry(13, 1, 21, 1),),
+                key=lambda item: (item.team_id, item.player_id),
+            )
+        ),
+        player_weeks=tuple(
+            sorted(
+                tuple(
+                    replace(
+                        record,
+                        raw_projection=0.0,
+                        projection_class=ProjectionClass.EXPLICIT_ZERO,
+                        effective_projection=0.0,
+                    )
+                    if record.player_id == 11
+                    else record
+                    for record in snapshot.player_weeks
+                )
+                + tuple(
+                    PlayerWeek(
+                        13,
+                        2026,
+                        week,
+                        13.0,
+                        ProjectionClass.PRESENT,
+                        13.0,
+                        ProjectionSource.ESPN,
+                        source_id,
+                    )
+                    for week in (15, 16, 17)
+                ),
+                key=lambda item: (item.player_id, item.scoring_week),
+            )
+        ),
+    )
+    return snapshot, replace(
+        _state(snapshot),
+        current_waiver_priority=(4, 3, 2, 1),
+        initial_window_waiver_priority=(4, 3, 2, 1),
     )
 
 
@@ -172,6 +271,30 @@ def test_unknown_boundary_rejected_and_no_network(monkeypatch) -> None:
     assert state.ledger == ()
 
 
+def test_unresolved_waiver_boundary_excludes_authorization_not_legal_free_agents() -> (
+    None
+):
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    snapshot = replace(
+        snapshot,
+        players=tuple(
+            replace(player, acquisition_status="WAIVERS")
+            if player.player_id == -300
+            else player
+            for player in snapshot.players
+        ),
+    )
+    result = enumerate_feasible_cycles(
+        snapshot, _state(snapshot), WeeklyTransactionPolicy()
+    )
+    assert result.legal_enumeration_complete
+    assert result.unsupported_authorization_branches_excluded > 0
+    assert all(
+        all(entry.player_id != -300 for entry in terminal.state.roster_entries)
+        for terminal in result.terminals
+    )
+
+
 def test_reordered_state_produces_same_sequential_terminal() -> None:
     snapshot = _valuation_snapshot(competing_teams=1, pool_values=(8.0, 6.0))
     state = _state(snapshot)
@@ -187,3 +310,113 @@ def test_reordered_state_produces_same_sequential_terminal() -> None:
         snapshot, reordered, WeeklyTransactionPolicy()
     )
     assert _effect(first.state) == _effect(second.state)
+
+
+def test_incomplete_value_preserves_feasible_branch_but_blocks_policy_certification(
+    monkeypatch,
+) -> None:
+    snapshot = _valuation_snapshot(competing_teams=1, pool_values=(8.0,))
+    state = replace(
+        _state(snapshot),
+        current_waiver_priority=(2, 3, 4, 1),
+        initial_window_waiver_priority=(2, 3, 4, 1),
+    )
+    from fantasy_football import transaction_cycle
+
+    actual_value_roster = transaction_cycle.value_roster
+
+    def controlled_incomplete_value(snapshot_arg, state_arg, team_id):
+        result = actual_value_roster(snapshot_arg, state_arg, team_id)
+        if team_id == 1 and any(
+            entry.player_id == -300 and entry.team_id == 1
+            for entry in state_arg.roster_entries
+        ):
+            return replace(
+                result,
+                is_complete=False,
+                unresolved_inputs=("controlled_material_future_access",),
+            )
+        return result
+
+    monkeypatch.setattr(transaction_cycle, "value_roster", controlled_incomplete_value)
+    feasible = enumerate_feasible_cycles(snapshot, state, WeeklyTransactionPolicy())
+    acquired_terminals = tuple(
+        terminal
+        for terminal in feasible.terminals
+        if any(
+            entry.player_id == -300 and entry.team_id == 1
+            for entry in terminal.state.roster_entries
+        )
+    )
+    assert feasible.legal_enumeration_complete
+    assert feasible.incomplete_valuation_branch_count > 0
+    assert feasible.all_terminal_valuations_complete is False
+    assert feasible.unresolved_terminal_valuation_count > 0
+    assert acquired_terminals
+    assert any(item.contains_incomplete_plan_valuation for item in acquired_terminals)
+
+    sequential = execute_sequential_policy_reference(
+        snapshot, state, WeeklyTransactionPolicy()
+    )
+    assert sequential.determination_complete is False
+    assert sequential.unresolved_decisions
+    assert sequential.state == state
+    comparison = validate_operational_policy_equivalence(
+        snapshot, state, WeeklyTransactionPolicy()
+    )
+    assert comparison.equivalent is False
+    assert "reference_sequential_policy_unresolved" in comparison.mismatches
+
+
+def test_immaterial_unresolved_player_preserves_complete_cycle_values() -> None:
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    state = _state(snapshot)
+    state = replace(
+        state,
+        availability=tuple(
+            replace(item, status=AcquisitionAvailability.UNRESOLVED)
+            if item.player_id == 4
+            else item
+            for item in state.availability
+        ),
+    )
+    result = enumerate_feasible_cycles(snapshot, state, WeeklyTransactionPolicy())
+    assert result.legal_enumeration_complete
+    assert result.all_terminal_valuations_complete
+    assert result.incomplete_valuation_branch_count == 0
+
+
+@pytest.mark.parametrize("candidate_count", [1, 2, 3, 4, 5])
+def test_seeded_tiny_policy_trace_equivalence(candidate_count: int) -> None:
+    values = tuple(float(10 - index) for index in range(candidate_count))
+    snapshot = _valuation_snapshot(competing_teams=0, pool_values=values)
+    comparison = validate_operational_policy_equivalence(
+        snapshot, _state(snapshot), WeeklyTransactionPolicy()
+    )
+    assert comparison.equivalent, comparison.mismatches
+    assert comparison.reference_trace == comparison.operational_trace
+
+
+def test_compound_ir_cycle_trace_matches_operational_execution() -> None:
+    snapshot, state = _compound_ir_cycle_fixture()
+    comparison = validate_operational_policy_equivalence(
+        snapshot, state, WeeklyTransactionPolicy()
+    )
+    assert comparison.equivalent, comparison.mismatches
+    assert comparison.reference_trace == comparison.operational_trace
+    selected = comparison.reference_trace[0]
+    assert selected[3] == 200
+    assert selected[5] == (11,)
+    assert selected[6] == (13,)
+    assert tuple(item[0] for item in selected[8]) == (
+        "ir_place",
+        "ir_activate",
+        "add",
+    )
+    availability = {
+        item.player_id: item for item in comparison.reference.state.availability
+    }
+    assert all(
+        availability[player_id].status is AcquisitionAvailability.HOLD
+        for player_id in selected[4]
+    )
