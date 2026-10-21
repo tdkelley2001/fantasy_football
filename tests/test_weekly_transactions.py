@@ -10,14 +10,20 @@ from fantasy_football.canonical.model import (
     ProjectionClass,
     ProjectionSource,
     RosterEntry,
+    SlotKind,
 )
 from fantasy_football.evolving_state import (
     AcquisitionAvailability,
     IREligibility,
     IRPolicy,
+    TransactionPhase,
+    TransactionStateError,
+    activate_from_ir,
+    add_player,
     initialize_evolving_state,
     place_on_ir,
     record_ir_eligibility_evidence,
+    replace_player,
     validate_eligibility_evidence_artifact,
 )
 from fantasy_football.lineup_optimizer import optimize_starting_lineup
@@ -44,6 +50,170 @@ def _policy(*, waivers: bool = False) -> WeeklyTransactionPolicy:
 
 def _state(snapshot):
     return initialize_evolving_state(snapshot, scoring_week=15, ir_policy=IRPolicy.PROJECTION_BASED)
+
+
+def _effect_signature(state):
+    return (
+        state.roster_entries,
+        state.availability,
+        state.season_acquisition_counts,
+        state.matchup_acquisition_counts,
+        state.ir_eligibility_evidence,
+    )
+
+
+def _exhaustive_small_correction_oracle(snapshot, state, team_id, player_id):
+    """Independent leaf enumeration for bounded correction fixtures.
+
+    It intentionally has no production deduplication or relevance pruning.
+    Finiteness comes only from one placement/activation per player and
+    irreversible drops.
+    """
+
+    reserve_ids = tuple(
+        rule.slot_id for rule in snapshot.rules.lineup_slots
+        if rule.kind is SlotKind.RESERVE and rule.capacity > 0
+    )
+    players = {player.player_id: player for player in snapshot.players}
+    projections = {
+        record.player_id: record.effective_projection
+        for record in snapshot.player_weeks if record.scoring_week == state.scoring_week
+    }
+    leaves = []
+
+    def visit(candidate, activated, placed):
+        leaves.append(candidate)
+        owned = tuple(
+            entry.player_id for entry in candidate.roster_entries
+            if entry.team_id == team_id
+        )
+        reserve_owned = tuple(
+            entry.player_id for entry in candidate.roster_entries
+            if entry.team_id == team_id and entry.lineup_slot_id in reserve_ids
+        )
+        blockers = tuple(
+            item for item in reserve_owned
+            if projections[item] > 0 and item not in placed
+        )
+        for blocker_id in blockers:
+            for slot_id in tuple(sorted(
+                rule.slot_id for rule in snapshot.rules.lineup_slots
+                if rule.kind is not SlotKind.RESERVE
+                and rule.capacity > 0
+                and rule.slot_id in players[blocker_id].eligible_lineup_slot_ids
+            )):
+                try:
+                    activated_state = activate_from_ir(
+                        candidate, snapshot, team_id=team_id,
+                        player_id=blocker_id, ordinary_slot_id=slot_id,
+                    )
+                except TransactionStateError:
+                    activated_state = None
+                if activated_state is not None:
+                    visit(activated_state, activated | {blocker_id}, placed)
+                else:
+                    for drop_id in owned:
+                        if drop_id == blocker_id:
+                            continue
+                        try:
+                            activated_state = activate_from_ir(
+                                candidate, snapshot, team_id=team_id,
+                                player_id=blocker_id, ordinary_slot_id=slot_id,
+                                drop_player_id=drop_id,
+                            )
+                        except TransactionStateError:
+                            continue
+                        visit(activated_state, activated | {blocker_id}, placed)
+        for entry in candidate.roster_entries:
+            if (
+                entry.team_id != team_id
+                or entry.lineup_slot_id in reserve_ids
+                or entry.player_id in activated
+                or entry.player_id in placed
+                or players[entry.player_id].injury_status not in {"OUT", "IR"}
+            ):
+                continue
+            for reserve_id in reserve_ids:
+                try:
+                    placed_state = place_on_ir(
+                        candidate, snapshot, team_id=team_id,
+                        player_id=entry.player_id, reserve_slot_id=reserve_id,
+                    )
+                except TransactionStateError:
+                    continue
+                visit(placed_state, activated, placed | {entry.player_id})
+
+    visit(state, frozenset(), frozenset())
+    baseline = optimize_starting_lineup(
+        snapshot, team_id, state.scoring_week, roster_entries=state.roster_entries
+    )
+    results = {}
+    legal_results = set()
+    essential_results = set()
+    destination_ids = tuple(sorted(
+        rule.slot_id for rule in snapshot.rules.lineup_slots
+        if rule.kind is not SlotKind.RESERVE
+        and rule.capacity > 0
+        and rule.slot_id in players[player_id].eligible_lineup_slot_ids
+    ))
+    for corrected in leaves:
+        for slot_id in destination_ids:
+            try:
+                completed = add_player(
+                    corrected, snapshot, team_id=team_id, player_id=player_id,
+                    lineup_slot_id=slot_id, phase=TransactionPhase.FREE_AGENT,
+                )
+            except TransactionStateError:
+                completed = None
+            completions = [] if completed is None else [completed]
+            if completed is None:
+                for drop_id in tuple(
+                    entry.player_id for entry in corrected.roster_entries
+                    if entry.team_id == team_id
+                ):
+                    try:
+                        completions.append(replace_player(
+                            corrected, snapshot, team_id=team_id,
+                            drop_player_id=drop_id, add_player_id=player_id,
+                            lineup_slot_id=slot_id, phase=TransactionPhase.FREE_AGENT,
+                        ))
+                    except TransactionStateError:
+                        continue
+            for completed in completions:
+                legal_results.add(_effect_signature(completed))
+                records = completed.ledger[len(state.ledger):]
+                consumers = [
+                    record for record in records
+                    if record.action.value in {"ir_activate", "add"}
+                ]
+                used = set()
+                relevant = True
+                for placement in (
+                    record for record in records if record.action.value == "ir_place"
+                ):
+                    match = next((
+                        index for index, consumer in enumerate(consumers)
+                        if index not in used
+                        and consumer.sequence > placement.sequence
+                        and consumer.resulting_slot_id == placement.prior_slot_id
+                    ), None)
+                    if match is None:
+                        relevant = False
+                        break
+                    used.add(match)
+                if not relevant:
+                    continue
+                lineup = optimize_starting_lineup(
+                    snapshot, team_id, state.scoring_week,
+                    roster_entries=completed.roster_entries,
+                )
+                if lineup.vacancy_count >= baseline.vacancy_count:
+                    continue
+                essential_results.add(_effect_signature(completed))
+                valuation = value_roster(snapshot, completed, team_id)
+                if valuation.is_complete:
+                    results[_effect_signature(completed)] = valuation.total_value
+    return results, leaves, legal_results, essential_results
 
 
 def _staff_team_one(snapshot):
@@ -212,6 +382,103 @@ def test_necessary_ir_placement_creates_capacity_without_unrelated_reshuffling()
     assert tuple(record.action.value for record in result.state.ledger[-2:]) == (
         "ir_place", "add",
     )
+
+
+def test_ir_placement_can_enable_activation_outside_acquisition_slot_namespace() -> None:
+    """Regression for QB placement -> QB activation -> FLEX acquisition."""
+
+    snapshot = _overlap_snapshot(pool_specs=((200, (23,), 9.0),))
+    source_id = snapshot.sources[0].source_id
+    blocker = Player(
+        13, "Recovered QB", 1, (0, 21), 1, "ACTIVE", "ONTEAM",
+        True, source_id,
+    )
+    snapshot = replace(
+        snapshot,
+        lineup_slot_namespace=replace(
+            snapshot.lineup_slot_namespace,
+            observed_slot_ids=tuple(sorted(set(
+                snapshot.lineup_slot_namespace.observed_slot_ids + (21,)
+            ))),
+        ),
+        rules=replace(
+            snapshot.rules,
+            lineup_slots=tuple(
+                replace(rule, capacity=2) if rule.slot_id == 21 else rule
+                for rule in snapshot.rules.lineup_slots
+            ),
+        ),
+        players=tuple(sorted(
+            tuple(
+                replace(
+                    player,
+                    injury_status="OUT",
+                    is_undroppable=True,
+                    eligible_lineup_slot_ids=tuple(sorted(set(player.eligible_lineup_slot_ids + (21,)))),
+                ) if player.player_id == 11 else
+                replace(player, acquisition_status="WAIVERS")
+                if player.player_id == 12 else player
+                for player in snapshot.players
+            ) + (blocker,),
+            key=lambda item: item.player_id,
+        )),
+        roster_entries=tuple(sorted(
+            tuple(entry for entry in snapshot.roster_entries if entry.player_id != 12)
+            + (RosterEntry(13, 1, 21, 1),),
+            key=lambda item: (item.team_id, item.player_id),
+        )),
+        player_weeks=tuple(sorted(
+            tuple(
+                replace(
+                    record,
+                    raw_projection=0.0,
+                    projection_class=ProjectionClass.EXPLICIT_ZERO,
+                    effective_projection=0.0,
+                ) if record.player_id == 11 else record
+                for record in snapshot.player_weeks
+            ) + tuple(PlayerWeek(
+                13, 2026, week, 13.0, ProjectionClass.PRESENT, 13.0,
+                ProjectionSource.ESPN, source_id,
+            ) for week in (15, 16, 17)),
+            key=lambda item: (item.player_id, item.scoring_week),
+        )),
+    )
+    state = replace(
+        _state(snapshot),
+        current_waiver_priority=(4, 3, 2, 1),
+        initial_window_waiver_priority=(4, 3, 2, 1),
+    )
+    from fantasy_football.weekly_transactions import _enumerate_plans
+    oracle, oracle_states, oracle_legal, oracle_essential = _exhaustive_small_correction_oracle(
+        snapshot, state, 1, 200
+    )
+    production, diagnostic, _, production_legal, production_essential = _enumerate_plans(
+        snapshot, state, team_id=1, phase=TransactionPhase.FREE_AGENT
+    )
+    production_values = {
+        _effect_signature(plan.state): plan.value for plan in production
+    }
+    assert {_effect_signature(item) for item in production_legal} == oracle_legal
+    assert {_effect_signature(item) for item in production_essential} == oracle_essential
+    assert production_values == oracle
+    assert max(len(item.ledger) for item in oracle_states) >= 2
+    assert diagnostic.correction_states >= 3
+    result = execute_weekly_essential_transactions(snapshot, state, _policy())
+    team_acquisitions = tuple(item for item in result.acquisitions if item.team_id == 1)
+    assert team_acquisitions, tuple(item for item in result.decisions if item.team_id == 1)
+    acquisition = team_acquisitions[0]
+    assert acquisition.acquired_player_id == 200
+    assert acquisition.ir_placed_player_ids == (11,), acquisition
+    assert acquisition.ir_activated_player_ids == (13,)
+    assert acquisition.dropped_player_ids == ()
+    assert tuple(record.action.value for record in result.state.ledger[-3:]) == (
+        "ir_place", "ir_activate", "add",
+    )
+    roster = {entry.player_id: entry.lineup_slot_id for entry in result.state.roster_entries}
+    assert roster[11] == 21
+    assert roster[13] == 0
+    assert roster[200] in {20, 23}
+    assert acquisition.resulting_roster_value == max(oracle.values())
 
 
 def test_waiver_phase_uses_dynamic_priority_and_moves_success_to_last() -> None:
