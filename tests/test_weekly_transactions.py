@@ -13,24 +13,32 @@ from fantasy_football.canonical.model import (
 )
 from fantasy_football.evolving_state import (
     AcquisitionAvailability,
+    IREligibility,
     IRPolicy,
     initialize_evolving_state,
+    place_on_ir,
+    record_ir_eligibility_evidence,
+    validate_eligibility_evidence_artifact,
 )
 from fantasy_football.lineup_optimizer import optimize_starting_lineup
 from fantasy_football.roster_value import value_roster
 from fantasy_football.weekly_transactions import (
     DecisionOutcome,
+    WaiverBoundaryPolicy,
     WeeklyTransactionError,
     WeeklyTransactionPolicy,
     execute_weekly_essential_transactions,
 )
 from tests.test_roster_value import _overlap_snapshot, _valuation_snapshot
+from tests.test_evolving_state import _eligibility_artifact
 
 
 def _policy(*, waivers: bool = False) -> WeeklyTransactionPolicy:
     return WeeklyTransactionPolicy(
-        waiver_processing_authorized=waivers,
-        waiver_boundary_assumption_id="modeled_weekly_waiver_boundary_v1" if waivers else None,
+        waiver_boundary=(
+            WaiverBoundaryPolicy.MODELED_WEEKLY_V1
+            if waivers else WaiverBoundaryPolicy.UNRESOLVED
+        ),
     )
 
 
@@ -162,6 +170,50 @@ def test_full_roster_uses_explicit_legal_drop_and_holds_dropped_player() -> None
     assert all(availability[player_id].prohibited_cycle_id == result.state.cycle_id for player_id in acquisition.dropped_player_ids)
 
 
+def test_necessary_ir_placement_creates_capacity_without_unrelated_reshuffling() -> None:
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    source_id = snapshot.sources[0].source_id
+    zero_dst = Player(-500, "Protected Zero DST", 16, (16, 20), 1, None, "ONTEAM", True, source_id)
+    snapshot = replace(
+        snapshot,
+        players=tuple(sorted(
+            tuple(
+                replace(
+                    player,
+                    acquisition_status="ONTEAM",
+                    injury_status="OUT" if player.player_id == 2 else player.injury_status,
+                    eligible_lineup_slot_ids=(0, 20, 21) if player.player_id == 2 else player.eligible_lineup_slot_ids,
+                ) if player.player_id in {2, 3} else player
+                for player in snapshot.players
+            ) + (zero_dst,),
+            key=lambda item: item.player_id,
+        )),
+        roster_entries=tuple(sorted(
+            snapshot.roster_entries + (
+                RosterEntry(-500, 1, 16, 1),
+                RosterEntry(2, 1, 20, 1),
+                RosterEntry(3, 1, 20, 1),
+            ),
+            key=lambda item: (item.team_id, item.player_id),
+        )),
+        player_weeks=tuple(sorted(
+            snapshot.player_weeks + tuple(PlayerWeek(
+                -500, 2026, week, 0.0, ProjectionClass.EXPLICIT_ZERO, 0.0,
+                ProjectionSource.ESPN, source_id,
+            ) for week in (15, 16, 17)),
+            key=lambda item: (item.player_id, item.scoring_week),
+        )),
+    )
+    result = execute_weekly_essential_transactions(snapshot, _state(snapshot), _policy())
+    acquisition = next(item for item in result.acquisitions if item.team_id == 1)
+    assert acquisition.acquired_player_id == -300
+    assert acquisition.ir_placed_player_ids == (2,)
+    assert acquisition.dropped_player_ids == ()
+    assert tuple(record.action.value for record in result.state.ledger[-2:]) == (
+        "ir_place", "add",
+    )
+
+
 def test_waiver_phase_uses_dynamic_priority_and_moves_success_to_last() -> None:
     snapshot = _valuation_snapshot(competing_teams=2, pool_values=(8.0,))
     snapshot = _staff_team_one(replace(
@@ -217,7 +269,91 @@ def test_finite_acquisition_limit_blocks_execution_without_mutation() -> None:
         if item.team_id == 1 and item.phase.value == "free_agent"
     )
     assert team_one[-1].outcome is DecisionOutcome.NO_LEGAL_PLAN
-    assert any(item.reason == "illegal_plan" for item in team_one[-1].rejection_summaries)
+    assert any(item.reason == "acquisition_limit" for item in team_one[-1].rejection_summaries)
+
+
+def _strict_ir_state(eligibility: IREligibility | None):
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    snapshot = replace(snapshot, players=tuple(
+        replace(
+            player,
+            eligible_lineup_slot_ids=tuple(sorted(set(player.eligible_lineup_slot_ids + (21,)))),
+            injury_status="OUT",
+        ) if player.player_id == 1 else player
+        if player.player_id != 4 else replace(player, acquisition_status="WAIVERS")
+        for player in snapshot.players
+    ))
+    claims = [] if eligibility is None else [{
+        "kind": "ir", "player_id": 1, "scoring_week": 15,
+        "eligibility": eligibility.value,
+        "condition": "future_ir_eligibility_observed",
+    }]
+    if claims:
+        snapshot, payload, source_id = _eligibility_artifact(snapshot, claims)
+    state = initialize_evolving_state(snapshot, scoring_week=15, ir_policy=IRPolicy.STRICT)
+    state = place_on_ir(state, snapshot, team_id=1, player_id=1, reserve_slot_id=21)
+    if claims:
+        evidence = validate_eligibility_evidence_artifact(
+            snapshot, source_id=source_id, payload=payload
+        ).ir_determinations[0]
+        state = record_ir_eligibility_evidence(state, snapshot, evidence)
+    return snapshot, state
+
+
+def test_strict_ineligible_ir_occupant_is_activated_before_essential_add() -> None:
+    snapshot, state = _strict_ir_state(IREligibility.INELIGIBLE)
+    result = execute_weekly_essential_transactions(snapshot, state, _policy())
+    acquisition = next(item for item in result.acquisitions if item.team_id == 1)
+    assert acquisition.acquired_player_id == -300
+    assert acquisition.ir_activated_player_ids == (1,)
+    assert tuple(record.action.value for record in result.state.ledger[-2:]) == (
+        "ir_activate", "add",
+    )
+
+
+def test_strict_eligible_ir_occupant_does_not_block_essential_add() -> None:
+    snapshot, state = _strict_ir_state(IREligibility.ELIGIBLE)
+    result = execute_weekly_essential_transactions(snapshot, state, _policy())
+    acquisition = next(item for item in result.acquisitions if item.team_id == 1)
+    assert acquisition.acquired_player_id == -300
+    assert acquisition.ir_activated_player_ids == ()
+
+
+@pytest.mark.parametrize("eligibility", [None, IREligibility.UNKNOWN])
+def test_strict_unknown_ir_status_does_not_authorize_correction(eligibility) -> None:
+    snapshot, state = _strict_ir_state(eligibility)
+    result = execute_weekly_essential_transactions(snapshot, state, _policy())
+    assert result.free_agent_acquisitions == 0
+    assert result.state == state
+    assert any(
+        item.outcome is DecisionOutcome.UNRESOLVED_AUTHORIZATION
+        for item in result.decisions if item.team_id == 1
+    )
+
+
+def test_arbitrary_waiver_boundary_string_cannot_authorize_processing() -> None:
+    snapshot = _valuation_snapshot(pool_values=(8.0,))
+    with pytest.raises(WeeklyTransactionError, match="unsupported waiver boundary policy"):
+        execute_weekly_essential_transactions(
+            snapshot, _state(snapshot),
+            WeeklyTransactionPolicy(waiver_boundary="anything"),  # type: ignore[arg-type]
+        )
+
+
+def test_plan_stage_diagnostics_reconcile() -> None:
+    snapshot = _valuation_snapshot(pool_values=(8.0, 6.0))
+    result = execute_weekly_essential_transactions(snapshot, _state(snapshot), _policy())
+    decision = next(item for item in result.decisions if item.outcome is DecisionOutcome.ACQUIRED)
+    rejected_attempts = sum(
+        item.count for item in decision.rejection_summaries
+        if item.reason not in {"ineligible_for_configured_slots", "incomplete_valuation"}
+    )
+    assert decision.transaction_sequences_attempted == decision.legally_executable_plans + rejected_attempts
+    assert decision.legally_executable_plans >= decision.essential_qualified_plans
+    assert decision.essential_qualified_plans == (
+        decision.valuation_complete_plans + decision.incomplete_valuation_plans
+    )
+    assert result.unique_legal_resulting_states <= decision.legally_executable_plans
 
 
 def test_incomplete_valuation_policy_cannot_be_disabled() -> None:
@@ -226,7 +362,7 @@ def test_incomplete_valuation_policy_cannot_be_disabled() -> None:
         execute_weekly_essential_transactions(
             snapshot,
             _state(snapshot),
-            WeeklyTransactionPolicy(False, reject_incomplete_valuations=False),
+            WeeklyTransactionPolicy(reject_incomplete_valuations=False),
         )
 
 
