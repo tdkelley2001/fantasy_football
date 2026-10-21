@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import replace
 
 import pytest
@@ -395,6 +396,24 @@ def test_seeded_tiny_policy_trace_equivalence(candidate_count: int) -> None:
     )
     assert comparison.equivalent, comparison.mismatches
     assert comparison.reference_trace == comparison.operational_trace
+
+
+def test_fixed_seed_randomized_tiny_policy_equivalence() -> None:
+    rng = random.Random(23035)
+    for _case in range(12):
+        candidate_count = rng.randint(1, 3)
+        projections = tuple(float(rng.randint(1, 20)) for _ in range(candidate_count))
+        snapshot = _valuation_snapshot(
+            competing_teams=rng.randint(0, 1), pool_values=projections
+        )
+        comparison = validate_operational_policy_equivalence(
+            snapshot, _state(snapshot), WeeklyTransactionPolicy()
+        )
+        assert comparison.equivalent, (
+            projections,
+            comparison.mismatches,
+        )
+        assert comparison.reference_trace == comparison.operational_trace
 
 
 def test_compound_ir_cycle_trace_matches_operational_execution() -> None:
