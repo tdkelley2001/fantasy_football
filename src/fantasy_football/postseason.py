@@ -1027,22 +1027,47 @@ def _advance_consolation(
         and all(item.status is MatchupStatus.COMPLETE for item in final_round)
         and not any(item.bracket_type is BracketType.CONSOLATION for item in placements)
     ):
-        buckets: dict[int, list[int]] = {index: [] for index in range(len(final_round))}
-        ordered_final = tuple(sorted(final_round, key=lambda item: item.purpose))
-        for index, matchup in enumerate(ordered_final):
-            buckets[max(index - 1, 0)].append(matchup.winner_team_id)
-            buckets[min(index + 1, len(final_round) - 1)].append(matchup.loser_team_id)
-        for index, team_ids in buckets.items():
-            team_ids.sort(key=lambda team_id: positions[team_id].original_seed)
-            base_position = min(graph.participant_seeds) + index * 2
-            for offset, team_id in enumerate(team_ids):
-                positions[team_id] = replace(
-                    positions[team_id], current_position=base_position + offset
+        final_nodes = {
+            item.node_id: item
+            for item in graph.nodes
+            if item.round_number == graph.round_count
+        }
+        first_place = min(graph.participant_seeds)
+        for matchup in final_round:
+            node = final_nodes.get(matchup.purpose)
+            if node is None:
+                raise PostseasonError(
+                    f"consolation final matchup {matchup.purpose!r} is absent from its graph"
                 )
-        placements.extend(
-            FinalPlacement(item.current_position, item.team_id, BracketType.CONSOLATION)
-            for item in positions.values()
-        )
+            winner_place = first_place + node.position * 2
+            loser_place = winner_place + 1
+            if (
+                winner_place not in graph.participant_seeds
+                or loser_place not in graph.participant_seeds
+            ):
+                raise PostseasonError(
+                    f"consolation final matchup {matchup.purpose!r} lacks an adjacent placement pair"
+                )
+            positions[matchup.winner_team_id] = replace(
+                positions[matchup.winner_team_id], current_position=winner_place
+            )
+            positions[matchup.loser_team_id] = replace(
+                positions[matchup.loser_team_id], current_position=loser_place
+            )
+            placements.extend(
+                (
+                    FinalPlacement(
+                        winner_place,
+                        matchup.winner_team_id,
+                        BracketType.CONSOLATION,
+                    ),
+                    FinalPlacement(
+                        loser_place,
+                        matchup.loser_team_id,
+                        BracketType.CONSOLATION,
+                    ),
+                )
+            )
     unresolved = tuple(
         item
         for item in state.unresolved_capabilities

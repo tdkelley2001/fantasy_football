@@ -143,6 +143,57 @@ def _score_all_active(snapshot, state, scoring_week: int):
     return apply_postseason_team_scores(snapshot, state, scoring_week, scores)
 
 
+def _complete_postseason_with_final_pattern(
+    snapshot, *, lower_seed_wins: tuple[bool, ...]
+):
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    original = state
+    seed_by_team = {item.team_id: item.original_seed for item in state.seeds}
+    final_round = len(snapshot.rules.consolation.rounds)
+    scoring_weeks = tuple(
+        sorted(
+            {
+                week
+                for period in snapshot.matchup_periods
+                if period.phase is MatchupPhase.POSTSEASON
+                for week in period.scoring_weeks
+            }
+        )
+    )
+    for week in scoring_weeks:
+        active = tuple(
+            item
+            for item in state.championship_matchups + state.consolation_matchups
+            if week in item.scoring_weeks
+            and item.status not in {MatchupStatus.COMPLETE, MatchupStatus.BYE}
+        )
+        final_nodes = {
+            item.node_id: item.position
+            for item in state.consolation_graph.nodes
+            if item.round_number == final_round
+        }
+        scores = []
+        for matchup in active:
+            winner = matchup.home_team_id
+            if (
+                matchup.bracket_type is BracketType.CONSOLATION
+                and matchup.round_number == final_round
+            ):
+                position = final_nodes[matchup.purpose]
+                participants = (matchup.home_team_id, matchup.away_team_id)
+                winner = (
+                    max(participants, key=seed_by_team.__getitem__)
+                    if lower_seed_wins[position]
+                    else min(participants, key=seed_by_team.__getitem__)
+                )
+            for team_id in (matchup.home_team_id, matchup.away_team_id):
+                scores.append(
+                    WeeklyTeamScore(week, team_id, 100.0 if team_id == winner else 90.0)
+                )
+        state = apply_postseason_team_scores(snapshot, state, week, tuple(scores))
+    return original, state
+
+
 def _score_round(snapshot, state, round_number, winners):
     matchups = tuple(
         item
@@ -447,6 +498,138 @@ def test_2026_eight_participant_ladder_complete_pairing_regression() -> None:
         )
         state = apply_postseason_team_scores(snapshot, state, week, scores)
     assert final_positions_complete(state, 14)
+
+
+@pytest.mark.parametrize(
+    "lower_seed_wins",
+    (
+        (True, True, True, True),
+        (False, True, False, True),
+    ),
+)
+def test_final_consolation_games_assign_their_adjacent_rank_pairs_directly(
+    lower_seed_wins: tuple[bool, ...],
+) -> None:
+    snapshot = _snapshot()
+    original, state = _complete_postseason_with_final_pattern(
+        snapshot, lower_seed_wins=lower_seed_wins
+    )
+    seed_by_team = {item.team_id: item.original_seed for item in state.seeds}
+    placements = {item.team_id: item.place for item in state.placements}
+    final_nodes = {
+        item.node_id: item.position
+        for item in state.consolation_graph.nodes
+        if item.round_number == state.consolation_graph.round_count
+    }
+    final_matchups = tuple(
+        item
+        for item in state.consolation_matchups
+        if item.round_number == state.consolation_graph.round_count
+    )
+    assert len(final_matchups) == 4
+    for matchup in final_matchups:
+        position = final_nodes[matchup.purpose]
+        assert placements[matchup.winner_team_id] == 7 + position * 2
+        assert placements[matchup.loser_team_id] == 8 + position * 2
+        if lower_seed_wins[position]:
+            assert (
+                seed_by_team[matchup.winner_team_id]
+                > seed_by_team[matchup.loser_team_id]
+            )
+    assert tuple(sorted(placements.values())) == tuple(range(1, 15))
+    assert tuple(
+        item.current_position
+        for item in sorted(state.consolation_positions, key=lambda item: item.team_id)
+    ) == tuple(
+        placements[item.team_id]
+        for item in sorted(state.consolation_positions, key=lambda item: item.team_id)
+    )
+    assert original == initialize_postseason(snapshot, _standings(snapshot))
+
+
+@pytest.mark.parametrize(
+    ("team_count", "pattern"),
+    (
+        (10, (True, False)),
+        (12, (False, True, True)),
+    ),
+)
+def test_generic_final_games_assign_adjacent_pairs_for_four_and_six_participants(
+    team_count: int, pattern: tuple[bool, ...]
+) -> None:
+    snapshot = _snapshot(team_count=team_count)
+    _, state = _complete_postseason_with_final_pattern(
+        snapshot, lower_seed_wins=pattern
+    )
+    placements = {item.team_id: item.place for item in state.placements}
+    node_positions = {
+        item.node_id: item.position
+        for item in state.consolation_graph.nodes
+        if item.round_number == state.consolation_graph.round_count
+    }
+    for matchup in state.consolation_matchups:
+        if matchup.round_number != state.consolation_graph.round_count:
+            continue
+        higher_rank = 7 + node_positions[matchup.purpose] * 2
+        assert placements[matchup.winner_team_id] == higher_rank
+        assert placements[matchup.loser_team_id] == higher_rank + 1
+    assert tuple(sorted(placements.values())) == tuple(range(1, team_count + 1))
+
+
+def test_final_placement_semantics_are_independent_of_scoring_period_lengths() -> None:
+    multiweek = _snapshot()
+    singleweek = replace(
+        multiweek,
+        matchup_periods=tuple(
+            replace(period, scoring_weeks=(17,))
+            if period.matchup_period_id == 4
+            else period
+            for period in multiweek.matchup_periods
+        ),
+        player_weeks=tuple(
+            item for item in multiweek.player_weeks if item.scoring_week <= 17
+        ),
+        nfl_games=tuple(
+            item for item in multiweek.nfl_games if item.scoring_week <= 17
+        ),
+        final_simulation_week=17,
+    )
+    pattern = (True, False, True, False)
+    _, multiweek_state = _complete_postseason_with_final_pattern(
+        multiweek, lower_seed_wins=pattern
+    )
+    _, singleweek_state = _complete_postseason_with_final_pattern(
+        singleweek, lower_seed_wins=pattern
+    )
+    multiweek_by_seed = {
+        next(
+            seed.original_seed
+            for seed in multiweek_state.seeds
+            if seed.team_id == item.team_id
+        ): item.place
+        for item in multiweek_state.placements
+    }
+    singleweek_by_seed = {
+        next(
+            seed.original_seed
+            for seed in singleweek_state.seeds
+            if seed.team_id == item.team_id
+        ): item.place
+        for item in singleweek_state.placements
+    }
+    assert singleweek_by_seed == multiweek_by_seed
+
+
+def test_final_consolation_placements_are_reordered_input_deterministic() -> None:
+    snapshot = _snapshot()
+    first = initialize_postseason(snapshot, _standings(snapshot))
+    second = initialize_postseason(snapshot, tuple(reversed(_standings(snapshot))))
+    assert first == second
+    for week in (15, 16, 17, 18):
+        first = _score_all_active(snapshot, first, week)
+        second = _score_all_active(snapshot, second, week)
+    assert first.placements == second.placements
+    assert first.consolation_positions == second.consolation_positions
 
 
 def test_single_and_multiweek_progression_produces_places_one_through_six() -> None:
