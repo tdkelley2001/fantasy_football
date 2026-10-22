@@ -35,6 +35,7 @@ from fantasy_football.weekly_transactions import (
     WeeklyTransactionPolicy,
     WeeklyTransactionResult,
     execute_weekly_essential_transactions,
+    require_supported_transaction_rules,
 )
 
 
@@ -497,6 +498,10 @@ def enumerate_feasible_cycles(
 
     validate_snapshot(snapshot)
     validate_evolving_state(state, snapshot)
+    try:
+        require_supported_transaction_rules(snapshot)
+    except ValueError as exc:
+        raise CycleReferenceError(str(exc)) from exc
     if not isinstance(policy.waiver_boundary, WaiverBoundaryPolicy):
         raise CycleReferenceError(
             f"unsupported waiver boundary {policy.waiver_boundary!r}"
@@ -711,6 +716,10 @@ def execute_sequential_policy_reference(
 
     validate_snapshot(snapshot)
     validate_evolving_state(state, snapshot)
+    try:
+        require_supported_transaction_rules(snapshot)
+    except ValueError as exc:
+        raise CycleReferenceError(str(exc)) from exc
     if not isinstance(policy.waiver_boundary, WaiverBoundaryPolicy):
         raise CycleReferenceError(
             f"unsupported waiver boundary {policy.waiver_boundary!r}"

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, replace
 from enum import StrEnum
-import time
 
 from fantasy_football.canonical.model import LeagueSnapshot, SlotKind
 from fantasy_football.canonical.validation import validate_snapshot
@@ -15,8 +15,8 @@ from fantasy_football.evolving_state import (
     IRPolicy,
     TransactionPhase,
     TransactionStateError,
-    activate_from_ir,
     acquisition_blocking_ir_players,
+    activate_from_ir,
     add_player,
     apply_successful_waiver_priority,
     place_on_ir,
@@ -29,6 +29,18 @@ from fantasy_football.roster_value import value_roster
 
 class WeeklyTransactionError(ValueError):
     """Raised when the weekly transaction capability cannot execute safely."""
+
+
+def require_supported_transaction_rules(snapshot: LeagueSnapshot) -> None:
+    """Gate the V1 execution policy to its verified traditional-waiver scope."""
+
+    acquisition = snapshot.rules.acquisition
+    if acquisition.acquisition_type != "WAIVERS_TRADITIONAL" or acquisition.uses_budget:
+        raise WeeklyTransactionError(
+            "weekly transaction execution supports only verified non-budget "
+            f"WAIVERS_TRADITIONAL leagues; observed {acquisition.acquisition_type!r} "
+            f"uses_budget={acquisition.uses_budget}"
+        )
 
 
 class DecisionOutcome(StrEnum):
@@ -145,20 +157,29 @@ class _PlanDiagnostics:
 
 def _ordinary_slot_ids(snapshot: LeagueSnapshot, player_id: int) -> tuple[int, ...]:
     player = next(item for item in snapshot.players if item.player_id == player_id)
-    return tuple(sorted(
-        rule.slot_id for rule in snapshot.rules.lineup_slots
-        if rule.kind is not SlotKind.RESERVE
-        and rule.capacity > 0
-        and rule.slot_id in player.eligible_lineup_slot_ids
-    ))
+    return tuple(
+        sorted(
+            rule.slot_id
+            for rule in snapshot.rules.lineup_slots
+            if rule.kind is not SlotKind.RESERVE
+            and rule.capacity > 0
+            and rule.slot_id in player.eligible_lineup_slot_ids
+        )
+    )
 
 
 def _team_owned(state: EvolvingLeagueState, team_id: int) -> tuple[int, ...]:
-    return tuple(sorted(entry.player_id for entry in state.roster_entries if entry.team_id == team_id))
+    return tuple(
+        sorted(
+            entry.player_id
+            for entry in state.roster_entries
+            if entry.team_id == team_id
+        )
+    )
 
 
 def _ledger_delta(before: EvolvingLeagueState, after: EvolvingLeagueState):
-    return after.ledger[len(before.ledger):]
+    return after.ledger[len(before.ledger) :]
 
 
 def _state_effect_key(state: EvolvingLeagueState) -> EvolvingLeagueState:
@@ -171,29 +192,42 @@ def _required_ir_blockers(
     snapshot: LeagueSnapshot, state: EvolvingLeagueState, team_id: int
 ) -> tuple[int, ...]:
     reserve_ids = {
-        item.slot_id for item in snapshot.rules.lineup_slots if item.kind is SlotKind.RESERVE
+        item.slot_id
+        for item in snapshot.rules.lineup_slots
+        if item.kind is SlotKind.RESERVE
     }
     owned_reserve = {
-        item.player_id for item in state.roster_entries
+        item.player_id
+        for item in state.roster_entries
         if item.team_id == team_id and item.lineup_slot_id in reserve_ids
     }
     if state.ir_policy is IRPolicy.PROJECTION_BASED:
-        return tuple(sorted(owned_reserve.intersection(
-            acquisition_blocking_ir_players(state, snapshot)
-        )))
+        return tuple(
+            sorted(
+                owned_reserve.intersection(
+                    acquisition_blocking_ir_players(state, snapshot)
+                )
+            )
+        )
     evidence = {
-        item.player_id: item for item in state.ir_eligibility_evidence
+        item.player_id: item
+        for item in state.ir_eligibility_evidence
         if item.scoring_week == state.scoring_week
     }
-    return tuple(sorted(
-        player_id for player_id in owned_reserve
-        if player_id in evidence
-        and evidence[player_id].eligibility is IREligibility.INELIGIBLE
-    ))
+    return tuple(
+        sorted(
+            player_id
+            for player_id in owned_reserve
+            if player_id in evidence
+            and evidence[player_id].eligibility is IREligibility.INELIGIBLE
+        )
+    )
 
 
 def _correction_states(
-    snapshot: LeagueSnapshot, state: EvolvingLeagueState, team_id: int,
+    snapshot: LeagueSnapshot,
+    state: EvolvingLeagueState,
+    team_id: int,
     acquisition_player_id: int,
 ) -> tuple[EvolvingLeagueState, ...]:
     """Exhaustively enumerate finite reactive IR correction effects.
@@ -204,10 +238,13 @@ def _correction_states(
     finite without an artificial depth cap.
     """
 
-    reserve_slots = tuple(sorted(
-        rule.slot_id for rule in snapshot.rules.lineup_slots
-        if rule.kind is SlotKind.RESERVE and rule.capacity > 0
-    ))
+    reserve_slots = tuple(
+        sorted(
+            rule.slot_id
+            for rule in snapshot.rules.lineup_slots
+            if rule.kind is SlotKind.RESERVE and rule.capacity > 0
+        )
+    )
     player_map = {item.player_id: item for item in snapshot.players}
     # state, players activated by this search, players placed by this search
     frontier = [(state, frozenset(), frozenset())]
@@ -219,7 +256,9 @@ def _correction_states(
     while cursor < len(frontier):
         candidate, activated, placed = frontier[cursor]
         cursor += 1
-        transitions: list[tuple[EvolvingLeagueState, frozenset[int], frozenset[int]]] = []
+        transitions: list[
+            tuple[EvolvingLeagueState, frozenset[int], frozenset[int]]
+        ] = []
 
         for blocker in _required_ir_blockers(snapshot, candidate, team_id):
             if blocker in placed:
@@ -227,7 +266,10 @@ def _correction_states(
             for slot_id in _ordinary_slot_ids(snapshot, blocker):
                 try:
                     corrected = activate_from_ir(
-                        candidate, snapshot, team_id=team_id, player_id=blocker,
+                        candidate,
+                        snapshot,
+                        team_id=team_id,
+                        player_id=blocker,
                         ordinary_slot_id=slot_id,
                     )
                 except TransactionStateError:
@@ -238,13 +280,18 @@ def _correction_states(
                 # A drop is reactive only when activation without it is not
                 # legal for this destination.
                 for drop_id in tuple(
-                    player_id for player_id in _team_owned(candidate, team_id)
+                    player_id
+                    for player_id in _team_owned(candidate, team_id)
                     if player_id != blocker
                 ):
                     try:
                         corrected = activate_from_ir(
-                            candidate, snapshot, team_id=team_id, player_id=blocker,
-                            ordinary_slot_id=slot_id, drop_player_id=drop_id,
+                            candidate,
+                            snapshot,
+                            team_id=team_id,
+                            player_id=blocker,
+                            ordinary_slot_id=slot_id,
+                            drop_player_id=drop_id,
                         )
                     except TransactionStateError:
                         continue
@@ -253,8 +300,14 @@ def _correction_states(
         # A verified injured ordinary occupant may move to IR to create the
         # capacity needed by the eventual essential add. It cannot be moved
         # back during this same correction search.
-        for entry in tuple(sorted(candidate.roster_entries, key=lambda item: item.player_id)):
-            if entry.team_id != team_id or entry.player_id in activated or entry.player_id in placed:
+        for entry in tuple(
+            sorted(candidate.roster_entries, key=lambda item: item.player_id)
+        ):
+            if (
+                entry.team_id != team_id
+                or entry.player_id in activated
+                or entry.player_id in placed
+            ):
                 continue
             if entry.lineup_slot_id in reserve_slots:
                 continue
@@ -264,8 +317,11 @@ def _correction_states(
             for reserve_id in reserve_slots:
                 try:
                     corrected = place_on_ir(
-                        candidate, snapshot, team_id=team_id,
-                        player_id=entry.player_id, reserve_slot_id=reserve_id,
+                        candidate,
+                        snapshot,
+                        team_id=team_id,
+                        player_id=entry.player_id,
+                        reserve_slot_id=reserve_id,
                     )
                 except TransactionStateError:
                     continue
@@ -274,7 +330,9 @@ def _correction_states(
         for corrected, next_activated, next_placed in sorted(
             transitions,
             key=lambda item: (
-                repr(item[0].roster_entries), tuple(sorted(item[1])), tuple(sorted(item[2]))
+                repr(item[0].roster_entries),
+                tuple(sorted(item[1])),
+                tuple(sorted(item[2])),
             ),
         ):
             key = _state_effect_key(corrected)
@@ -301,19 +359,22 @@ def _corrections_are_relevant(
 
     records = _ledger_delta(before, after)
     consumers = [
-        record for record in records
-        if record.action.value in {"ir_activate", "add"}
+        record for record in records if record.action.value in {"ir_activate", "add"}
     ]
     consumed: set[int] = set()
     for placement in (
         record for record in records if record.action.value == "ir_place"
     ):
-        match = next((
-            index for index, consumer in enumerate(consumers)
-            if index not in consumed
-            and consumer.sequence > placement.sequence
-            and consumer.resulting_slot_id == placement.prior_slot_id
-        ), None)
+        match = next(
+            (
+                index
+                for index, consumer in enumerate(consumers)
+                if index not in consumed
+                and consumer.sequence > placement.sequence
+                and consumer.resulting_slot_id == placement.prior_slot_id
+            ),
+            None,
+        )
         if match is None:
             return False
         consumed.add(match)
@@ -327,19 +388,27 @@ def _enumerate_plans(
     team_id: int,
     phase: TransactionPhase,
 ) -> tuple[
-    tuple[_Plan, ...], _PlanDiagnostics, int,
-    tuple[EvolvingLeagueState, ...], tuple[EvolvingLeagueState, ...],
+    tuple[_Plan, ...],
+    _PlanDiagnostics,
+    int,
+    tuple[EvolvingLeagueState, ...],
+    tuple[EvolvingLeagueState, ...],
 ]:
     baseline = optimize_starting_lineup(
         snapshot, team_id, state.scoring_week, roster_entries=state.roster_entries
     )
     required_status = (
         AcquisitionAvailability.WAIVERS
-        if phase is TransactionPhase.WAIVER else AcquisitionAvailability.FREE_AGENT
+        if phase is TransactionPhase.WAIVER
+        else AcquisitionAvailability.FREE_AGENT
     )
-    available = tuple(sorted(
-        item.player_id for item in state.availability if item.status is required_status
-    ))
+    available = tuple(
+        sorted(
+            item.player_id
+            for item in state.availability
+            if item.status is required_status
+        )
+    )
     reasons: dict[str, int] = {}
     plans_by_state: dict[EvolvingLeagueState, _Plan] = {}
     legal_states: dict[EvolvingLeagueState, EvolvingLeagueState] = {}
@@ -365,8 +434,12 @@ def _enumerate_plans(
                 attempted += 1
                 try:
                     direct = add_player(
-                        corrected, snapshot, team_id=team_id, player_id=player_id,
-                        lineup_slot_id=slot_id, phase=phase,
+                        corrected,
+                        snapshot,
+                        team_id=team_id,
+                        player_id=player_id,
+                        lineup_slot_id=slot_id,
+                        phase=phase,
                     )
                 except TransactionStateError as exc:
                     direct_error = str(exc)
@@ -379,9 +452,13 @@ def _enumerate_plans(
                         attempted += 1
                         try:
                             resulting = replace_player(
-                                corrected, snapshot, team_id=team_id,
-                                drop_player_id=drop_id, add_player_id=player_id,
-                                lineup_slot_id=slot_id, phase=phase,
+                                corrected,
+                                snapshot,
+                                team_id=team_id,
+                                drop_player_id=drop_id,
+                                add_player_id=player_id,
+                                lineup_slot_id=slot_id,
+                                phase=phase,
                             )
                         except TransactionStateError as exc:
                             text = str(exc)
@@ -420,16 +497,20 @@ def _enumerate_plans(
                     legal += 1
                     legal_states.setdefault(_state_effect_key(resulting), resulting)
                     if not _corrections_are_relevant(state, resulting):
-                        reasons["irrelevant_ir_correction"] = reasons.get(
-                            "irrelevant_ir_correction", 0
-                        ) + 1
+                        reasons["irrelevant_ir_correction"] = (
+                            reasons.get("irrelevant_ir_correction", 0) + 1
+                        )
                         continue
                     after = optimize_starting_lineup(
-                        snapshot, team_id, state.scoring_week,
+                        snapshot,
+                        team_id,
+                        state.scoring_week,
                         roster_entries=resulting.roster_entries,
                     )
                     if after.vacancy_count >= baseline.vacancy_count:
-                        reasons["no_coverage_improvement"] = reasons.get("no_coverage_improvement", 0) + 1
+                        reasons["no_coverage_improvement"] = (
+                            reasons.get("no_coverage_improvement", 0) + 1
+                        )
                         continue
                     essential += 1
                     essential_states.setdefault(_state_effect_key(resulting), resulting)
@@ -439,43 +520,77 @@ def _enumerate_plans(
                     evaluations += 1
                     valuation_seconds += elapsed
                     if not value.is_complete:
-                        reasons["incomplete_valuation"] = reasons.get("incomplete_valuation", 0) + 1
+                        reasons["incomplete_valuation"] = (
+                            reasons.get("incomplete_valuation", 0) + 1
+                        )
                         incomplete += 1
                         continue
                     complete += 1
                     records = _ledger_delta(state, resulting)
-                    dropped = tuple(sorted(
-                        record.player_id for record in records
-                        if record.action.value == "drop" and record.player_id is not None
-                    ))
-                    activated = tuple(sorted(
-                        record.player_id for record in records
-                        if record.action.value == "ir_activate" and record.player_id is not None
-                    ))
-                    placed = tuple(sorted(
-                        record.player_id for record in records
-                        if record.action.value == "ir_place" and record.player_id is not None
-                    ))
+                    dropped = tuple(
+                        sorted(
+                            record.player_id
+                            for record in records
+                            if record.action.value == "drop"
+                            and record.player_id is not None
+                        )
+                    )
+                    activated = tuple(
+                        sorted(
+                            record.player_id
+                            for record in records
+                            if record.action.value == "ir_activate"
+                            and record.player_id is not None
+                        )
+                    )
+                    placed = tuple(
+                        sorted(
+                            record.player_id
+                            for record in records
+                            if record.action.value == "ir_place"
+                            and record.player_id is not None
+                        )
+                    )
                     tie_key = (player_id, dropped, activated, placed, slot_id)
                     plan = _Plan(
-                        resulting, player_id, baseline.vacancy_count, after.vacancy_count,
-                        value.total_value, tie_key,
+                        resulting,
+                        player_id,
+                        baseline.vacancy_count,
+                        after.vacancy_count,
+                        value.total_value,
+                        tie_key,
                     )
                     key = _state_effect_key(resulting)
                     incumbent = plans_by_state.get(key)
                     if incumbent is None or plan.tie_key < incumbent.tie_key:
                         plans_by_state[key] = plan
         if not player_had_structural_option:
-            reasons["ineligible_for_configured_slots"] = reasons.get("ineligible_for_configured_slots", 0) + 1
+            reasons["ineligible_for_configured_slots"] = (
+                reasons.get("ineligible_for_configured_slots", 0) + 1
+            )
     plans = tuple(plans_by_state[key] for key in sorted(plans_by_state, key=repr))
-    return plans, _PlanDiagnostics(
-        len(available), correction_count, attempted, legal, essential, complete,
-        incomplete, unresolved,
-        tuple(CandidateRejectionSummary(reason, count) for reason, count in sorted(reasons.items())),
-        evaluations, valuation_seconds,
-    ), len(legal_states), (
-        tuple(legal_states[key] for key in sorted(legal_states, key=repr))
-    ), tuple(essential_states[key] for key in sorted(essential_states, key=repr))
+    return (
+        plans,
+        _PlanDiagnostics(
+            len(available),
+            correction_count,
+            attempted,
+            legal,
+            essential,
+            complete,
+            incomplete,
+            unresolved,
+            tuple(
+                CandidateRejectionSummary(reason, count)
+                for reason, count in sorted(reasons.items())
+            ),
+            evaluations,
+            valuation_seconds,
+        ),
+        len(legal_states),
+        (tuple(legal_states[key] for key in sorted(legal_states, key=repr))),
+        tuple(essential_states[key] for key in sorted(essential_states, key=repr)),
+    )
 
 
 def _choose(plans: tuple[_Plan, ...]) -> _Plan | None:
@@ -493,8 +608,14 @@ def execute_weekly_essential_transactions(
 
     validate_snapshot(snapshot)
     validate_evolving_state(state, snapshot)
-    if state.scoring_week < snapshot.first_simulation_week or state.scoring_week > snapshot.final_simulation_week:
-        raise WeeklyTransactionError("state scoring week is outside the canonical simulation horizon")
+    require_supported_transaction_rules(snapshot)
+    if (
+        state.scoring_week < snapshot.first_simulation_week
+        or state.scoring_week > snapshot.final_simulation_week
+    ):
+        raise WeeklyTransactionError(
+            "state scoring week is outside the canonical simulation horizon"
+        )
     if not isinstance(policy, WeeklyTransactionPolicy):
         raise WeeklyTransactionError("policy must be WeeklyTransactionPolicy")
     if not isinstance(policy.waiver_boundary, WaiverBoundaryPolicy):
@@ -502,7 +623,9 @@ def execute_weekly_essential_transactions(
             f"unsupported waiver boundary policy {policy.waiver_boundary!r}"
         )
     if not policy.reject_incomplete_valuations:
-        raise WeeklyTransactionError("ranking incomplete roster valuations has no approved capability policy")
+        raise WeeklyTransactionError(
+            "ranking incomplete roster valuations has no approved capability policy"
+        )
 
     initial = state.current_waiver_priority
     frozen = state.initial_window_waiver_priority
@@ -527,16 +650,39 @@ def execute_weekly_essential_transactions(
             order = tuple(order_factory(current))
             for team_id in order:
                 lineup = optimize_starting_lineup(
-                    snapshot, team_id, current.scoring_week, roster_entries=current.roster_entries
+                    snapshot,
+                    team_id,
+                    current.scoring_week,
+                    roster_entries=current.roster_entries,
                 )
                 if lineup.vacancy_count == 0:
-                    decisions.append(TeamDecision(
-                        phase, pass_number, team_id, DecisionOutcome.NO_ESSENTIAL_VACANCY,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, (), None,
-                    ))
+                    decisions.append(
+                        TeamDecision(
+                            phase,
+                            pass_number,
+                            team_id,
+                            DecisionOutcome.NO_ESSENTIAL_VACANCY,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            (),
+                            None,
+                        )
+                    )
                     continue
-                plans, diagnostic, unique_legal, _legal_states, _essential_states = _enumerate_plans(
-                    snapshot, current, team_id=team_id, phase=phase,
+                plans, diagnostic, unique_legal, _legal_states, _essential_states = (
+                    _enumerate_plans(
+                        snapshot,
+                        current,
+                        team_id=team_id,
+                        phase=phase,
+                    )
                 )
                 total_candidates += diagnostic.candidate_players
                 total_corrections += diagnostic.correction_states
@@ -550,39 +696,95 @@ def execute_weekly_essential_transactions(
                         DecisionOutcome.UNRESOLVED_AUTHORIZATION
                         if diagnostic.unresolved_plans or diagnostic.incomplete_plans
                         else DecisionOutcome.NO_LEGAL_PLAN
-                        if diagnostic.sequences_attempted else DecisionOutcome.NO_SUITABLE_CANDIDATE
+                        if diagnostic.sequences_attempted
+                        else DecisionOutcome.NO_SUITABLE_CANDIDATE
                     )
-                    decisions.append(TeamDecision(
-                        phase, pass_number, team_id, outcome, lineup.vacancy_count,
-                        diagnostic.candidate_players, diagnostic.correction_states,
-                        diagnostic.sequences_attempted, diagnostic.legal_plans,
-                        diagnostic.essential_plans, diagnostic.complete_plans,
-                        diagnostic.incomplete_plans, diagnostic.unresolved_plans,
-                        diagnostic.rejections, None,
-                    ))
+                    decisions.append(
+                        TeamDecision(
+                            phase,
+                            pass_number,
+                            team_id,
+                            outcome,
+                            lineup.vacancy_count,
+                            diagnostic.candidate_players,
+                            diagnostic.correction_states,
+                            diagnostic.sequences_attempted,
+                            diagnostic.legal_plans,
+                            diagnostic.essential_plans,
+                            diagnostic.complete_plans,
+                            diagnostic.incomplete_plans,
+                            diagnostic.unresolved_plans,
+                            diagnostic.rejections,
+                            None,
+                        )
+                    )
                     continue
                 before = current
                 current = selected.state
                 if phase is TransactionPhase.WAIVER:
-                    current = apply_successful_waiver_priority(current, snapshot, team_id=team_id)
+                    current = apply_successful_waiver_priority(
+                        current, snapshot, team_id=team_id
+                    )
                 records = _ledger_delta(before, current)
-                dropped = tuple(sorted(record.player_id for record in records if record.action.value == "drop" and record.player_id is not None))
-                activated = tuple(sorted(record.player_id for record in records if record.action.value == "ir_activate" and record.player_id is not None))
-                placed = tuple(sorted(record.player_id for record in records if record.action.value == "ir_place" and record.player_id is not None))
-                acquisitions.append(SelectedAcquisition(
-                    phase, pass_number, team_id, selected.player_id, dropped, activated, placed,
-                    selected.before_vacancies, selected.after_vacancies, selected.value,
-                    selected.tie_key, tuple(record.sequence for record in records),
-                ))
-                decisions.append(TeamDecision(
-                    phase, pass_number, team_id, DecisionOutcome.ACQUIRED,
-                    selected.before_vacancies, diagnostic.candidate_players,
-                    diagnostic.correction_states, diagnostic.sequences_attempted,
-                    diagnostic.legal_plans, diagnostic.essential_plans,
-                    diagnostic.complete_plans, diagnostic.incomplete_plans,
-                    diagnostic.unresolved_plans, diagnostic.rejections,
-                    selected.player_id,
-                ))
+                dropped = tuple(
+                    sorted(
+                        record.player_id
+                        for record in records
+                        if record.action.value == "drop"
+                        and record.player_id is not None
+                    )
+                )
+                activated = tuple(
+                    sorted(
+                        record.player_id
+                        for record in records
+                        if record.action.value == "ir_activate"
+                        and record.player_id is not None
+                    )
+                )
+                placed = tuple(
+                    sorted(
+                        record.player_id
+                        for record in records
+                        if record.action.value == "ir_place"
+                        and record.player_id is not None
+                    )
+                )
+                acquisitions.append(
+                    SelectedAcquisition(
+                        phase,
+                        pass_number,
+                        team_id,
+                        selected.player_id,
+                        dropped,
+                        activated,
+                        placed,
+                        selected.before_vacancies,
+                        selected.after_vacancies,
+                        selected.value,
+                        selected.tie_key,
+                        tuple(record.sequence for record in records),
+                    )
+                )
+                decisions.append(
+                    TeamDecision(
+                        phase,
+                        pass_number,
+                        team_id,
+                        DecisionOutcome.ACQUIRED,
+                        selected.before_vacancies,
+                        diagnostic.candidate_players,
+                        diagnostic.correction_states,
+                        diagnostic.sequences_attempted,
+                        diagnostic.legal_plans,
+                        diagnostic.essential_plans,
+                        diagnostic.complete_plans,
+                        diagnostic.incomplete_plans,
+                        diagnostic.unresolved_plans,
+                        diagnostic.rejections,
+                        selected.player_id,
+                    )
+                )
                 successes += 1
                 progress = True
             if not progress:
@@ -590,42 +792,79 @@ def execute_weekly_essential_transactions(
 
     if policy.waiver_boundary is WaiverBoundaryPolicy.MODELED_WEEKLY_V1:
         waiver_passes, waiver_successes = run_phase(
-            TransactionPhase.WAIVER, lambda current_state: current_state.current_waiver_priority,
+            TransactionPhase.WAIVER,
+            lambda current_state: current_state.current_waiver_priority,
         )
     else:
         waiver_passes, waiver_successes = 0, 0
-        if any(item.status is AcquisitionAvailability.WAIVERS for item in current.availability):
+        if any(
+            item.status is AcquisitionAvailability.WAIVERS
+            for item in current.availability
+        ):
             for team_id in current.current_waiver_priority:
                 vacancy_count = optimize_starting_lineup(
-                    snapshot, team_id, current.scoring_week,
+                    snapshot,
+                    team_id,
+                    current.scoring_week,
                     roster_entries=current.roster_entries,
                 ).vacancy_count
                 if vacancy_count == 0:
                     continue
-                decisions.append(TeamDecision(
-                    TransactionPhase.WAIVER, 0, team_id,
-                    DecisionOutcome.UNRESOLVED_AUTHORIZATION,
-                    vacancy_count,
-                    0, 0, 0, 0, 0, 0, 0, 1,
-                    (CandidateRejectionSummary("waiver_processing_boundary_unresolved", 1),),
-                    None,
-                ))
+                decisions.append(
+                    TeamDecision(
+                        TransactionPhase.WAIVER,
+                        0,
+                        team_id,
+                        DecisionOutcome.UNRESOLVED_AUTHORIZATION,
+                        vacancy_count,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        1,
+                        (
+                            CandidateRejectionSummary(
+                                "waiver_processing_boundary_unresolved", 1
+                            ),
+                        ),
+                        None,
+                    )
+                )
 
     free_agent_order = tuple(reversed(frozen))
     free_agent_passes, free_agent_successes = run_phase(
-        TransactionPhase.FREE_AGENT, lambda _current_state: free_agent_order,
+        TransactionPhase.FREE_AGENT,
+        lambda _current_state: free_agent_order,
     )
     validate_evolving_state(current, snapshot)
     assumptions = (
         "essential_coverage_improvement_only_v1",
         "highest_resulting_remaining_season_value_v1",
         "reverse_frozen_initial_priority_free_agents_v1",
-    ) + (("modeled_weekly_waiver_boundary_v1",)
-         if policy.waiver_boundary is WaiverBoundaryPolicy.MODELED_WEEKLY_V1 else ())
+    ) + (
+        ("modeled_weekly_waiver_boundary_v1",)
+        if policy.waiver_boundary is WaiverBoundaryPolicy.MODELED_WEEKLY_V1
+        else ()
+    )
     return WeeklyTransactionResult(
-        initial, frozen, current.current_waiver_priority,
-        waiver_passes, free_agent_passes, waiver_successes, free_agent_successes,
-        total_candidates, total_corrections, total_attempted, total_unique_legal,
-        total_evaluations, valuation_seconds,
-        tuple(decisions), tuple(acquisitions), assumptions, current,
+        initial,
+        frozen,
+        current.current_waiver_priority,
+        waiver_passes,
+        free_agent_passes,
+        waiver_successes,
+        free_agent_successes,
+        total_candidates,
+        total_corrections,
+        total_attempted,
+        total_unique_legal,
+        total_evaluations,
+        valuation_seconds,
+        tuple(decisions),
+        tuple(acquisitions),
+        assumptions,
+        current,
     )

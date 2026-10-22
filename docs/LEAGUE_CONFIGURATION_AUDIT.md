@@ -1,0 +1,81 @@
+# League Configuration Audit
+
+This M2.4 acceptance audit reviews production paths that can affect a simulated
+league. The standing rule is that a league-specific mechanic must be API-derived
+from the immutable canonical snapshot, supplied through validated configuration,
+or explicitly identified as an approved modeled policy. Current-league numbers
+may appear in sanitized fixtures and historical evidence, but not as production
+simulation defaults.
+
+## Configuration inventory
+
+| Area | Classification | Source and implemented boundary |
+|---|---|---|
+| League/team identities and count | API-derived | `LeagueSnapshot.teams` and `LeagueRules.team_count`; canonical validation requires exact reconciliation. |
+| Roster slots, capacities, eligibility, IR, and position limits | API-derived | Canonical lineup-slot and position-limit records. M2.1, evolving state, and V(R) iterate these records without named-position or league-size constants. |
+| Projection availability | Approved modeled policy | The documented missing-projection policy derives effective zero while retaining raw missing evidence. M2.1 starts only positive effective projections. |
+| Regular-season schedule and standings | API-derived | Canonical matchup periods/matchups and standings rules. M2.2 supports `allow_ties` and `TOTAL_POINTS_SCORED` only when their applicable evidence is understood; deeper ties remain unresolved. |
+| Championship structure | API-derived with capability checks | Qualifier count, reseeding flag, round-period mapping, and tie-rule reference come from canonical rules. M2.4 supports fixed no-reseed graphs and explicitly reports unsupported placement cohorts. |
+| Consolation enablement | API-derived tri-state | `True`, `False`, and unresolved `None` are distinct. Unknown enablement creates no bracket. |
+| Consolation movement | Verified ESPN rule | Adjacent first-round seeds and bounded winner-up/loser-down movement generate even fields. Odd-field bye reentry remains unresolved. |
+| Explicit consolation mapping | Configurable | Immutable `ConsolationLadderConfiguration` receives full graph/rank preflight. Canonical source ID or approval provenance is retained; odd continuation requires one. |
+| Postseason scoring periods | API-derived | Championship and consolation round lists independently reference canonical periods and their scoring weeks. |
+| Postseason tie result | API-derived and verified | M2.4 requires an understood `higher_seed` interpretation; another or unresolved rule blocks the capability. |
+| Acquisition type and limits | API-derived | Canonical acquisition type, budget flag, season/matchup limits, availability, holds, and waiver priority govern M2.3 state. |
+| Traditional claim-to-last behavior | API-derived supported mode | Operational transaction execution is now gated to non-budget `WAIVERS_TRADITIONAL`; FAAB/alternative modes fail before processing. |
+| Weekly modeled waiver boundary | Approved modeled policy | `MODELED_WEEKLY_V1` is typed and explicitly reported as an assumption, not ESPN timing evidence. |
+| Reverse frozen-priority immediate free agents | Approved modeled policy | Explicit V1 manager-behavior assumption, used only inside the transaction capability now gated to its supported traditional-waiver league type. |
+| IR recovery | Approved modeled policy or validated evidence | Projection-based recovery is labeled as an assumption; strict mode consumes player/week-specific validated evidence and preserves unknowns. |
+| Undroppable protection | API-derived with interpretation safety gate | Snapshot-frozen player evidence and league enablement are preserved. Automatic dropping remains unavailable when polarity interpretation/evidence is insufficient. |
+
+## Focused source findings
+
+- `lineup_optimizer.py`, `weekly_engine.py`, `roster_value.py`, and the evolving
+  roster validators derive teams, positions, slots, capacities, weeks, and
+  player eligibility from canonical data. No material current-league-size or
+  named-position template was found.
+- `postseason.py` derives qualifier and consolation populations, rounds,
+  periods, byes, and seeds from canonical settings. The 10/12/14/16-team and
+  4/6/8-participant values are tests only.
+- `espn_adapter.py` recognizes ESPN lineup slot IDs 20 (bench) and 21 (IR) as
+  verified ESPN identifier semantics, not configured capacities. Slot 25 and
+  other observed-only IDs do not become playable. The 32-team check is the
+  supported NFL universe invariant, not a fantasy-league team-count template.
+- `future_data_audit.py` contains a statement about all 14 teams in the audited
+  2026 live league. It is historical evidence/reporting and is not imported by
+  deterministic simulation. It must not be promoted to a simulation invariant.
+- `weekly_transactions.py` and `transaction_cycle.py` previously allowed the
+  approved traditional/reverse-priority V1 policies without independently
+  checking the canonical acquisition type. This was **problematic hardcoding**:
+  an FAAB league could have received traditional priority mechanics. Both
+  operational and reference entry points now fail unless configuration is
+  verified non-budget `WAIVERS_TRADITIONAL`. This defect would have blocked
+  M2.5 integration and is corrected with adversarial tests.
+
+No other material production assumption tied to the current fantasy league's
+10/12/14/16 team counts, six qualifiers, eight consolation participants, or
+current slot mix was found in the reviewed M1/M2 modules.
+
+## Unsupported configurations
+
+- Championship reseeding and complete placement sub-brackets for elimination
+  cohorts larger than two.
+- Odd-participant consolation continuation without approved bye-reentry
+  evidence/configuration.
+- Unknown consolation enablement.
+- Postseason tie rules other than the understood higher-seed behavior.
+- FAAB and alternative waiver execution policies.
+- Unverified real-world waiver processing timestamps and unresolved future
+  strict-IR evidence.
+
+These limitations are capability-specific. Structurally valid snapshots remain
+inspectable and reproducible; only the affected simulator operation fails.
+
+## M2.5 boundary
+
+M2.5 must iterate every team in the configured canonical league and carry
+configuration/evidence classifications into path diagnostics. The current
+14-team league remains a representative acceptance fixture, not the production
+universe. The corrected waiver gate and postseason tri-state/preflight checks
+remove the material hardcoding blockers found by this audit; unsupported modes
+must continue to fail closed.

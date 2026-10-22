@@ -104,6 +104,9 @@ class ConsolationLadderConfiguration:
 
     transitions: tuple[LadderTransition, ...]
     final_positions_by_ladder_position: tuple[tuple[int, int], ...]
+    source_id: str | None = None
+    approval_reference: str | None = None
+    provenance_kind: str = "manual_validated"
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -287,6 +290,115 @@ def generate_consolation_graph(
     return BracketGraph(participant_seeds, round_count, tuple(nodes))
 
 
+def _validate_consolation_configuration(
+    snapshot: LeagueSnapshot,
+    config: ConsolationLadderConfiguration,
+    participant_seeds: tuple[int, ...],
+    round_count: int,
+) -> None:
+    """Prove an explicit ladder mapping is a complete round-by-round permutation."""
+
+    if not participant_seeds:
+        raise PostseasonError("explicit consolation configuration has no participants")
+    if config.provenance_kind not in {"api_derived", "manual_validated"}:
+        raise PostseasonError(
+            f"unsupported consolation configuration provenance {config.provenance_kind!r}"
+        )
+    if config.provenance_kind == "api_derived" and config.source_id is None:
+        raise PostseasonError(
+            "API-derived consolation configuration requires a canonical source ID"
+        )
+    if config.source_id is not None and config.source_id not in {
+        item.source_id for item in snapshot.sources
+    }:
+        raise PostseasonError(
+            f"explicit consolation configuration references unknown source {config.source_id!r}"
+        )
+    if len(participant_seeds) % 2 and not (
+        config.source_id or config.approval_reference
+    ):
+        raise PostseasonError(
+            "odd-participant consolation continuation requires source or approval provenance"
+        )
+    transitions = config.transitions
+    keys = tuple(
+        (item.round_number, item.upper_position, item.lower_position)
+        for item in transitions
+    )
+    if len(keys) != len(set(keys)):
+        raise PostseasonError(
+            "explicit consolation configuration has duplicate transition keys"
+        )
+    if any(not 1 <= item.round_number <= round_count for item in transitions):
+        raise PostseasonError(
+            "explicit consolation configuration has transition outside configured rounds"
+        )
+
+    positions = tuple(participant_seeds)
+    minimum, maximum = min(positions), max(positions)
+    for round_number in range(1, round_count + 1):
+        ordered = tuple(sorted(positions))
+        expected_pairs = tuple(
+            (ordered[index], ordered[index + 1])
+            for index in range(0, len(ordered) - 1, 2)
+        )
+        round_transitions = tuple(
+            item for item in transitions if item.round_number == round_number
+        )
+        observed_pairs = tuple(
+            tuple(sorted((item.upper_position, item.lower_position)))
+            for item in round_transitions
+        )
+        if tuple(sorted(observed_pairs)) != tuple(sorted(expected_pairs)):
+            raise PostseasonError(
+                f"explicit consolation round {round_number} transition coverage "
+                f"{tuple(sorted(observed_pairs))} does not match required {tuple(sorted(expected_pairs))}"
+            )
+        unchanged = list(ordered[len(expected_pairs) * 2 :])
+        destinations = unchanged
+        for item in round_transitions:
+            upper, lower = sorted((item.upper_position, item.lower_position))
+            if not minimum <= upper < lower <= maximum:
+                raise PostseasonError(
+                    f"explicit consolation transition {item} references invalid positions"
+                )
+            if not minimum <= item.winner_position <= upper:
+                raise PostseasonError(
+                    f"explicit consolation transition {item} moves winner downward"
+                )
+            if not lower <= item.loser_position <= maximum:
+                raise PostseasonError(
+                    f"explicit consolation transition {item} moves loser upward"
+                )
+            destinations.extend((item.winner_position, item.loser_position))
+        if len(destinations) != len(set(destinations)):
+            raise PostseasonError(
+                f"explicit consolation round {round_number} has destination collisions"
+            )
+        if set(destinations) != set(positions):
+            raise PostseasonError(
+                f"explicit consolation round {round_number} loses or invents a participant position"
+            )
+        positions = tuple(sorted(destinations))
+
+    final_pairs = config.final_positions_by_ladder_position
+    if len(final_pairs) != len({position for position, _ in final_pairs}):
+        raise PostseasonError(
+            "explicit consolation final mapping has duplicate ladder positions"
+        )
+    if {position for position, _ in final_pairs} != set(participant_seeds):
+        raise PostseasonError(
+            "explicit consolation final mapping must cover every ladder position"
+        )
+    final_places = tuple(place for _, place in final_pairs)
+    if len(final_places) != len(set(final_places)):
+        raise PostseasonError("explicit consolation final mapping has duplicate ranks")
+    if set(final_places) != set(participant_seeds):
+        raise PostseasonError(
+            f"explicit consolation final ranks must be exactly {participant_seeds}"
+        )
+
+
 def resolve_postseason_seeds(
     snapshot: LeagueSnapshot, standings: tuple[ModeledStanding, ...]
 ) -> tuple[PostseasonSeed, ...]:
@@ -448,6 +560,20 @@ def initialize_postseason(
         consolation_matchups: tuple[PostseasonMatchup, ...] = ()
         positions: tuple[ConsolationLadderPosition, ...] = ()
         unresolved = ()
+        consolation_graph = None
+        if consolation_configuration is not None:
+            raise PostseasonError(
+                "explicit consolation configuration conflicts with disabled consolation"
+            )
+    elif consolation_rules.enabled is None:
+        consolation_matchups = ()
+        positions = ()
+        unresolved = ("consolation_enablement_unresolved",)
+        consolation_graph = None
+        if consolation_configuration is not None:
+            raise PostseasonError(
+                "explicit consolation configuration cannot override unresolved enablement"
+            )
     else:
         if consolation_rules.participant_count not in (None, len(consolation_seeds)):
             raise PostseasonError(
@@ -462,6 +588,13 @@ def initialize_postseason(
             tuple(item.original_seed for item in consolation_seeds),
             len(consolation_periods),
         )
+        if consolation_configuration is not None:
+            _validate_consolation_configuration(
+                snapshot,
+                consolation_configuration,
+                tuple(item.original_seed for item in consolation_seeds),
+                len(consolation_periods),
+            )
         consolation_matchups_list = []
         period_id, weeks = consolation_periods[1]
         for node in consolation_graph.nodes:
@@ -489,8 +622,6 @@ def initialize_postseason(
         unresolved = consolation_graph.unresolved_capabilities
         if consolation_configuration is not None:
             unresolved = ()
-    if consolation_rules.enabled is False:
-        consolation_graph = None
     _reconcile_first_round_schedule(
         snapshot, championship_matchups, BracketType.CHAMPIONSHIP
     )
@@ -514,6 +645,19 @@ def initialize_postseason(
 
 def _seed_map(state: PostseasonState) -> dict[int, int]:
     return {item.team_id: item.original_seed for item in state.seeds}
+
+
+def _validated_placements(
+    placements: list[FinalPlacement] | tuple[FinalPlacement, ...],
+) -> tuple[FinalPlacement, ...]:
+    ordered = tuple(sorted(placements))
+    places = tuple(item.place for item in ordered)
+    teams = tuple(item.team_id for item in ordered)
+    if len(places) != len(set(places)):
+        raise PostseasonError("postseason placements contain duplicate final ranks")
+    if len(teams) != len(set(teams)):
+        raise PostseasonError("postseason placements contain duplicate teams")
+    return ordered
 
 
 def _finish_matchup(
@@ -643,7 +787,9 @@ def _advance_championship(
     if (
         final_round
         and all(item.status is MatchupStatus.COMPLETE for item in final_round)
-        and not placements
+        and not any(
+            item.bracket_type is BracketType.CHAMPIONSHIP for item in placements
+        )
     ):
         for item in final_round:
             if item.bracket_type is BracketType.CHAMPIONSHIP:
@@ -666,7 +812,7 @@ def _advance_championship(
     return replace(
         state,
         championship_matchups=tuple(sorted(matchups, key=lambda item: item.matchup_id)),
-        placements=tuple(sorted(placements)),
+        placements=_validated_placements(placements),
     )
 
 
@@ -804,7 +950,7 @@ def _advance_configured_consolation(
         state,
         consolation_matchups=tuple(sorted(matchups, key=lambda item: item.matchup_id)),
         consolation_positions=tuple(sorted(positions.values())),
-        placements=tuple(sorted(placements)),
+        placements=_validated_placements(placements),
         unresolved_capabilities=tuple(
             item
             for item in state.unresolved_capabilities
@@ -906,7 +1052,7 @@ def _advance_consolation(
         state,
         consolation_matchups=tuple(sorted(matchups, key=lambda item: item.matchup_id)),
         consolation_positions=tuple(sorted(positions.values())),
-        placements=tuple(sorted(placements)),
+        placements=_validated_placements(placements),
         unresolved_capabilities=unresolved,
     )
 

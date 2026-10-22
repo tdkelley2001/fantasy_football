@@ -15,6 +15,7 @@ from fantasy_football.canonical.model import (
     PostseasonRound,
 )
 from fantasy_football.postseason import (
+    BracketType,
     ConsolationLadderConfiguration,
     LadderTransition,
     MatchupStatus,
@@ -102,6 +103,44 @@ def _standings(snapshot):
         )
         for team in snapshot.teams
     )
+
+
+def _with_independent_round_counts(
+    snapshot, *, championship_round_count: int, consolation_round_count: int
+):
+    championship_rounds = tuple(
+        PostseasonRound(number, number + 1)
+        for number in range(1, championship_round_count + 1)
+    )
+    consolation_rounds = tuple(
+        PostseasonRound(number, number + 1)
+        for number in range(1, consolation_round_count + 1)
+    )
+    rules = replace(
+        snapshot.rules,
+        championship=replace(snapshot.rules.championship, rounds=championship_rounds),
+        consolation=replace(snapshot.rules.consolation, rounds=consolation_rounds),
+    )
+    return replace(snapshot, rules=rules)
+
+
+def _score_all_active(snapshot, state, scoring_week: int):
+    active = tuple(
+        item
+        for item in state.championship_matchups + state.consolation_matchups
+        if scoring_week in item.scoring_weeks
+        and item.status not in {MatchupStatus.COMPLETE, MatchupStatus.BYE}
+    )
+    scores = tuple(
+        WeeklyTeamScore(
+            scoring_week,
+            team_id,
+            100.0 if team_id == matchup.home_team_id else 90.0,
+        )
+        for matchup in active
+        for team_id in (matchup.home_team_id, matchup.away_team_id)
+    )
+    return apply_postseason_team_scores(snapshot, state, scoring_week, scores)
 
 
 def _score_round(snapshot, state, round_number, winners):
@@ -195,6 +234,67 @@ def test_odd_consolation_field_gives_lowest_seed_bye() -> None:
     assert seed == 13
     assert bye.winner_team_id == bye.home_team_id
     assert state.unresolved_capabilities == ("consolation_bye_reentry_mapping",)
+
+
+@pytest.mark.parametrize(
+    ("enabled", "expected_matchups", "expected_gap"),
+    (
+        (True, 4, None),
+        (False, 0, None),
+        (None, 0, "consolation_enablement_unresolved"),
+    ),
+)
+def test_consolation_enablement_is_strictly_tristate(
+    enabled: bool | None, expected_matchups: int, expected_gap: str | None
+) -> None:
+    snapshot = _snapshot()
+    rules = replace(
+        snapshot.rules,
+        consolation=replace(snapshot.rules.consolation, enabled=enabled),
+    )
+    state = initialize_postseason(replace(snapshot, rules=rules), _standings(snapshot))
+    assert len(state.consolation_matchups) == expected_matchups
+    assert len(state.consolation_positions) == (8 if enabled is True else 0)
+    assert (expected_gap in state.unresolved_capabilities) is (expected_gap is not None)
+    assert not any(
+        item.bracket_type is BracketType.CONSOLATION for item in state.placements
+    )
+
+
+@pytest.mark.parametrize("enabled", (False, None))
+def test_absent_consolation_never_creates_a_complete_league_ranking(
+    enabled: bool | None,
+) -> None:
+    snapshot = _snapshot()
+    rules = replace(
+        snapshot.rules,
+        consolation=replace(snapshot.rules.consolation, enabled=enabled),
+    )
+    snapshot = replace(snapshot, rules=rules)
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    for week in (15, 16, 17, 18):
+        state = _score_all_active(snapshot, state, week)
+    assert len(state.placements) == 6
+    assert not final_positions_complete(state, 14)
+    assert not state.consolation_matchups
+
+
+@pytest.mark.parametrize("enabled", (False, None))
+def test_explicit_configuration_cannot_override_consolation_enablement(
+    enabled: bool | None,
+) -> None:
+    snapshot = _snapshot()
+    rules = replace(
+        snapshot.rules,
+        consolation=replace(snapshot.rules.consolation, enabled=enabled),
+    )
+    config = ConsolationLadderConfiguration((), ())
+    with pytest.raises(PostseasonError, match="disabled|unresolved"):
+        initialize_postseason(
+            replace(snapshot, rules=rules),
+            _standings(snapshot),
+            consolation_configuration=config,
+        )
 
 
 @pytest.mark.parametrize("participant_count", (4, 6, 8))
@@ -424,6 +524,52 @@ def test_multiweek_matchup_does_not_advance_after_first_week() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    (
+        "team_count",
+        "qualifiers",
+        "championship_rounds",
+        "consolation_rounds",
+        "first_bracket",
+    ),
+    (
+        (12, 4, 2, 3, BracketType.CHAMPIONSHIP),
+        (14, 6, 3, 2, BracketType.CONSOLATION),
+    ),
+)
+def test_brackets_finalize_independently_with_different_periods(
+    team_count: int,
+    qualifiers: int,
+    championship_rounds: int,
+    consolation_rounds: int,
+    first_bracket: BracketType,
+) -> None:
+    snapshot = _with_independent_round_counts(
+        _snapshot(team_count=team_count, qualifier_count=qualifiers),
+        championship_round_count=championship_rounds,
+        consolation_round_count=consolation_rounds,
+    )
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    for week in (15, 16):
+        state = _score_all_active(snapshot, state, week)
+    first = tuple(
+        item for item in state.placements if item.bracket_type is first_bracket
+    )
+    second_type = (
+        BracketType.CONSOLATION
+        if first_bracket is BracketType.CHAMPIONSHIP
+        else BracketType.CHAMPIONSHIP
+    )
+    assert first
+    assert not any(item.bracket_type is second_type for item in state.placements)
+    partial = state.placements
+    for week in (17, 18):
+        state = _score_all_active(snapshot, state, week)
+    assert final_positions_complete(state, team_count)
+    assert all(item in state.placements for item in partial)
+    assert len(state.placements) == len(set(state.placements)) == team_count
+
+
 def test_exact_tie_uses_higher_original_seed_and_preserves_negative_scores() -> None:
     snapshot = _snapshot()
     state = initialize_postseason(snapshot, _standings(snapshot))
@@ -536,21 +682,92 @@ def test_ladder_configuration_enforces_upper_and_lower_boundaries() -> None:
         ),
         tuple((position, position) for position in range(7, 15)),
     )
+    with pytest.raises(PostseasonError, match="winner"):
+        initialize_postseason(
+            snapshot, _standings(snapshot), consolation_configuration=config
+        )
+
+
+def test_explicit_configuration_preflight_rejects_malformed_graphs() -> None:
+    snapshot = _snapshot()
+    valid = tuple(
+        LadderTransition(round_number, upper, upper + 1, upper, upper + 1)
+        for round_number in (1, 2, 3)
+        for upper in (7, 9, 11, 13)
+    )
+    final = tuple((position, position) for position in range(7, 15))
+    invalid = (
+        (valid + (valid[0],), "duplicate transition"),
+        (valid[:-1], "coverage"),
+        (valid + (LadderTransition(4, 7, 8, 7, 8),), "outside configured rounds"),
+        (
+            (replace(valid[0], loser_position=9),) + valid[1:],
+            "destination collisions",
+        ),
+    )
+    for transitions, message in invalid:
+        with pytest.raises(PostseasonError, match=message):
+            initialize_postseason(
+                snapshot,
+                _standings(snapshot),
+                consolation_configuration=ConsolationLadderConfiguration(
+                    transitions, final
+                ),
+            )
+    with pytest.raises(PostseasonError, match="duplicate ranks"):
+        initialize_postseason(
+            snapshot,
+            _standings(snapshot),
+            consolation_configuration=ConsolationLadderConfiguration(
+                valid, tuple((position, 7) for position in range(7, 15))
+            ),
+        )
+    with pytest.raises(PostseasonError, match="unsupported.*provenance"):
+        initialize_postseason(
+            snapshot,
+            _standings(snapshot),
+            consolation_configuration=ConsolationLadderConfiguration(
+                valid, final, provenance_kind="caller_asserted"
+            ),
+        )
+    with pytest.raises(PostseasonError, match="requires a canonical source"):
+        initialize_postseason(
+            snapshot,
+            _standings(snapshot),
+            consolation_configuration=ConsolationLadderConfiguration(
+                valid, final, provenance_kind="api_derived"
+            ),
+        )
+
+
+def test_odd_explicit_configuration_requires_and_preserves_approval_provenance() -> (
+    None
+):
+    snapshot = _snapshot(team_count=13)
+    transitions = tuple(
+        LadderTransition(round_number, upper, upper + 1, upper, upper + 1)
+        for round_number in (1, 2, 3)
+        for upper in (7, 9, 11)
+    )
+    final = tuple((position, position) for position in range(7, 14))
+    with pytest.raises(PostseasonError, match="requires source or approval"):
+        initialize_postseason(
+            snapshot,
+            _standings(snapshot),
+            consolation_configuration=ConsolationLadderConfiguration(
+                transitions, final
+            ),
+        )
+    config = ConsolationLadderConfiguration(
+        transitions,
+        final,
+        approval_reference="owner-approved odd-field mapping fixture",
+    )
     state = initialize_postseason(
         snapshot, _standings(snapshot), consolation_configuration=config
     )
-    active = tuple(
-        item
-        for item in state.championship_matchups + state.consolation_matchups
-        if item.away_team_id is not None
-    )
-    scores = tuple(
-        WeeklyTeamScore(15, team_id, 100.0 if team_id == matchup.home_team_id else 90.0)
-        for matchup in active
-        for team_id in (matchup.home_team_id, matchup.away_team_id)
-    )
-    with pytest.raises(PostseasonError, match="boundaries"):
-        apply_postseason_team_scores(snapshot, state, 15, scores)
+    assert state.consolation_configuration == config
+    assert "consolation_bye_reentry_mapping" not in state.unresolved_capabilities
 
 
 def test_postseason_requires_verified_higher_seed_tie_rule() -> None:
