@@ -44,6 +44,13 @@ without a league-size template. Four-, six-, and eight-participant ladders
 complete through the same production code. The current 2026 eight-participant
 graph (beginning 7-8, 9-10, 11-12, 13-14) is an expected-output fixture.
 
+Winner-up/loser-down movement applies only between rounds. Each matchup in the
+configured final round is a placement game: graph position `i` directly awards
+the winner consolation rank `s + 2*i` and the loser rank `s + 2*i + 1`, where
+`s` is the first consolation seed. Original seed affects a final game only when
+the verified higher-seed tiebreak resolves an exact scoring tie. Finalized
+`ConsolationLadderPosition.current_position` values equal these awarded ranks.
+
 Original postseason seed and current ladder position are separate immutable
 fields. Championship and consolation membership never cross. An odd field is
 initialized with the documented lowest-seed bye, but ESPN's public rule does
@@ -63,6 +70,11 @@ permutations, complete unique final ranks within the consolation range, and
 source-reference validity. Odd-field continuation additionally requires a
 recorded canonical source or an explicit approval reference. Configuration
 provenance remains visible on the immutable postseason state.
+For an explicit configuration, a `LadderTransition` describes movement after
+the named round, including its final transition when supplied; the separately
+validated `final_positions_by_ladder_position` then maps those terminal ladder
+positions to ranks exactly. This explicit evidence-backed mapping is not
+silently reinterpreted as the generated even-field placement-game formula.
 
 ## Interfaces and limitations
 
@@ -84,8 +96,10 @@ bracket may therefore complete and publish its placements while the other is
 still active. Placement finalization is bracket-specific and idempotent;
 global duplicate ranks or teams are rejected.
 
-The final correction acceptance run contains 39 focused postseason tests and
-422 passing credential-free repository tests. On the development
+The final placement-game correction passes 45 focused postseason tests and all
+428 credential-free repository tests. It adds exact team-to-rank checks for
+two independent eight-participant paths, four- and six-participant ladders,
+distinct scoring-period lengths, immutability, and reordered inputs. On the development
 Windows/Python 3.12 environment, 200 complete synthetic postseasons averaged
 22.15 ms for the 14-team shared three-round fixture, 18.15 ms for a 12-team
 championship-first fixture, and 24.28 ms for a 14-team consolation-first
