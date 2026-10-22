@@ -1,65 +1,73 @@
 # Deterministic Postseason Engine
 
-M2.4 implements a pure, immutable postseason state machine in
+M2.4 implements a pure immutable state machine in
 `fantasy_football.postseason`. It consumes a validated canonical snapshot and
-the final modeled regular-season standings. It never uses the snapshot's
-historical playoff-seed field as the simulated seed order.
+modeled final regular-season standings. Historical snapshot seed fields never
+control a simulated postseason.
 
-## Supported championship contract
+## Settings-driven bracket graphs
 
-The reference implementation currently supports the verified six-team,
-no-reseed championship: seeds 1 and 2 receive first-round byes, seed 3 plays
-seed 6, and seed 4 plays seed 5. Semifinals are seed 1 against the 4/5 winner
-and seed 2 against the 3/6 winner. The final round contains championship,
-third-place, and fifth-place games and resolves places 1–6.
+`BracketGraph`, `BracketGraphNode`, and `BracketSource` separate reusable
+topology from season-specific team IDs. `generate_championship_graph()` derives
+a fixed, no-reseed elimination graph from the configured qualifier count and
+round count. It uses the next power-of-two field, gives the highest seeds the
+required byes, and fails when the configured rounds cannot resolve that field.
+The current six-qualifier result (1/2 byes, 3-6, 4-5) is a regression fixture,
+not a production conditional. Four- and eight-qualifier graphs are tested too.
+
+The main championship path is generic. Complete placement classification is
+currently supported where each elimination cohort contains two teams (the
+verified four- and six-qualifier shapes). Larger fields still resolve their
+title path but report `championship_complete_placement_mapping` until their
+complete placement topology is established. Reseeding remains unsupported
+rather than being silently treated as a fixed bracket.
 
 Round-to-matchup-period relationships and scoring weeks come from canonical
-league rules. Multiweek games accumulate supplied weekly team scores with
+league rules. Multiweek games accumulate finite supplied weekly totals with
 `math.fsum`; no rounding or zero floor is applied. Exact ties advance the
-higher original postseason seed only when the canonical rule is understood as
-`higher_seed`. Unresolved seeding, unsupported bracket structures, missing
-weekly scores, nonfinite scores, and unsupported tie rules fail explicitly.
-
-Callers may supply already-computed weekly team totals with
-`apply_postseason_team_scores()`, or use `score_frozen_postseason_week()` to
-validate frozen M2.1 lineups against modeled roster state and sum externally
-supplied realized player scores through the established M2.2 scoring rules.
-Neither route generates outcomes, changes rosters, or mutates its inputs.
+higher original postseason seed only when the canonical interpretation is
+understood as `higher_seed`.
 
 ## ESPN consolation ladder
 
-ESPN's official playoff rules establish that every non-championship qualifier
-enters a head-to-head Consolation Ladder, winners move upward, losers move
-downward, the upper and lower boundaries cannot be crossed, and every team
-continues playing. First-round participants are paired by adjacent descending
-seed; if the count is odd, the lowest seed receives the bye. Consequently the
-current 14-team/six-qualifier shape initializes 7–8, 9–10, 11–12, and 13–14.
-Championship and consolation membership never cross.
+ESPN's official rules establish that every non-championship qualifier enters a
+head-to-head Consolation Ladder, every participant continues playing, winners
+move upward, losers move downward, and the upper and lower boundaries cannot
+be crossed. First-round participants are adjacent descending seeds; with an
+odd count, the lowest seed receives the first-round bye.
+
+`generate_consolation_graph()` pairs adjacent seeds, then routes each winner
+upward one matchup position and each loser downward one matchup position,
+clamping movement at both boundaries. Every destination receives two teams for
+an even field, so subsequent pairings are generated for every configured round
+without a league-size template. Four-, six-, and eight-participant ladders
+complete through the same production code. The current 2026 eight-participant
+graph (beginning 7-8, 9-10, 11-12, 13-14) is an expected-output fixture.
 
 Original postseason seed and current ladder position are separate immutable
-fields. Official prose does not uniquely determine every later-round pairing,
-so the engine does not invent one. Without an explicit validated
-`ConsolationLadderConfiguration`, initialization and first-round scoring remain
-supported while `consolation_later_round_transition_mapping` stays unresolved.
-An explicit configuration defines each winner/loser position transition and
-the final placement mapping. The engine validates complete coverage, unique
-positions, upper/lower bounds, continued participation, and period mappings
-before advancing. Final placements are emitted only after every configured
-relationship resolves.
+fields. Championship and consolation membership never cross. An odd field is
+initialized with the documented lowest-seed bye, but ESPN's public rule does
+not establish how that participant reenters the next movement round. The graph
+therefore reports `consolation_bye_reentry_mapping` and stops after round one
+unless a validated explicit configuration supplies that relationship.
 
-## Determinism and limitations
+## Interfaces and limitations
 
-All collections and results use stable identifiers and deterministic ordering.
-The state records completed and in-progress weekly scoring, active consolation
-positions, final placements, and unresolved capabilities. The engine is a
-deterministic reference, not an ESPN bracket scraper, score generator, waiver
-processor, or full-season coordinator. Arbitrary championship formats,
-reseeding, and unconfigured later-round consolation mappings remain unsupported
-rather than receiving fallback behavior.
+Callers may supply audited weekly team totals through
+`apply_postseason_team_scores()`, or use `score_frozen_postseason_week()` to
+validate frozen M2.1 lineups against modeled roster state and sum externally
+supplied realized scores using M2.2 rules. Neither route generates outcomes,
+changes rosters, or mutates inputs. Populated canonical first-round schedules
+must reconcile exactly with generated pairings.
 
-The credential-free acceptance run contains 13 focused postseason tests and
-394 passing repository tests. On the development Windows/Python 3.12
-environment, 1,000 synthetic 14-team initializations took 6.67 seconds
-(6.67 ms each) and peaked at 382.3 KiB of traced Python memory. This is a
-synthetic deterministic benchmark, not a live ESPN workload.
+The state records graph topology, in-progress and completed matchups, active
+ladder positions, placements, and unresolved capabilities with stable IDs and
+ordering. Reseeding, unresolved odd-field bye reentry, and championship
+placement cohorts larger than two fail closed. The engine is not an ESPN
+scraper, score generator, waiver processor, or full-season coordinator.
 
+The acceptance run contains 28 focused postseason tests and 409 passing
+credential-free repository tests. On the development Windows/Python 3.12
+environment, 1,000 synthetic 14-team initializations averaged 7.87 ms and
+peaked at 722.4 KiB of traced Python memory. This is a synthetic deterministic
+benchmark, not a live ESPN workload.

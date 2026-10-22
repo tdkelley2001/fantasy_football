@@ -22,6 +22,8 @@ from fantasy_football.postseason import (
     WeeklyTeamScore,
     apply_postseason_team_scores,
     final_positions_complete,
+    generate_championship_graph,
+    generate_consolation_graph,
     initialize_postseason,
     resolve_postseason_seeds,
 )
@@ -87,15 +89,16 @@ def _snapshot(*, team_count: int = 14, qualifier_count: int = 6):
 
 
 def _standings(snapshot):
-    # Team 14 is seed 1, proving snapshot ranks do not control modeled seeding.
+    # Highest team ID is seed 1, proving snapshot ranks do not control modeled seeding.
+    team_count = len(snapshot.teams)
     return tuple(
         ModeledStanding(
             team.team_id,
             team.team_id,
-            14 - team.team_id,
+            team_count - team.team_id,
             0,
             float(team.team_id * 100),
-            float((15 - team.team_id) * 100),
+            float((team_count + 1 - team.team_id) * 100),
         )
         for team in snapshot.teams
     )
@@ -138,7 +141,7 @@ def _score_round(snapshot, state, round_number, winners):
     return state
 
 
-def test_modeled_standings_create_six_seeds_and_fixed_championship_bracket() -> None:
+def test_modeled_standings_create_six_seeds_and_settings_driven_championship() -> None:
     snapshot = _snapshot()
     seeds = resolve_postseason_seeds(snapshot, _standings(snapshot))
     assert tuple((item.original_seed, item.team_id) for item in seeds[:3]) == (
@@ -173,9 +176,7 @@ def test_eight_team_consolation_uses_exact_adjacent_seed_pairings() -> None:
         for item in state.consolation_matchups
     )
     assert pairs == ((7, 8), (9, 10), (11, 12), (13, 14))
-    assert state.unresolved_capabilities == (
-        "consolation_later_round_transition_mapping",
-    )
+    assert state.unresolved_capabilities == ()
     assert all(item.active for item in state.consolation_positions)
     assert {item.original_seed for item in state.consolation_positions}.isdisjoint(
         {item.original_seed for item in state.seeds if item.championship_qualifier}
@@ -193,26 +194,198 @@ def test_odd_consolation_field_gives_lowest_seed_bye() -> None:
     )
     assert seed == 13
     assert bye.winner_team_id == bye.home_team_id
+    assert state.unresolved_capabilities == ("consolation_bye_reentry_mapping",)
+
+
+@pytest.mark.parametrize("participant_count", (4, 6, 8))
+def test_generic_consolation_graph_sizes(participant_count: int) -> None:
+    seeds = tuple(range(7, 7 + participant_count))
+    graph = generate_consolation_graph(seeds, 3)
+    first_round = tuple(node for node in graph.nodes if node.round_number == 1)
+    assert tuple(
+        tuple(source.seed for source in node.sources) for node in first_round
+    ) == tuple(zip(seeds[::2], seeds[1::2], strict=True))
+    assert len(tuple(node for node in graph.nodes if node.round_number == 2)) == (
+        participant_count // 2
+    )
+    assert graph.unresolved_capabilities == ()
+
+
+@pytest.mark.parametrize(
+    ("qualifiers", "rounds", "first_round_pairs"),
+    (
+        (4, 2, ((1, 4), (2, 3))),
+        (6, 3, ((1,), (4, 5), (2,), (3, 6))),
+        (8, 3, ((1, 8), (4, 5), (2, 7), (3, 6))),
+    ),
+)
+def test_generic_championship_graph_sizes(
+    qualifiers: int,
+    rounds: int,
+    first_round_pairs: tuple[tuple[int, ...], ...],
+) -> None:
+    graph = generate_championship_graph(tuple(range(1, qualifiers + 1)), rounds)
+    assert (
+        tuple(
+            tuple(source.seed for source in node.sources)
+            for node in graph.nodes
+            if node.round_number == 1
+        )
+        == first_round_pairs
+    )
+
+
+def test_generic_eight_team_ladder_moves_winners_up_and_losers_down() -> None:
+    snapshot = _snapshot()
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    seed_by_team = {item.team_id: item.original_seed for item in state.seeds}
+    scores = []
+    for matchup in state.championship_matchups + state.consolation_matchups:
+        if matchup.away_team_id is None:
+            continue
+        scores.extend(
+            (
+                WeeklyTeamScore(15, matchup.home_team_id, 100.0),
+                WeeklyTeamScore(15, matchup.away_team_id, 90.0),
+            )
+        )
+    state = apply_postseason_team_scores(snapshot, state, 15, tuple(scores))
+    round_two = tuple(
+        item for item in state.consolation_matchups if item.round_number == 2
+    )
+    assert tuple(
+        tuple(
+            sorted((seed_by_team[item.home_team_id], seed_by_team[item.away_team_id]))
+        )
+        for item in round_two
+    ) == ((7, 9), (8, 11), (10, 13), (12, 14))
+
+
+@pytest.mark.parametrize(
+    ("team_count", "expected_pairs"),
+    ((10, 2), (12, 3), (14, 4), (16, 5)),
+)
+def test_engine_initializes_different_league_sizes_without_templates(
+    team_count: int, expected_pairs: int
+) -> None:
+    snapshot = _snapshot(team_count=team_count)
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    assert len(state.consolation_matchups) == expected_pairs
+    assert not state.unresolved_capabilities
+
+
+@pytest.mark.parametrize("team_count", (10, 12, 14))
+def test_four_six_and_eight_participant_ladders_complete_generically(
+    team_count: int,
+) -> None:
+    snapshot = _snapshot(team_count=team_count)
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    for week in (15, 16, 17, 18):
+        active = tuple(
+            item
+            for item in state.championship_matchups + state.consolation_matchups
+            if week in item.scoring_weeks
+            and item.status not in {MatchupStatus.COMPLETE, MatchupStatus.BYE}
+        )
+        scores = tuple(
+            WeeklyTeamScore(
+                week,
+                team_id,
+                100.0 if team_id == matchup.home_team_id else 90.0,
+            )
+            for matchup in active
+            for team_id in (matchup.home_team_id, matchup.away_team_id)
+        )
+        state = apply_postseason_team_scores(snapshot, state, week, scores)
+    assert final_positions_complete(state, team_count)
+    assert all(item.active for item in state.consolation_positions)
+
+
+def test_2026_eight_participant_ladder_complete_pairing_regression() -> None:
+    snapshot = _snapshot()
+    state = initialize_postseason(snapshot, _standings(snapshot))
+    seed_by_team = {item.team_id: item.original_seed for item in state.seeds}
+    expected = {
+        1: ((7, 8), (9, 10), (11, 12), (13, 14)),
+        2: ((7, 9), (8, 11), (10, 13), (12, 14)),
+        3: ((7, 8), (9, 10), (11, 12), (13, 14)),
+    }
+    for round_number, week in ((1, 15), (2, 16), (3, 17), (3, 18)):
+        consolation = tuple(
+            item
+            for item in state.consolation_matchups
+            if item.round_number == round_number
+        )
+        assert (
+            tuple(
+                tuple(
+                    sorted(
+                        (
+                            seed_by_team[item.home_team_id],
+                            seed_by_team[item.away_team_id],
+                        )
+                    )
+                )
+                for item in consolation
+            )
+            == expected[round_number]
+        )
+        active = tuple(
+            item
+            for item in state.championship_matchups + state.consolation_matchups
+            if week in item.scoring_weeks
+            and item.status not in {MatchupStatus.COMPLETE, MatchupStatus.BYE}
+        )
+        scores = tuple(
+            WeeklyTeamScore(
+                week,
+                team_id,
+                100.0 if team_id == matchup.home_team_id else 90.0,
+            )
+            for matchup in active
+            for team_id in (matchup.home_team_id, matchup.away_team_id)
+        )
+        state = apply_postseason_team_scores(snapshot, state, week, scores)
+    assert final_positions_complete(state, 14)
 
 
 def test_single_and_multiweek_progression_produces_places_one_through_six() -> None:
     snapshot = _snapshot()
     state = initialize_postseason(snapshot, _standings(snapshot))
-    state = _score_round(snapshot, state, 1, {"three-six": 12, "four-five": 11})
+    state = _score_round(
+        snapshot,
+        state,
+        1,
+        {"championship-r1-m4": 12, "championship-r1-m2": 11},
+    )
     semifinals = {
         item.purpose: (item.home_team_id, item.away_team_id)
         for item in state.championship_matchups
         if item.round_number == 2
     }
-    assert semifinals == {"semifinal-one": (14, 11), "semifinal-two": (13, 12)}
-    state = _score_round(snapshot, state, 2, {"semifinal-one": 14, "semifinal-two": 12})
+    assert semifinals == {
+        "championship-r2-m1": (14, 11),
+        "championship-r2-m2": (13, 12),
+    }
+    state = _score_round(
+        snapshot,
+        state,
+        2,
+        {"championship-r2-m1": 14, "championship-r2-m2": 12},
+    )
     state = _score_round(
         snapshot,
         state,
         3,
-        {"championship-final": 14, "third-place": 13, "fifth-place": 10},
+        {
+            "championship-r3-m1": 14,
+            "places-3-4": 13,
+            "places-5-6": 10,
+        },
     )
-    assert tuple((item.place, item.team_id) for item in state.placements) == (
+    assert tuple(
+        (item.place, item.team_id) for item in state.placements if item.place <= 6
+    ) == (
         (1, 14),
         (2, 12),
         (3, 13),
@@ -220,16 +393,22 @@ def test_single_and_multiweek_progression_produces_places_one_through_six() -> N
         (5, 10),
         (6, 9),
     )
-    assert final_positions_complete(state, 14) is False
+    assert final_positions_complete(state, 14)
 
 
 def test_multiweek_matchup_does_not_advance_after_first_week() -> None:
     snapshot = _snapshot()
     state = initialize_postseason(snapshot, _standings(snapshot))
-    state = _score_round(snapshot, state, 1, {"three-six": 12, "four-five": 11})
-    state = _score_round(snapshot, state, 2, {"semifinal-one": 14, "semifinal-two": 12})
+    state = _score_round(
+        snapshot, state, 1, {"championship-r1-m4": 12, "championship-r1-m2": 11}
+    )
+    state = _score_round(
+        snapshot, state, 2, {"championship-r2-m1": 14, "championship-r2-m2": 12}
+    )
     final_matchups = tuple(
-        item for item in state.championship_matchups if item.round_number == 3
+        item
+        for item in state.championship_matchups + state.consolation_matchups
+        if item.round_number == 3
     )
     scores = tuple(
         WeeklyTeamScore(17, team_id, float(100 - team_id))
@@ -260,7 +439,9 @@ def test_exact_tie_uses_higher_original_seed_and_preserves_negative_scores() -> 
     )
     state = apply_postseason_team_scores(snapshot, state, 15, scores)
     three_six = next(
-        item for item in state.championship_matchups if item.purpose == "three-six"
+        item
+        for item in state.championship_matchups
+        if item.purpose == "championship-r1-m4"
     )
     assert three_six.home_total == -2.5
     assert three_six.winner_team_id == 12
@@ -323,15 +504,19 @@ def test_explicit_full_ladder_configuration_produces_complete_positions() -> Non
     state = initialize_postseason(
         snapshot, _standings(snapshot), consolation_configuration=config
     )
-    state = _score_round(snapshot, state, 1, {"three-six": 12, "four-five": 11})
+    state = _score_round(
+        snapshot, state, 1, {"championship-r1-m4": 12, "championship-r1-m2": 11}
+    )
     assert {item.round_number for item in state.consolation_matchups} == {1, 2}
     assert all(item.active for item in state.consolation_positions)
-    state = _score_round(snapshot, state, 2, {"semifinal-one": 14, "semifinal-two": 12})
+    state = _score_round(
+        snapshot, state, 2, {"championship-r2-m1": 14, "championship-r2-m2": 12}
+    )
     state = _score_round(
         snapshot,
         state,
         3,
-        {"championship-final": 14, "third-place": 13, "fifth-place": 10},
+        {"championship-r3-m1": 14, "places-3-4": 13, "places-5-6": 10},
     )
     assert final_positions_complete(state, 14)
     assert tuple(

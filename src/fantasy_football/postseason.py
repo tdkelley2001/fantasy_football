@@ -106,6 +106,32 @@ class ConsolationLadderConfiguration:
     final_positions_by_ladder_position: tuple[tuple[int, int], ...]
 
 
+@dataclass(frozen=True, slots=True, order=True)
+class BracketSource:
+    """One graph input: an original seed or a prior matchup outcome."""
+
+    seed: int | None = None
+    matchup_id: str | None = None
+    outcome: str | None = None
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class BracketGraphNode:
+    node_id: str
+    bracket_type: BracketType
+    round_number: int
+    position: int
+    sources: tuple[BracketSource, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BracketGraph:
+    participant_seeds: tuple[int, ...]
+    round_count: int
+    nodes: tuple[BracketGraphNode, ...]
+    unresolved_capabilities: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class PostseasonState:
     source_snapshot_id: str | None
@@ -117,6 +143,148 @@ class PostseasonState:
     placements: tuple[FinalPlacement, ...]
     unresolved_capabilities: tuple[str, ...]
     consolation_configuration: ConsolationLadderConfiguration | None = None
+    championship_graph: BracketGraph | None = None
+    consolation_graph: BracketGraph | None = None
+
+
+def _power_of_two(value: int) -> int:
+    size = 1
+    while size < value:
+        size *= 2
+    return size
+
+
+def _seed_order(size: int) -> tuple[int, ...]:
+    order = (1, 2)
+    current = 2
+    while current < size:
+        expanded = current * 2
+        order = tuple(value for seed in order for value in (seed, expanded + 1 - seed))
+        current = expanded
+    return order
+
+
+def generate_championship_graph(
+    participant_seeds: tuple[int, ...], round_count: int
+) -> BracketGraph:
+    """Generate a fixed, no-reseed ESPN-style elimination graph."""
+
+    if not participant_seeds or participant_seeds != tuple(
+        range(1, len(participant_seeds) + 1)
+    ):
+        raise PostseasonError("championship seeds must be contiguous starting at one")
+    bracket_size = _power_of_two(len(participant_seeds))
+    required_rounds = bracket_size.bit_length() - 1
+    if round_count != required_rounds:
+        raise PostseasonError(
+            f"{len(participant_seeds)} championship qualifiers require {required_rounds} rounds; configured {round_count}"
+        )
+    order = _seed_order(bracket_size)
+    nodes: list[BracketGraphNode] = []
+    previous: tuple[str, ...] = ()
+    for round_number in range(1, round_count + 1):
+        node_count = bracket_size // (2**round_number)
+        current = []
+        for position in range(node_count):
+            node_id = f"championship-r{round_number}-m{position + 1}"
+            if round_number == 1:
+                pair = order[position * 2 : position * 2 + 2]
+                sources = tuple(
+                    BracketSource(seed=seed)
+                    for seed in pair
+                    if seed <= len(participant_seeds)
+                )
+            else:
+                sources = tuple(
+                    BracketSource(matchup_id=source, outcome="winner")
+                    for source in previous[position * 2 : position * 2 + 2]
+                )
+            nodes.append(
+                BracketGraphNode(
+                    node_id,
+                    BracketType.CHAMPIONSHIP,
+                    round_number,
+                    position,
+                    sources,
+                )
+            )
+            current.append(node_id)
+        previous = tuple(current)
+    unresolved = ()
+    if len(participant_seeds) not in (2, 4, 6):
+        unresolved = ("championship_complete_placement_mapping",)
+    return BracketGraph(participant_seeds, round_count, tuple(nodes), unresolved)
+
+
+def generate_consolation_graph(
+    participant_seeds: tuple[int, ...], round_count: int
+) -> BracketGraph:
+    """Generate the settings-driven ESPN consolation movement graph."""
+
+    if not participant_seeds or tuple(sorted(participant_seeds)) != participant_seeds:
+        raise PostseasonError("consolation seeds must be nonempty and ordered")
+    if len(set(participant_seeds)) != len(participant_seeds):
+        raise PostseasonError("consolation seeds must be unique")
+    if round_count < 1:
+        raise PostseasonError("consolation ladder requires at least one round")
+    nodes: list[BracketGraphNode] = []
+    match_count = len(participant_seeds) // 2
+    for position in range(match_count):
+        sources = tuple(
+            BracketSource(seed=seed)
+            for seed in participant_seeds[position * 2 : position * 2 + 2]
+        )
+        nodes.append(
+            BracketGraphNode(
+                f"consolation-r1-m{position + 1}",
+                BracketType.CONSOLATION,
+                1,
+                position,
+                sources,
+            )
+        )
+    if len(participant_seeds) % 2:
+        nodes.append(
+            BracketGraphNode(
+                "consolation-r1-bye",
+                BracketType.CONSOLATION,
+                1,
+                match_count,
+                (BracketSource(seed=participant_seeds[-1]),),
+            )
+        )
+        return BracketGraph(
+            participant_seeds,
+            round_count,
+            tuple(nodes),
+            ("consolation_bye_reentry_mapping",),
+        )
+    previous = tuple(node for node in nodes if node.round_number == 1)
+    for round_number in range(2, round_count + 1):
+        current = []
+        for position in range(match_count):
+            sources = tuple(
+                BracketSource(matchup_id=node.node_id, outcome=outcome)
+                for index, node in enumerate(previous)
+                for outcome, destination in (
+                    ("winner", max(index - 1, 0)),
+                    ("loser", min(index + 1, match_count - 1)),
+                )
+                if destination == position
+            )
+            node_id = f"consolation-r{round_number}-m{position + 1}"
+            nodes.append(
+                BracketGraphNode(
+                    node_id,
+                    BracketType.CONSOLATION,
+                    round_number,
+                    position,
+                    sources,
+                )
+            )
+            current.append(nodes[-1])
+        previous = tuple(current)
+    return BracketGraph(participant_seeds, round_count, tuple(nodes))
 
 
 def resolve_postseason_seeds(
@@ -229,7 +397,7 @@ def initialize_postseason(
     *,
     consolation_configuration: ConsolationLadderConfiguration | None = None,
 ) -> PostseasonState:
-    """Initialize the verified six-team championship and ESPN consolation first round."""
+    """Initialize settings-driven championship and ESPN consolation graphs."""
 
     seeds = resolve_postseason_seeds(snapshot, standings)
     championship = snapshot.rules.championship
@@ -249,54 +417,29 @@ def initialize_postseason(
         raise PostseasonError(
             "postseason resolution requires an understood higher_seed matchup tie rule"
         )
-    if championship.qualifier_count != 6 or championship.reseed is not False:
+    if championship.reseed is not False:
         raise PostseasonError(
-            "supported championship structure requires six qualifiers and playoffReseed=false"
+            "supported championship structures require playoffReseed=false"
         )
     championship_periods = _periods(snapshot, championship.rounds)
-    if tuple(championship_periods) != (1, 2, 3):
-        raise PostseasonError(
-            "supported six-team championship requires rounds 1, 2, and 3"
-        )
+    championship_graph = generate_championship_graph(
+        tuple(range(1, championship.qualifier_count + 1)),
+        len(championship_periods),
+    )
     team_by_seed = {item.original_seed: item.team_id for item in seeds}
     period_id, weeks = championship_periods[1]
-    championship_matchups = (
+    championship_matchups = tuple(
         _matchup(
             BracketType.CHAMPIONSHIP,
             1,
             period_id,
             weeks,
-            team_by_seed[1],
-            None,
-            "seed-1-bye",
-        ),
-        _matchup(
-            BracketType.CHAMPIONSHIP,
-            1,
-            period_id,
-            weeks,
-            team_by_seed[2],
-            None,
-            "seed-2-bye",
-        ),
-        _matchup(
-            BracketType.CHAMPIONSHIP,
-            1,
-            period_id,
-            weeks,
-            team_by_seed[3],
-            team_by_seed[6],
-            "three-six",
-        ),
-        _matchup(
-            BracketType.CHAMPIONSHIP,
-            1,
-            period_id,
-            weeks,
-            team_by_seed[4],
-            team_by_seed[5],
-            "four-five",
-        ),
+            team_by_seed[node.sources[0].seed],
+            team_by_seed[node.sources[1].seed] if len(node.sources) == 2 else None,
+            node.node_id,
+        )
+        for node in championship_graph.nodes
+        if node.round_number == 1
     )
 
     consolation_seeds = tuple(item for item in seeds if not item.championship_qualifier)
@@ -315,34 +458,25 @@ def initialize_postseason(
             raise PostseasonError(
                 "consolation ladder requires a configured first-round period"
             )
+        consolation_graph = generate_consolation_graph(
+            tuple(item.original_seed for item in consolation_seeds),
+            len(consolation_periods),
+        )
         consolation_matchups_list = []
         period_id, weeks = consolation_periods[1]
-        index = 0
-        while index + 1 < len(consolation_seeds):
-            upper, lower = consolation_seeds[index : index + 2]
+        for node in consolation_graph.nodes:
+            if node.round_number != 1:
+                continue
+            source_teams = tuple(team_by_seed[source.seed] for source in node.sources)
             consolation_matchups_list.append(
                 _matchup(
                     BracketType.CONSOLATION,
                     1,
                     period_id,
                     weeks,
-                    upper.team_id,
-                    lower.team_id,
-                    f"positions-{upper.original_seed}-{lower.original_seed}",
-                )
-            )
-            index += 2
-        if index < len(consolation_seeds):
-            bye = consolation_seeds[index]
-            consolation_matchups_list.append(
-                _matchup(
-                    BracketType.CONSOLATION,
-                    1,
-                    period_id,
-                    weeks,
-                    bye.team_id,
-                    None,
-                    f"lowest-seed-{bye.original_seed}-bye",
+                    source_teams[0],
+                    source_teams[1] if len(source_teams) == 2 else None,
+                    node.node_id,
                 )
             )
         consolation_matchups = tuple(consolation_matchups_list)
@@ -352,11 +486,11 @@ def initialize_postseason(
             )
             for item in consolation_seeds
         )
-        unresolved = (
-            ()
-            if consolation_configuration is not None
-            else ("consolation_later_round_transition_mapping",)
-        )
+        unresolved = consolation_graph.unresolved_capabilities
+        if consolation_configuration is not None:
+            unresolved = ()
+    if consolation_rules.enabled is False:
+        consolation_graph = None
     _reconcile_first_round_schedule(
         snapshot, championship_matchups, BracketType.CHAMPIONSHIP
     )
@@ -371,8 +505,10 @@ def initialize_postseason(
         consolation_matchups,
         positions,
         (),
-        unresolved,
+        tuple(sorted(set(unresolved + championship_graph.unresolved_capabilities))),
         consolation_configuration,
+        championship_graph,
+        consolation_graph,
     )
 
 
@@ -431,103 +567,92 @@ def _finish_matchup(
 def _advance_championship(
     snapshot: LeagueSnapshot, state: PostseasonState
 ) -> PostseasonState:
+    """Resolve the generated fixed bracket and supported placement cohorts."""
+
+    graph = state.championship_graph
+    if graph is None:
+        raise PostseasonError("postseason state lacks its championship graph")
     matchups = list(state.championship_matchups)
     periods = _periods(snapshot, snapshot.rules.championship.rounds)
-    by_round = {
-        number: tuple(item for item in matchups if item.round_number == number)
-        for number in (1, 2, 3)
-    }
-    if not by_round[2] and all(
-        item.status in {MatchupStatus.COMPLETE, MatchupStatus.BYE}
-        for item in by_round[1]
-    ):
-        three_six = next(item for item in by_round[1] if item.purpose == "three-six")
-        four_five = next(item for item in by_round[1] if item.purpose == "four-five")
-        seed_one = next(item.team_id for item in state.seeds if item.original_seed == 1)
-        seed_two = next(item.team_id for item in state.seeds if item.original_seed == 2)
-        period_id, weeks = periods[2]
-        matchups.extend(
-            (
-                _matchup(
-                    BracketType.CHAMPIONSHIP,
-                    2,
-                    period_id,
-                    weeks,
-                    seed_one,
-                    four_five.winner_team_id,
-                    "semifinal-one",
-                ),
-                _matchup(
-                    BracketType.CHAMPIONSHIP,
-                    2,
-                    period_id,
-                    weeks,
-                    seed_two,
-                    three_six.winner_team_id,
-                    "semifinal-two",
-                ),
+    by_purpose = {item.purpose: item for item in matchups}
+    seed_teams = {item.original_seed: item.team_id for item in state.seeds}
+    for round_number in range(2, graph.round_count + 1):
+        prior = tuple(
+            item
+            for item in matchups
+            if item.bracket_type is BracketType.CHAMPIONSHIP
+            and item.round_number == round_number - 1
+        )
+        if not prior or not all(
+            item.status in {MatchupStatus.COMPLETE, MatchupStatus.BYE} for item in prior
+        ):
+            break
+        period_id, weeks = periods[round_number]
+        for node in graph.nodes:
+            if node.round_number != round_number or node.node_id in by_purpose:
+                continue
+            participants = []
+            for source in node.sources:
+                if source.seed is not None:
+                    participants.append(seed_teams[source.seed])
+                else:
+                    source_matchup = by_purpose[source.matchup_id]
+                    participants.append(source_matchup.winner_team_id)
+            created = _matchup(
+                BracketType.CHAMPIONSHIP,
+                round_number,
+                period_id,
+                weeks,
+                participants[0],
+                participants[1] if len(participants) == 2 else None,
+                node.node_id,
             )
+            matchups.append(created)
+            by_purpose[node.node_id] = created
+
+    final_period_id, final_weeks = periods[graph.round_count]
+    for round_number in range(1, graph.round_count):
+        cohort = tuple(
+            item.loser_team_id
+            for item in matchups
+            if item.bracket_type is BracketType.CHAMPIONSHIP
+            and item.round_number == round_number
+            and item.status is MatchupStatus.COMPLETE
+            and item.loser_team_id is not None
         )
-    by_round_two = tuple(item for item in matchups if item.round_number == 2)
-    if (
-        by_round_two
-        and not any(item.round_number == 3 for item in matchups)
-        and all(item.status is MatchupStatus.COMPLETE for item in by_round_two)
-    ):
-        semifinal_one = next(
-            item for item in by_round_two if item.purpose == "semifinal-one"
-        )
-        semifinal_two = next(
-            item for item in by_round_two if item.purpose == "semifinal-two"
-        )
-        three_six = next(item for item in matchups if item.purpose == "three-six")
-        four_five = next(item for item in matchups if item.purpose == "four-five")
-        period_id, weeks = periods[3]
-        matchups.extend(
-            (
-                _matchup(
-                    BracketType.CHAMPIONSHIP,
-                    3,
-                    period_id,
-                    weeks,
-                    semifinal_one.winner_team_id,
-                    semifinal_two.winner_team_id,
-                    "championship-final",
-                ),
-                _matchup(
-                    BracketType.PLACEMENT,
-                    3,
-                    period_id,
-                    weeks,
-                    semifinal_one.loser_team_id,
-                    semifinal_two.loser_team_id,
-                    "third-place",
-                ),
-                _matchup(
-                    BracketType.PLACEMENT,
-                    3,
-                    period_id,
-                    weeks,
-                    three_six.loser_team_id,
-                    four_five.loser_team_id,
-                    "fifth-place",
-                ),
+        survivors = _power_of_two(len(graph.participant_seeds)) // (2**round_number)
+        first_place = survivors + 1
+        purpose = f"places-{first_place}-{first_place + 1}"
+        if len(cohort) == 2 and purpose not in by_purpose:
+            created = _matchup(
+                BracketType.PLACEMENT,
+                graph.round_count,
+                final_period_id,
+                final_weeks,
+                cohort[0],
+                cohort[1],
+                purpose,
             )
-        )
-    final_round = tuple(item for item in matchups if item.round_number == 3)
+            matchups.append(created)
+            by_purpose[purpose] = created
+
+    final_round = tuple(
+        item for item in matchups if item.round_number == graph.round_count
+    )
     placements = list(state.placements)
     if (
         final_round
         and all(item.status is MatchupStatus.COMPLETE for item in final_round)
         and not placements
     ):
-        purpose_places = {
-            "championship-final": (1, 2),
-            "third-place": (3, 4),
-            "fifth-place": (5, 6),
-        }
         for item in final_round:
-            winner_place, loser_place = purpose_places[item.purpose]
+            if item.bracket_type is BracketType.CHAMPIONSHIP:
+                winner_place, loser_place = 1, 2
+            elif item.purpose.startswith("places-"):
+                _, winner, loser = item.purpose.split("-")
+                winner_place, loser_place = int(winner), int(loser)
+            else:
+                continue
             placements.extend(
                 (
                     FinalPlacement(
@@ -545,7 +670,7 @@ def _advance_championship(
     )
 
 
-def _advance_consolation(
+def _advance_configured_consolation(
     snapshot: LeagueSnapshot, state: PostseasonState
 ) -> PostseasonState:
     """Apply only an explicit validated ladder transition configuration."""
@@ -680,7 +805,109 @@ def _advance_consolation(
         consolation_matchups=tuple(sorted(matchups, key=lambda item: item.matchup_id)),
         consolation_positions=tuple(sorted(positions.values())),
         placements=tuple(sorted(placements)),
-        unresolved_capabilities=(),
+        unresolved_capabilities=tuple(
+            item
+            for item in state.unresolved_capabilities
+            if not item.startswith("consolation_")
+        ),
+    )
+
+
+def _advance_consolation(
+    snapshot: LeagueSnapshot, state: PostseasonState
+) -> PostseasonState:
+    """Advance the generic movement graph, or an explicit odd-field mapping."""
+
+    if state.consolation_configuration is not None:
+        return _advance_configured_consolation(snapshot, state)
+    graph = state.consolation_graph
+    if graph is None or not state.consolation_matchups:
+        return state
+    if graph.unresolved_capabilities:
+        return state
+    matchups = list(state.consolation_matchups)
+    positions = {item.team_id: item for item in state.consolation_positions}
+    by_purpose = {item.purpose: item for item in matchups}
+    periods = _periods(snapshot, snapshot.rules.consolation.rounds)
+    for round_number in range(2, graph.round_count + 1):
+        prior = tuple(
+            item for item in matchups if item.round_number == round_number - 1
+        )
+        if not prior or not all(
+            item.status in {MatchupStatus.COMPLETE, MatchupStatus.BYE} for item in prior
+        ):
+            break
+        period_id, weeks = periods[round_number]
+        for node in graph.nodes:
+            if node.round_number != round_number or node.node_id in by_purpose:
+                continue
+            participants = []
+            for source in node.sources:
+                source_matchup = by_purpose[source.matchup_id]
+                participant = (
+                    source_matchup.winner_team_id
+                    if source.outcome == "winner"
+                    else source_matchup.loser_team_id
+                )
+                if participant is None:
+                    raise PostseasonError(
+                        f"consolation graph source {source} has no resolved participant"
+                    )
+                participants.append(participant)
+            participants.sort(key=lambda team_id: positions[team_id].original_seed)
+            base_position = min(graph.participant_seeds) + node.position * 2
+            for offset, team_id in enumerate(participants):
+                positions[team_id] = replace(
+                    positions[team_id], current_position=base_position + offset
+                )
+            created = _matchup(
+                BracketType.CONSOLATION,
+                round_number,
+                period_id,
+                weeks,
+                participants[0],
+                participants[1],
+                node.node_id,
+            )
+            matchups.append(created)
+            by_purpose[node.node_id] = created
+
+    placements = list(state.placements)
+    final_round = tuple(
+        item for item in matchups if item.round_number == graph.round_count
+    )
+    if (
+        final_round
+        and all(item.status is MatchupStatus.COMPLETE for item in final_round)
+        and not any(item.bracket_type is BracketType.CONSOLATION for item in placements)
+    ):
+        buckets: dict[int, list[int]] = {index: [] for index in range(len(final_round))}
+        ordered_final = tuple(sorted(final_round, key=lambda item: item.purpose))
+        for index, matchup in enumerate(ordered_final):
+            buckets[max(index - 1, 0)].append(matchup.winner_team_id)
+            buckets[min(index + 1, len(final_round) - 1)].append(matchup.loser_team_id)
+        for index, team_ids in buckets.items():
+            team_ids.sort(key=lambda team_id: positions[team_id].original_seed)
+            base_position = min(graph.participant_seeds) + index * 2
+            for offset, team_id in enumerate(team_ids):
+                positions[team_id] = replace(
+                    positions[team_id], current_position=base_position + offset
+                )
+        placements.extend(
+            FinalPlacement(item.current_position, item.team_id, BracketType.CONSOLATION)
+            for item in positions.values()
+        )
+    unresolved = tuple(
+        item
+        for item in state.unresolved_capabilities
+        if not item.startswith("consolation_")
+    )
+    return replace(
+        state,
+        consolation_matchups=tuple(sorted(matchups, key=lambda item: item.matchup_id)),
+        consolation_positions=tuple(sorted(positions.values())),
+        placements=tuple(sorted(placements)),
+        unresolved_capabilities=unresolved,
     )
 
 
