@@ -38,6 +38,23 @@ def _state(snapshot):
     )
 
 
+def test_cycle_references_reject_unsupported_faab_league() -> None:
+    snapshot = _valuation_snapshot()
+    rules = replace(
+        snapshot.rules,
+        acquisition=replace(
+            snapshot.rules.acquisition,
+            acquisition_type="WAIVERS_FAAB",
+            uses_budget=True,
+        ),
+    )
+    unsupported = replace(snapshot, rules=rules)
+    with pytest.raises(CycleReferenceError, match="WAIVERS_TRADITIONAL"):
+        enumerate_feasible_cycles(
+            unsupported, _state(unsupported), WeeklyTransactionPolicy()
+        )
+
+
 def _effect(state):
     return (
         state.roster_entries,

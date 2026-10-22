@@ -51,6 +51,19 @@ not establish how that participant reenters the next movement round. The graph
 therefore reports `consolation_bye_reentry_mapping` and stops after round one
 unless a validated explicit configuration supplies that relationship.
 
+Consolation enablement is strictly tri-state. Canonical `True` enables a
+supported ladder, `False` disables it, and `None` creates no consolation
+participants or matchups while reporting `consolation_enablement_unresolved`.
+An explicit mapping cannot override disabled or unresolved enablement.
+
+Explicit `ConsolationLadderConfiguration` input is preflighted before state
+creation. Validation proves complete unique transition coverage for every
+configured round, directional and boundary legality, collision-free position
+permutations, complete unique final ranks within the consolation range, and
+source-reference validity. Odd-field continuation additionally requires a
+recorded canonical source or an explicit approval reference. Configuration
+provenance remains visible on the immutable postseason state.
+
 ## Interfaces and limitations
 
 Callers may supply audited weekly team totals through
@@ -66,8 +79,15 @@ ordering. Reseeding, unresolved odd-field bye reentry, and championship
 placement cohorts larger than two fail closed. The engine is not an ESPN
 scraper, score generator, waiver processor, or full-season coordinator.
 
-The acceptance run contains 28 focused postseason tests and 409 passing
-credential-free repository tests. On the development Windows/Python 3.12
-environment, 1,000 synthetic 14-team initializations averaged 7.87 ms and
-peaked at 722.4 KiB of traced Python memory. This is a synthetic deterministic
-benchmark, not a live ESPN workload.
+Championship and consolation rules retain independent round lists. A supported
+bracket may therefore complete and publish its placements while the other is
+still active. Placement finalization is bracket-specific and idempotent;
+global duplicate ranks or teams are rejected.
+
+The final correction acceptance run contains 39 focused postseason tests and
+422 passing credential-free repository tests. On the development
+Windows/Python 3.12 environment, 200 complete synthetic postseasons averaged
+22.15 ms for the 14-team shared three-round fixture, 18.15 ms for a 12-team
+championship-first fixture, and 24.28 ms for a 14-team consolation-first
+fixture. Peak traced memory was 1,088.3, 385.9, and 332.2 KiB respectively.
+These are synthetic deterministic benchmarks, not live ESPN workloads.

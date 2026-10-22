@@ -59,6 +59,8 @@ Current settings verify six qualifiers, two first-round byes, no reseeding, roun
 
 On 21 October 2026, the official [ESPN Fantasy Football playoff rules](https://www.espn.co.uk/fantasy/football/ffl/story?page=fflrulesplayoffs) verified that all non-qualifiers enter the Consolation Ladder, first-round opponents are adjacent in descending seed order, the lowest seed receives a bye for an odd population, winners move one matchup upward, losers move one matchup downward, boundary teams cannot move beyond the ladder, and participants continue throughout the postseason. This movement generates every later even-field round. For the current 14-team/six-qualifier configuration it produces the complete eight-participant graph beginning 7–8, 9–10, 11–12, and 13–14. The public rule does not establish how an odd-field bye participant enters the following round, so that narrower capability remains unresolved without additional evidence or explicit configuration.
 
+M2.4 preserves the source Boolean as a tri-state capability boundary: explicit enabled and disabled values are actionable, while a missing/unresolved value creates no ladder. A manual ladder mapping cannot supply the missing enablement fact. Explicit later-round configuration is separately preflighted and retains its canonical source ID or approval reference; fixture approval demonstrates code behavior only and is not new ESPN evidence.
+
 ## Manual configuration gaps
 
 These keys are proposals for later review, not a production schema or defaults:
