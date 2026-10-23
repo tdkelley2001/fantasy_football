@@ -20,6 +20,9 @@ from fantasy_football.canonical.validation import CanonicalValidationError
 from fantasy_football.evolving_state import IRPolicy
 from fantasy_football.season_simulator import (
     DeterministicScoreScenario,
+    ParticipationProvenance,
+    PostseasonTransactionParticipationMode,
+    PostseasonTransactionParticipationPolicy,
     SeasonCompletionStatus,
     SeasonSimulationError,
     simulate_deterministic_season,
@@ -70,7 +73,7 @@ def _policy(*, authorized: bool = True):
     )
 
 
-def _run(snapshot=None, scenario=None, *, policy=None):
+def _run(snapshot=None, scenario=None, *, policy=None, postseason_policy=None):
     snapshot = _snapshot() if snapshot is None else snapshot
     scenario = _scenario(snapshot) if scenario is None else scenario
     return simulate_deterministic_season(
@@ -78,7 +81,79 @@ def _run(snapshot=None, scenario=None, *, policy=None):
         scenario,
         ir_policy=IRPolicy.PROJECTION_BASED,
         transaction_policy=_policy() if policy is None else policy,
+        postseason_transaction_policy=(
+            PostseasonTransactionParticipationPolicy()
+            if postseason_policy is None
+            else postseason_policy
+        ),
     )
+
+
+def _active_only_policy(reference: str = "fixture-active-participants"):
+    return PostseasonTransactionParticipationPolicy(
+        PostseasonTransactionParticipationMode.ACTIVE_POSTSEASON_PARTICIPANTS,
+        ParticipationProvenance.MANUAL_VALIDATED_CONFIGURATION,
+        reference,
+    )
+
+
+def _postseason_shared_player_fixture(*, consolation_enabled: bool):
+    snapshot = _snapshot()
+    source_id = snapshot.sources[0].source_id
+    defense = Player(
+        30,
+        "Postseason defense",
+        16,
+        (16,),
+        1,
+        "ACTIVE",
+        "WAIVERS",
+        False,
+        source_id,
+    )
+    defense_weeks = tuple(
+        PlayerWeek(
+            30,
+            snapshot.season,
+            week,
+            12.0 if week == 17 else 0.0,
+            (ProjectionClass.PRESENT if week == 17 else ProjectionClass.EXPLICIT_ZERO),
+            12.0 if week == 17 else 0.0,
+            ProjectionSource.ESPN,
+            source_id,
+        )
+        for week in range(
+            snapshot.first_simulation_week, snapshot.final_simulation_week + 1
+        )
+    )
+    snapshot = replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            consolation=replace(
+                snapshot.rules.consolation, enabled=consolation_enabled
+            ),
+        ),
+        players=tuple(
+            sorted(snapshot.players + (defense,), key=lambda item: item.player_id)
+        ),
+        player_weeks=tuple(
+            sorted(
+                snapshot.player_weeks + defense_weeks,
+                key=lambda item: (item.player_id, item.season, item.scoring_week),
+            )
+        ),
+    )
+    base = _scenario(snapshot)
+    scores = tuple(
+        replace(item, points=40.0)
+        if (item.player_id, item.scoring_week) == (1, 17)
+        else replace(item, points=10.0)
+        if (item.player_id, item.scoring_week) == (2, 17)
+        else item
+        for item in base.scores
+    ) + (RealizedPlayerScore(30, snapshot.season, 17, 50.0),)
+    return snapshot, replace(base, scores=scores)
 
 
 def _fourteen_team_postseason_snapshot():
@@ -338,6 +413,150 @@ def test_essential_free_agent_acquisition_changes_frozen_lineup_and_matchup() ->
         item.player_id == 30 and item.team_id == 4
         for item in result.final_evolving_state.roster_entries
     )
+
+
+def test_disabled_consolation_participation_policy_changes_contested_ownership() -> (
+    None
+):
+    snapshot, scenario = _postseason_shared_player_fixture(consolation_enabled=False)
+    all_teams = _run(snapshot, scenario)
+    active_only = _run(
+        snapshot,
+        scenario,
+        postseason_policy=_active_only_policy(),
+    )
+    all_owner = next(
+        item.team_id
+        for item in all_teams.final_evolving_state.roster_entries
+        if item.player_id == 30
+    )
+    active_owner = next(
+        item.team_id
+        for item in active_only.final_evolving_state.roster_entries
+        if item.player_id == 30
+    )
+    assert all_owner == 4
+    assert active_owner == 2
+    all_champion = next(
+        item.team_id for item in all_teams.team_records if item.final_placement == 1
+    )
+    active_champion = next(
+        item.team_id for item in active_only.team_records if item.final_placement == 1
+    )
+    assert all_champion == 1
+    assert active_champion == 2
+    postseason_week = active_only.weeks[-1]
+    assert {item.team_id for item in postseason_week.transaction_result.decisions} == {
+        1,
+        2,
+    }
+    assert "manual_validated_configuration" in active_only.configuration_provenance[0]
+
+
+def test_enabled_consolation_keeps_nonqualifier_in_active_participant_competition() -> (
+    None
+):
+    snapshot, scenario = _postseason_shared_player_fixture(consolation_enabled=True)
+    result = _run(snapshot, scenario, postseason_policy=_active_only_policy())
+    owner = next(
+        item.team_id
+        for item in result.final_evolving_state.roster_entries
+        if item.player_id == 30
+    )
+    assert owner == 4
+    assert {item.team_id for item in result.weeks[-1].transaction_result.decisions} == {
+        1,
+        2,
+        3,
+        4,
+    }
+
+
+def test_championship_bye_teams_remain_transaction_participants() -> None:
+    snapshot = _fourteen_team_postseason_snapshot()
+    scenario = DeterministicScoreScenario(
+        "bye-participation",
+        tuple(
+            RealizedPlayerScore(player.player_id, snapshot.season, week, 1.0)
+            for week in range(
+                snapshot.first_simulation_week, snapshot.final_simulation_week + 1
+            )
+            for player in snapshot.players
+        ),
+    )
+    result = _run(
+        snapshot,
+        scenario,
+        postseason_policy=_active_only_policy("fixture-byes-remain-participants"),
+    )
+    first_decisions = {
+        item.team_id for item in result.weeks[0].transaction_result.decisions
+    }
+    seed_by_team = {item.team_id: item.postseason_seed for item in result.team_records}
+    bye_teams = {team_id for team_id, seed in seed_by_team.items() if seed in {1, 2}}
+    assert bye_teams <= first_decisions
+
+
+def test_unresolved_postseason_participation_stops_only_when_acquisition_is_material() -> (
+    None
+):
+    snapshot, scenario = _postseason_shared_player_fixture(consolation_enabled=False)
+    unresolved = PostseasonTransactionParticipationPolicy(
+        PostseasonTransactionParticipationMode.UNRESOLVED,
+        ParticipationProvenance.UNRESOLVED,
+        None,
+    )
+    result = _run(snapshot, scenario, postseason_policy=unresolved)
+    assert result.status is SeasonCompletionStatus.INCOMPLETE
+    assert result.unresolved_capabilities == (
+        "week_17_postseason_transaction_participation_unresolved",
+    )
+    assert not any(
+        item.player_id == 30 for item in result.final_evolving_state.roster_entries
+    )
+
+    harmless = _run(_snapshot(), _scenario(_snapshot()), postseason_policy=unresolved)
+    assert harmless.status is SeasonCompletionStatus.COMPLETE
+
+
+def test_weekly_reset_and_persistent_priority_follow_canonical_configuration() -> None:
+    resetting = _run()
+    assert resetting.weeks[0].transaction_result.initial_waiver_priority == (
+        1,
+        2,
+        3,
+        4,
+    )
+    assert resetting.weeks[1].transaction_result.initial_waiver_priority == (
+        4,
+        3,
+        2,
+        1,
+    )
+
+    snapshot = _snapshot()
+    snapshot = replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            acquisition=replace(snapshot.rules.acquisition, waiver_order_resets=False),
+        ),
+    )
+    persistent = _run(snapshot, _scenario(snapshot))
+    assert all(
+        item.transaction_result.initial_waiver_priority == (1, 2, 3, 4)
+        for item in persistent.weeks
+    )
+
+
+def test_participation_policy_provenance_is_validated() -> None:
+    invalid = PostseasonTransactionParticipationPolicy(
+        PostseasonTransactionParticipationMode.ACTIVE_POSTSEASON_PARTICIPANTS,
+        ParticipationProvenance.APPROVED_V1_ASSUMPTION,
+        "arbitrary-string",
+    )
+    with pytest.raises(SeasonSimulationError, match="validated manual configuration"):
+        _run(postseason_policy=invalid)
 
 
 def test_replay_is_deterministic_and_inputs_are_immutable() -> None:

@@ -86,3 +86,12 @@ queue for the separately approved reverse-priority free-agent policy. No hold
 is cleared by cycle advancement. The existing acquisition gate continues to
 reject FAAB and alternative modes. No new material league-size or current-slot
 hardcoding was found during M2.5 integration.
+
+Postseason acquisition participation is not exposed by a currently verified
+canonical ESPN field. M2.5 therefore makes it explicit and provenance-bearing:
+the default all-team mode is the approved `all_teams_continue_essential_acquisitions_v1`
+model assumption; an active championship/bye/consolation-only mode requires a
+validated manual configuration reference; and unresolved mode stops before a
+material acquisition. Scored-lineup participation is not used as an implicit
+transaction rule. This policy is league-size independent and filters actors
+without deleting inactive teams from shared ownership or valuation state.
