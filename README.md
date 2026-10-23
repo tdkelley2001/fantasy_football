@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, M1, and M2.1–M2.6 are **COMPLETE AND ACCEPTED**. The next work package is M3.1, which is **NOT STARTED**. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented; the provisional outcome distribution remains explicitly uncalibrated. Simulator-specific rule gaps remain preserved without defaults.
+M0, M1, and M2.1–M2.6 are **COMPLETE AND ACCEPTED**. M3.1's historical research-dataset contract is **IMPLEMENTED — REVIEW PENDING**; M3.2 and later statistical work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented; the provisional outcome distribution remains explicitly uncalibrated. Simulator-specific rule gaps remain preserved without defaults.
 
 ## Authoritative documentation
 
@@ -29,6 +29,7 @@ M0, M1, and M2.1–M2.6 are **COMPLETE AND ACCEPTED**. The next work package is 
 - [Player outcome model](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo runner](docs/MONTE_CARLO.md) — M2.6 provisional score generation, replay, identity, and aggregation.
 - [League configuration audit](docs/LEAGUE_CONFIGURATION_AUDIT.md) — standing inventory of API-derived rules, configuration, assumptions, and unsupported modes.
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
+- [Historical research dataset](docs/HISTORICAL_RESEARCH_DATASET.md) — M3.1 immutable projection/actual evidence contract, leakage safeguards, coverage, and limitations.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -233,6 +234,22 @@ Available primitives cover explicit add, drop, compound replacement, IR placemen
 ## Remaining-season roster valuation
 
 `fantasy_football.roster_value.value_roster()` computes the implemented M2.3c V(R): the equal-weight sum of projected weekly lineups after exact conservative allocation of the current shared unrostered pool against demonstrated mandatory opponent vacancies. It returns structured weekly owned/replacement contributions, competing demand, access rank, vacancies, exclusions, and assumptions without modifying ownership or the transaction ledger. `value_hypothetical_roster()` accepts a complete structurally legal hypothetical state but does not claim its transaction history is ESPN-authorized; `compare_roster_values()` reports unified delta V(R) separately from current-week vacancy improvement. See [the valuation contract](docs/ROSTER_VALUATION.md).
+
+## Historical projection research dataset
+
+M3.1 exposes `build_historical_research_dataset(samples, sources)` and
+`historical_research_dataset_to_json(dataset)` from
+`fantasy_football.historical_dataset`. The builder consumes explicit historical
+samples parsed with the accepted M0.5 raw-record logic and produces deterministic
+rows, provenance, coverage tables, and a SHA-256 dataset identity. It makes no
+network request and does not write to snapshot storage.
+
+Historical ESPN projections remain labeled pregame-provenance unverified.
+Missing projections, explicit ESPN zeros, and separately supplied
+model-policy-imputed zeros remain distinct; only independently verified immutable
+pregame captures can become authenticated calibration pairs. Generated research
+data can contain private identifiers and should be written only to ignored local
+output. See [the M3.1 contract](docs/HISTORICAL_RESEARCH_DATASET.md).
 
 ## Historical implementation
 

@@ -152,6 +152,18 @@ Questions carried to M0.6:
 
 M0.6 resolution: the project may proceed through M1 and V1 without scheduled prospective collection. Unverified historical pairs may support explicitly provisional exploratory calibration and probability estimates, with their evidence limitation visible in outputs. No distribution, promotion threshold, or horizon adjustment is approved here. Existing timestamped artifacts and prospective collection remain optional future evidence. M0.4 rule gaps are capability-specific: they can be retained in M1 metadata but block only the authoritative simulator behaviors that depend on them. See `M0_FEASIBILITY_AND_M1_HANDOFF.md`.
 
+## M3.1 dataset handoff
+
+M3.1 implements the separate immutable research contract documented in
+`HISTORICAL_RESEARCH_DATASET.md`. It preserves the M0.5 classifications rather
+than upgrading them: the 5,000 recorded raw projection/actual pairs are eligible
+only for explicitly unverified exploratory work, and the authenticated-pregame
+pair count remains zero. The implementation adds deterministic source, period,
+scoring, row, coverage and identity validation; it does not retroactively create
+the row-level artifact from the aggregate-only 2026 audit. Materializing that
+artifact requires a separately authorized rerun, and generated private records
+must remain outside version control.
+
 ## Reproduction
 
 With local credentials in ignored `.env` values:
