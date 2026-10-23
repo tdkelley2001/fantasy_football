@@ -46,6 +46,38 @@ For each canonical scoring week the coordinator:
 6. Retains the complete transition and validates evolving state before moving
    to the next week.
 
+## Postseason transaction participation
+
+Transaction eligibility is separate from the obligation to submit a scored
+lineup. `PostseasonTransactionParticipationPolicy` provides three controlled
+modes:
+
+- `all_league_teams_v1` preserves the master specification's approved V1
+  behavior that every manager may continue essential acquisition competition.
+  It requires the exact named `approved_v1_assumption` reference and is not
+  represented as an ESPN rule.
+- `active_postseason_participants` is available only with a nonempty
+  `manual_validated_configuration` reference. It permits championship teams in
+  scheduled games or byes and active consolation-ladder teams. Teams no longer
+  participating in scored competition cannot act, but remain in ownership and
+  shared-pool valuation state.
+- `unresolved` makes no permission claim. The coordinator performs an immutable
+  probe; if any acquisition would occur, the path stops before mutation with a
+  capability-incomplete result. A window in which no team would acquire may
+  proceed because the unresolved distinction cannot affect that transition.
+
+No live ESPN provider currently verifies a universal postseason acquisition
+permission rule. The precedence is verified evidence when a provider exists,
+then validated explicit configuration, then the named V1 assumption, otherwise
+unresolved. Merely having an ESPN team record or lacking a scored matchup is not
+treated as transaction authority. Bye teams remain participants, while disabled
+or unresolved consolation creates no implicit nonqualifier permission under the
+active-participant configuration.
+
+M2.3d's optional `eligible_team_ids` input filters only managers allowed to act.
+It does not remove teams from ownership, availability, competing-demand, or
+V(R) calculations and therefore does not create a parallel transaction engine.
+
 Postseason seeds come only from modeled final regular-season standings. Snapshot
 historical seed fields are not used. A deeper unresolved standings tie produces
 an incomplete result before bracket initialization.

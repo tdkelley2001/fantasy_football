@@ -603,8 +603,15 @@ def execute_weekly_essential_transactions(
     snapshot: LeagueSnapshot,
     state: EvolvingLeagueState,
     policy: WeeklyTransactionPolicy,
+    *,
+    eligible_team_ids: tuple[int, ...] | None = None,
 ) -> WeeklyTransactionResult:
-    """Execute one immutable sequential weekly waiver/free-agent window."""
+    """Execute one immutable sequential weekly waiver/free-agent window.
+
+    ``eligible_team_ids`` controls only which managers may act in this window.
+    Shared ownership, availability, opponent demand, and valuation still use the
+    complete league state.  ``None`` preserves the accepted all-team behavior.
+    """
 
     validate_snapshot(snapshot)
     validate_evolving_state(state, snapshot)
@@ -626,6 +633,20 @@ def execute_weekly_essential_transactions(
         raise WeeklyTransactionError(
             "ranking incomplete roster valuations has no approved capability policy"
         )
+    team_ids = {item.team_id for item in snapshot.teams}
+    if eligible_team_ids is None:
+        eligible = team_ids
+    else:
+        if not isinstance(eligible_team_ids, tuple):
+            raise WeeklyTransactionError("eligible_team_ids must be an immutable tuple")
+        if len(eligible_team_ids) != len(set(eligible_team_ids)):
+            raise WeeklyTransactionError("eligible_team_ids must be unique")
+        unknown = set(eligible_team_ids) - team_ids
+        if unknown:
+            raise WeeklyTransactionError(
+                f"eligible_team_ids contain unknown teams {sorted(unknown)}"
+            )
+        eligible = set(eligible_team_ids)
 
     initial = state.current_waiver_priority
     frozen = state.initial_window_waiver_priority
@@ -647,7 +668,9 @@ def execute_weekly_essential_transactions(
         while True:
             pass_number += 1
             progress = False
-            order = tuple(order_factory(current))
+            order = tuple(
+                team_id for team_id in order_factory(current) if team_id in eligible
+            )
             for team_id in order:
                 lineup = optimize_starting_lineup(
                     snapshot,

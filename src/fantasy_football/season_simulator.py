@@ -57,6 +57,30 @@ class SeasonCompletionStatus(StrEnum):
     INCOMPLETE = "incomplete"
 
 
+class PostseasonTransactionParticipationMode(StrEnum):
+    ALL_LEAGUE_TEAMS_V1 = "all_league_teams_v1"
+    ACTIVE_POSTSEASON_PARTICIPANTS = "active_postseason_participants"
+    UNRESOLVED = "unresolved"
+
+
+class ParticipationProvenance(StrEnum):
+    APPROVED_V1_ASSUMPTION = "approved_v1_assumption"
+    MANUAL_VALIDATED_CONFIGURATION = "manual_validated_configuration"
+    UNRESOLVED = "unresolved"
+
+
+@dataclass(frozen=True, slots=True)
+class PostseasonTransactionParticipationPolicy:
+    mode: PostseasonTransactionParticipationMode = (
+        PostseasonTransactionParticipationMode.ALL_LEAGUE_TEAMS_V1
+    )
+    provenance: ParticipationProvenance = ParticipationProvenance.APPROVED_V1_ASSUMPTION
+    reference: str | None = "all_teams_continue_essential_acquisitions_v1"
+
+
+DEFAULT_POSTSEASON_TRANSACTION_POLICY = PostseasonTransactionParticipationPolicy()
+
+
 @dataclass(frozen=True, slots=True)
 class DeterministicScoreScenario:
     scenario_id: str
@@ -98,6 +122,7 @@ class DeterministicSeasonResult:
     season: int
     status: SeasonCompletionStatus
     unresolved_capabilities: tuple[str, ...]
+    configuration_provenance: tuple[str, ...]
     initial_standings: tuple[ModeledStanding, ...]
     final_regular_standings: tuple[ModeledStanding, ...]
     final_regular_ranking: StandingsTable
@@ -186,6 +211,7 @@ def _preflight(
     snapshot: LeagueSnapshot,
     scenario: DeterministicScoreScenario,
     transaction_policy: WeeklyTransactionPolicy,
+    postseason_transaction_policy: PostseasonTransactionParticipationPolicy,
     consolation_configuration: ConsolationLadderConfiguration | None,
 ) -> dict[tuple[int, int], RealizedPlayerScore]:
     validate_snapshot(snapshot)
@@ -201,6 +227,42 @@ def _preflight(
     if not isinstance(transaction_policy, WeeklyTransactionPolicy):
         raise SeasonSimulationError(
             "transaction_policy must be WeeklyTransactionPolicy"
+        )
+    participation = postseason_transaction_policy
+    if not isinstance(participation, PostseasonTransactionParticipationPolicy):
+        raise SeasonSimulationError(
+            "postseason_transaction_policy must be PostseasonTransactionParticipationPolicy"
+        )
+    if participation.mode is PostseasonTransactionParticipationMode.ALL_LEAGUE_TEAMS_V1:
+        if (
+            participation.provenance
+            is not ParticipationProvenance.APPROVED_V1_ASSUMPTION
+            or participation.reference != "all_teams_continue_essential_acquisitions_v1"
+        ):
+            raise SeasonSimulationError(
+                "all-team postseason transactions require the approved V1 assumption reference"
+            )
+    elif (
+        participation.mode
+        is PostseasonTransactionParticipationMode.ACTIVE_POSTSEASON_PARTICIPANTS
+    ):
+        if (
+            participation.provenance
+            is not ParticipationProvenance.MANUAL_VALIDATED_CONFIGURATION
+            or not isinstance(participation.reference, str)
+            or not participation.reference.strip()
+        ):
+            raise SeasonSimulationError(
+                "active-participant postseason transactions require validated manual configuration provenance"
+            )
+    elif participation.mode is PostseasonTransactionParticipationMode.UNRESOLVED:
+        if participation.provenance is not ParticipationProvenance.UNRESOLVED:
+            raise SeasonSimulationError(
+                "unresolved postseason participation must retain unresolved provenance"
+            )
+    else:
+        raise SeasonSimulationError(
+            f"unsupported postseason transaction participation mode {participation.mode!r}"
         )
     phases = _phase_by_week(snapshot)
     first_period = next(
@@ -246,6 +308,31 @@ def _active_postseason_teams(
             }
         )
     )
+
+
+def _postseason_transaction_participants(
+    snapshot: LeagueSnapshot,
+    state: PostseasonState,
+    policy: PostseasonTransactionParticipationPolicy,
+) -> tuple[int, ...] | None:
+    if policy.mode in {
+        PostseasonTransactionParticipationMode.ALL_LEAGUE_TEAMS_V1,
+        PostseasonTransactionParticipationMode.UNRESOLVED,
+    }:
+        return None
+    participants = {
+        team_id
+        for matchup in state.championship_matchups + state.consolation_matchups
+        if matchup.status.value != "complete"
+        for team_id in (matchup.home_team_id, matchup.away_team_id)
+        if team_id is not None
+    }
+    known = {item.team_id for item in snapshot.teams}
+    if not participants <= known:
+        raise SeasonSimulationError(
+            "postseason transaction participants contain an unknown team"
+        )
+    return tuple(sorted(participants))
 
 
 def _regular_teams(snapshot: LeagueSnapshot, scoring_week: int) -> tuple[int, ...]:
@@ -333,6 +420,7 @@ def _incomplete_result(
     weeks: list[SeasonWeekTransition],
     evolving_state: EvolvingLeagueState,
     postseason_state: PostseasonState | None,
+    configuration_provenance: tuple[str, ...],
 ) -> DeterministicSeasonResult:
     ranking = rank_standings(snapshot, standings)
     return DeterministicSeasonResult(
@@ -341,6 +429,7 @@ def _incomplete_result(
         snapshot.season,
         SeasonCompletionStatus.INCOMPLETE,
         (reason,),
+        configuration_provenance,
         initial_standings,
         standings,
         ranking,
@@ -391,6 +480,9 @@ def simulate_deterministic_season(
     *,
     ir_policy: IRPolicy,
     transaction_policy: WeeklyTransactionPolicy,
+    postseason_transaction_policy: PostseasonTransactionParticipationPolicy = (
+        DEFAULT_POSTSEASON_TRANSACTION_POLICY
+    ),
     consolation_configuration: ConsolationLadderConfiguration | None = None,
     season_acquisition_counts: dict[int, int] | None = None,
     matchup_acquisition_counts: dict[int, int] | None = None,
@@ -399,7 +491,15 @@ def simulate_deterministic_season(
     """Execute one settings-driven deterministic path without network or randomness."""
 
     score_index = _preflight(
-        snapshot, scenario, transaction_policy, consolation_configuration
+        snapshot,
+        scenario,
+        transaction_policy,
+        postseason_transaction_policy,
+        consolation_configuration,
+    )
+    participation_reference = postseason_transaction_policy.reference or "unresolved"
+    configuration_provenance = (
+        f"postseason_transactions:{postseason_transaction_policy.provenance.value}:{participation_reference}",
     )
     phases = _phase_by_week(snapshot)
     initial_standings = initialize_standings(snapshot)
@@ -437,6 +537,7 @@ def simulate_deterministic_season(
                         weeks=weeks,
                         evolving_state=evolving,
                         postseason_state=postseason,
+                        configuration_provenance=configuration_provenance,
                     )
                 evolving = reset_waiver_priority(
                     evolving,
@@ -457,6 +558,7 @@ def simulate_deterministic_season(
                     weeks=weeks,
                     evolving_state=evolving,
                     postseason_state=None,
+                    configuration_provenance=configuration_provenance,
                 )
             try:
                 postseason = initialize_postseason(
@@ -469,9 +571,41 @@ def simulate_deterministic_season(
                     f"postseason initialization failed: {exc}"
                 ) from exc
 
-        transaction_result = execute_weekly_essential_transactions(
-            snapshot, evolving, transaction_policy
+        pre_transaction_state = evolving
+        if phase is MatchupPhase.POSTSEASON:
+            assert postseason is not None
+        eligible_team_ids = (
+            None
+            if phase is MatchupPhase.REGULAR
+            else _postseason_transaction_participants(
+                snapshot,
+                postseason,
+                postseason_transaction_policy,
+            )
         )
+        transaction_result = execute_weekly_essential_transactions(
+            snapshot,
+            evolving,
+            transaction_policy,
+            eligible_team_ids=eligible_team_ids,
+        )
+        if (
+            phase is MatchupPhase.POSTSEASON
+            and postseason_transaction_policy.mode
+            is PostseasonTransactionParticipationMode.UNRESOLVED
+            and transaction_result.acquisitions
+        ):
+            return _incomplete_result(
+                scenario=scenario,
+                snapshot=snapshot,
+                reason=f"week_{scoring_week}_postseason_transaction_participation_unresolved",
+                initial_standings=initial_standings,
+                standings=standings,
+                weeks=weeks,
+                evolving_state=pre_transaction_state,
+                postseason_state=postseason,
+                configuration_provenance=configuration_provenance,
+            )
         evolving = transaction_result.state
         logical_transaction_result = replace(transaction_result, valuation_seconds=0.0)
         validate_evolving_state(evolving, snapshot)
@@ -504,6 +638,7 @@ def simulate_deterministic_season(
                 weeks=weeks,
                 evolving_state=evolving,
                 postseason_state=postseason,
+                configuration_provenance=configuration_provenance,
             )
 
         if phase is MatchupPhase.REGULAR:
@@ -571,6 +706,7 @@ def simulate_deterministic_season(
         snapshot.season,
         status,
         tuple(sorted(unresolved)),
+        configuration_provenance,
         initial_standings,
         standings,
         ranking,
