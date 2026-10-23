@@ -213,6 +213,74 @@ def test_sparse_conditioned_groups_fall_back_and_report_counts() -> None:
         (CandidateSpecification("position", CandidateFamily.EMPIRICAL, Conditioning.POSITION),),
     )
     assert report.candidates[0].fallback_rows == 4
+    assert report.candidates[0].sparse_partially_pooled_rows == 0
+
+
+@pytest.mark.parametrize(
+    ("local_training_count", "minimum_group_size", "pooled_fallback", "sparse_partial"),
+    (
+        (0, 2, 1, 0),
+        (1, 2, 0, 1),
+        (2, 2, 0, 0),
+        (3, 2, 0, 0),
+    ),
+)
+def test_hybrid_distinguishes_empty_sparse_threshold_and_dense_groups(
+    local_training_count: int,
+    minimum_group_size: int,
+    pooled_fallback: int,
+    sparse_partial: int,
+) -> None:
+    local = tuple(
+        _record(player, 2024, 1, 10.0, 20.0, position=2)
+        for player in range(1, local_training_count + 1)
+    )
+    pooled_context = tuple(
+        _record(100 + player, 2024, 1, 10.0, 1.0, position=3)
+        for player in range(1, 4)
+    )
+    evaluation = (_record(999, 2025, 1, 10.0, 20.0, position=2),)
+    dataset = _dataset(((2024, 1, local + pooled_context), (2025, 1, evaluation)))
+    report = research_outcome_distributions(
+        dataset,
+        _config(
+            minimum_group_size=minimum_group_size,
+            minimum_training_rows=1,
+            minimum_evaluation_rows=1,
+        ),
+        (CandidateSpecification(
+            "hybrid", CandidateFamily.HYBRID, Conditioning.POSITION_PROJECTION,
+        ),),
+    )
+    result = report.candidates[0]
+    assert result.fallback_rows == pooled_fallback
+    assert result.sparse_partially_pooled_rows == sparse_partial
+
+
+def test_sparse_hybrid_uses_local_evidence_while_empirical_and_normal_fall_back() -> None:
+    training = (
+        _record(1, 2024, 1, 10.0, 20.0, position=2),
+        _record(2, 2024, 1, 10.0, 0.0, position=3),
+        _record(3, 2024, 1, 10.0, 0.0, position=3),
+        _record(4, 2024, 1, 10.0, 0.0, position=3),
+    )
+    dataset = _dataset(((2024, 1, training), (2025, 1, (_record(9, 2025, 1, 10.0, 20.0, position=2),))))
+    candidates = (
+        CandidateSpecification("empirical", CandidateFamily.EMPIRICAL, Conditioning.POSITION_PROJECTION),
+        CandidateSpecification("hybrid", CandidateFamily.HYBRID, Conditioning.POSITION_PROJECTION),
+        CandidateSpecification("normal", CandidateFamily.NORMAL, Conditioning.POSITION_PROJECTION),
+    )
+    report = research_outcome_distributions(
+        dataset,
+        _config(minimum_group_size=2, minimum_training_rows=1, minimum_evaluation_rows=1),
+        candidates,
+    )
+    results = {item.candidate_id: item for item in report.candidates}
+    assert results["empirical"].fallback_rows == 1
+    assert results["normal"].fallback_rows == 1
+    assert results["hybrid"].fallback_rows == 0
+    assert results["hybrid"].sparse_partially_pooled_rows == 1
+    assert results["hybrid"].mean_error != results["empirical"].mean_error
 
 
 def test_hand_calculated_perfect_empirical_forecast_has_zero_crps() -> None:
