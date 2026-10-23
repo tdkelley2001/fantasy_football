@@ -251,7 +251,9 @@ model-policy-imputed zeros remain distinct; only independently verified immutabl
 pregame captures can become authenticated calibration pairs only after their
 canonical manifest and exact payload are validated against an independently
 provisioned manifest identity; caller source labels, references, timestamps, and
-digests alone remain unverified. Generated research
+digests alone remain unverified. Authenticated rows must also match the player,
+week, projection, position, and NFL-team evidence parsed from those exact payload
+bytes. Generated research
 data can contain private identifiers and should be written only to ignored local
 output. See [the M3.1 contract](docs/HISTORICAL_RESEARCH_DATASET.md).
 

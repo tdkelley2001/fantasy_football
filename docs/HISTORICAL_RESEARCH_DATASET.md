@@ -72,6 +72,16 @@ source ID, endpoint/view/parameters, target player-week boundary, timezone-aware
 capture time, and strict capture-before-period ordering. The builder then binds
 that validated result back to identical source metadata and sample boundary.
 
+The validator also parses the exact payload bytes with the accepted
+`parse_historical_player_page()` ESPN parser. Its immutable parsed player-week
+records travel with the validated authorization. During dataset construction,
+every record using that authenticated projection source must match a captured
+player ID, season, week, raw projection, default position, and NFL team. Altered
+projection values, invented players, cross-week records, and identity/context
+mismatches fail rather than inheriting authentication from a matching source ID.
+Actual scores remain reconciled through the separately identified post-period
+actual source; a pregame capture does not authenticate later actual results.
+
 The expected manifest digest is the external trust anchor; the code cannot prove
 where a caller obtained it. Hashing an arbitrary manifest and passing that hash
 back is structurally valid but does **not** create independent real-world
@@ -141,6 +151,9 @@ and do not claim new live verification.
 - Only captures bound to an independently provisioned manifest identity and
   exact payload can produce authenticated pairs; caller source metadata alone
   cannot, and capture completion must precede the period.
+- Authenticated player-week values are reparsed from those exact payload bytes
+  and reconciled field-for-field against research records; source-ID agreement
+  alone grants no row-level status.
 - Historical endpoint values remain unverified regardless of raw as-of-like
   fields.
 - Missing values stay missing; a separate policy-imputation field cannot replace
@@ -171,13 +184,14 @@ The caller controls any local write and must use an ignored private output path.
 
 ## Tests and limitations
 
-Nineteen focused credential-free tests cover deterministic order, missing versus explicit and
+Twenty-two focused credential-free tests cover deterministic order, missing versus explicit and
 imputed zeros, authenticated and unverified evidence, fabricated source metadata,
-manifest and payload identity failures, boundary mismatches, source
+manifest and payload identity failures, altered projections, nonexistent
+players, mismatched weeks, boundary mismatches, source
 role/period/digest/parameters, early actual leakage,
 duplicate and mismatched player-weeks, status/provenance contradictions,
 nonmatching scoring rules, coverage reconciliation, and identity tampering.
-The complete repository suite passed **531 tests in 13.61 seconds** on Python
+The complete repository suite passed **534 tests in 12.97 seconds** on Python
 3.12.10. No live ESPN retrieval was performed for M3.1; fixture verification
 proves code behavior only.
 

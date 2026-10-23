@@ -16,7 +16,11 @@ import math
 import re
 from typing import Sequence
 
-from fantasy_football.historical_projection_audit import HistoricalPlayerWeek
+from fantasy_football.historical_projection_audit import (
+    HistoricalPlayerWeek,
+    HistoricalProjectionAuditError,
+    parse_historical_player_page,
+)
 
 
 DATASET_SCHEMA_VERSION = 2
@@ -98,6 +102,7 @@ class ValidatedPregameCapture:
     parameters_json: str
     verification_authority: str
     verification_reference: str
+    projection_records: tuple[HistoricalPlayerWeek, ...]
     _validation_token: object
 
 
@@ -292,6 +297,18 @@ def validate_pregame_capture_manifest(
         _fail("capture manifest payload_sha256 must be lowercase SHA-256")
     if hashlib.sha256(payload_bytes).hexdigest() != payload_sha256:
         _fail("captured payload does not match the manifest payload identity")
+    try:
+        payload = json.loads(payload_bytes, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        _fail(f"captured payload is invalid JSON: {exc}")
+    if not isinstance(payload, dict):
+        _fail("captured payload must be an ESPN historical response object")
+    try:
+        projection_records = parse_historical_player_page(payload, season=season, week=week)
+    except HistoricalProjectionAuditError as exc:
+        _fail(f"captured payload cannot establish player-week projections: {exc}")
+    if not projection_records:
+        _fail("captured payload cannot establish an empty player-week universe")
     capture = object.__new__(ValidatedPregameCapture)
     values = {
         "source_id": manifest["source_id"], "target_season": season, "target_week": week,
@@ -301,6 +318,7 @@ def validate_pregame_capture_manifest(
         "parameters_json": manifest["parameters_json"],
         "verification_authority": manifest["verification_authority"],
         "verification_reference": manifest["verification_reference"],
+        "projection_records": projection_records,
         "_validation_token": _CAPTURE_VALIDATION_TOKEN,
     }
     for field, value in values.items():
@@ -446,6 +464,10 @@ def build_historical_research_dataset(
         if capture is not None and capture.observation_period_start_utc != sample.observation_period_start_utc:
             _fail(f"validated pregame capture has the wrong observation boundary for sample {sample_key}")
         temporal = _temporal_provenance(capture)
+        captured_record_by_player = (
+            {record.player_id: record for record in capture.projection_records}
+            if capture is not None else {}
+        )
         if not sample.records:
             _fail(f"sample {sample_key} records must be nonempty")
         if not isinstance(sample.records, tuple):
@@ -477,6 +499,24 @@ def build_historical_research_dataset(
             _finite(record.projection, f"player-week {row_key} projection")
             _finite(record.actual, f"player-week {row_key} actual")
             _finite(item.policy_imputed_projection, f"player-week {row_key} policy_imputed_projection")
+            if capture is not None:
+                captured = captured_record_by_player.get(record.player_id)
+                if captured is None:
+                    _fail(f"authenticated capture does not contain player-week {row_key}")
+                if (
+                    captured.season,
+                    captured.week,
+                    captured.position_id,
+                    captured.pro_team_id,
+                    captured.projection,
+                ) != (
+                    record.season,
+                    record.week,
+                    record.position_id,
+                    record.pro_team_id,
+                    record.projection,
+                ):
+                    _fail(f"player-week {row_key} contradicts the authenticated capture projection evidence")
             if record.projection_status != ("missing" if record.projection is None else "explicit_zero" if record.projection == 0 else "negative" if record.projection < 0 else "positive"):
                 _fail(f"player-week {row_key} projection status contradicts raw projection")
             if record.actual_status != ("missing" if record.actual is None else "explicit_zero" if record.actual == 0 else "negative" if record.actual < 0 else "positive"):
