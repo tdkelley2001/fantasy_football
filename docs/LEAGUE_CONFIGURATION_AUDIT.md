@@ -101,3 +101,14 @@ games qualify, while stale byes and fully completed placement obligations do
 not. Scored-lineup participation remains distinct. This policy is league-size
 independent and filters actors without deleting inactive teams from shared
 ownership or valuation state.
+## M2.6 probabilistic-layer configuration
+
+The repeated-season runner derives league size, horizon, player-week universe,
+lineup rules, acquisition behavior, qualifier count, and placement range from the
+canonical snapshot and existing validated policies. Its new configuration is
+limited to model identity/dispersion, master seed, exact path range, existing IR
+and transaction policies, optional validated consolation mapping, and whether
+complete league-wide output is mandatory. These are approved explicit simulator
+inputs, not ESPN fields. No new league-size, position, playoff, or current-season
+hardcoding was found. Unsupported deterministic capabilities remain unsupported
+inside each path rather than receiving probabilistic fallbacks.
