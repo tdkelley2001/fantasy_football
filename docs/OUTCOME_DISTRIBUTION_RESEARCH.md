@@ -50,9 +50,15 @@ mass. Other empirical outcomes translate their observed residual to the target
 projection. The Normal candidate estimates a zero mass and a signed nonzero
 residual distribution, represented by deterministic quantile quadrature. The
 hybrid combines local and pooled empirical support with the configured
-shrinkage strength. Sparse conditioned groups fall back to pooled evidence and
-report every affected evaluation row. Negative predicted outcomes are retained;
-no floor or rounding is applied.
+shrinkage strength. For empirical and Normal candidates, groups below
+`minimum_group_size` retain the established pooled-only fallback. Hybrid
+semantics differ deliberately: an empty local group uses pooled-only fallback,
+while every nonempty group retains local evidence and shrinks it toward the
+pooled distribution. A nonempty group below the threshold is reported through
+`sparse_partially_pooled_rows`; `fallback_rows` means that pooled-only behavior
+was actually executed. Groups exactly at or above the threshold are ordinary
+partial-pooling rows and increment neither diagnostic. Negative predicted
+outcomes are retained; no floor or rounding is applied.
 
 This is group-level research only. It introduces no player-specific parameters,
 correlations, injury process, league-size assumption, or forecast-horizon curve.
@@ -69,7 +75,7 @@ Each candidate reports:
 - 50%, 80%, and 90% interval coverage and mean width;
 - lower-10% and upper-90% exceedance rates;
 - a ten-bin deterministic mid-PIT histogram; and
-- evaluation and sparse-group fallback counts.
+- evaluation, pooled-only fallback, and sparse-partial-pooling counts.
 
 The exploratory winner is ordered by held-out mean CRPS, then held-out negative
 log score, then stable candidate ID. Under authenticated-only evidence meeting
@@ -140,7 +146,7 @@ insufficiency report rather than fabricated scores.
 
 ## Verification
 
-Fifteen focused credential-free tests cover absent-data insufficiency, strict
+Twenty focused credential-free tests cover absent-data insufficiency, strict
 temporal separation, authenticated-only filtering, unverified exploratory
 classification, all candidate families and conditioning levels, sparse-group
 fallbacks, zero/tail/interval/PIT diagnostics, deterministic identity and input
@@ -148,6 +154,9 @@ ordering, a hand-calculated perfect-forecast CRPS reference, invalid
 configuration, and the no-network boundary. Synthetic
 fixtures include zero and negative outcomes and multiple positions and
 projection levels; they prove implementation behavior, not ESPN calibration.
-The complete credential-free repository suite passed **550 tests in 14.03
-seconds** on Python 3.12.10.
+Dedicated hybrid tests cover empty groups, nonempty groups below the threshold,
+groups exactly at the threshold, groups above it, actual local-evidence use, and
+unchanged empirical/Normal fallback behavior. Exact final counts are recorded in
+the M3.2 roadmap gate evidence. The complete credential-free repository suite
+passed **555 tests in 14.37 seconds** on Python 3.12.10.
 

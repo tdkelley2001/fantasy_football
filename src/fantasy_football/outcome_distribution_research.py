@@ -93,6 +93,7 @@ class CandidateEvaluation:
     conditioning: Conditioning
     evaluation_rows: int
     fallback_rows: int
+    sparse_partially_pooled_rows: int
     mean_crps: float
     mean_negative_log_score: float
     mean_error: float
@@ -281,12 +282,13 @@ def _forecast(
     observation: _Observation,
     training: Sequence[_Observation],
     config: ResearchConfiguration,
-) -> tuple[_Forecast, bool]:
+) -> tuple[_Forecast, bool, bool]:
     pooled = tuple(training)
     key = _group_key(observation, candidate.conditioning, config.projection_bin_edges)
     group = tuple(item for item in training if _group_key(item, candidate.conditioning, config.projection_bin_edges) == key)
-    fallback = len(group) < config.minimum_group_size
-    selected = pooled if fallback else group
+    pooled_only_fallback = len(group) < config.minimum_group_size
+    sparse_partial_pooling = False
+    selected = pooled if pooled_only_fallback else group
     if candidate.family is CandidateFamily.EMPIRICAL:
         atoms = _atoms_empirical(selected, observation.projection)
     elif candidate.family is CandidateFamily.NORMAL:
@@ -295,8 +297,10 @@ def _forecast(
         local = group
         if not local:
             atoms = _atoms_empirical(pooled, observation.projection)
-            fallback = True
+            pooled_only_fallback = True
         else:
+            pooled_only_fallback = False
+            sparse_partial_pooling = len(local) < config.minimum_group_size
             local_weight = len(local) / (len(local) + config.hybrid_shrinkage_strength)
             atoms = _combine_atoms(
                 (local_weight, _atoms_empirical(local, observation.projection)),
@@ -305,7 +309,11 @@ def _forecast(
     zero_probability = sum(weight for value, weight in atoms if value == 0)
     nonzero_values = [value for value, weight in atoms if value != 0 and weight > 0]
     bandwidth = max(config.density_bandwidth_floor, pstdev(nonzero_values) * (len(nonzero_values) ** -0.2) if len(nonzero_values) > 1 else 0.0)
-    return _Forecast(atoms=atoms, zero_probability=zero_probability, bandwidth=bandwidth), fallback
+    return (
+        _Forecast(atoms=atoms, zero_probability=zero_probability, bandwidth=bandwidth),
+        pooled_only_fallback,
+        sparse_partial_pooling,
+    )
 
 
 def _quantile(forecast: _Forecast, probability: float) -> float:
@@ -380,10 +388,12 @@ def _evaluate_candidate(
 ) -> CandidateEvaluation:
     forecasts: list[_Forecast] = []
     fallbacks = 0
+    sparse_partial_pooling_rows = 0
     for observation in evaluation:
-        forecast, fallback = _forecast(candidate, observation, training, config)
+        forecast, fallback, sparse_partial = _forecast(candidate, observation, training, config)
         forecasts.append(forecast)
         fallbacks += fallback
+        sparse_partial_pooling_rows += sparse_partial
     actuals = [item.actual for item in evaluation]
     means = [_mean(forecast) for forecast in forecasts]
     errors = [mean - actual for mean, actual in zip(means, actuals, strict=True)]
@@ -411,6 +421,7 @@ def _evaluate_candidate(
         conditioning=candidate.conditioning,
         evaluation_rows=len(evaluation),
         fallback_rows=fallbacks,
+        sparse_partially_pooled_rows=sparse_partial_pooling_rows,
         mean_crps=fmean(_crps(forecast, actual) for forecast, actual in zip(forecasts, actuals, strict=True)),
         mean_negative_log_score=fmean(_negative_log_score(forecast, actual) for forecast, actual in zip(forecasts, actuals, strict=True)),
         mean_error=fmean(errors),
