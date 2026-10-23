@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1–M2.3b are accepted, and M2.3c's unified remaining-season roster valuation is implemented for review. M2.3d and later work packages remain **NOT STARTED**. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. Immutable evolving roster/transaction legality and deterministic V(R) exist, but automatic transaction selection and weekly waiver-cycle processing do not. Simulator-specific rule gaps remain preserved without defaults.
+M0, M1, and M2.1–M2.6 are **COMPLETE AND ACCEPTED**. The next work package is M3.1, which is **NOT STARTED**. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented; the provisional outcome distribution remains explicitly uncalibrated. Simulator-specific rule gaps remain preserved without defaults.
 
 ## Authoritative documentation
 
@@ -21,6 +21,14 @@ M0 and M1 are **COMPLETE**. M2 is **IN PROGRESS**: M2.1–M2.3b are accepted, an
 - [Canonical model](docs/CANONICAL_MODEL.md) — schema-v3 entities, historical v2 compatibility, slot/protection provenance, evolving-state legality, validation, and serialization.
 - [ESPN-to-canonical adapter](docs/ESPN_CANONICAL_ADAPTER.md) — M1.2 retrieval, translation, reconciliation, YAML rule-gap configuration, testing, and live acceptance evidence.
 - [Snapshot storage](docs/SNAPSHOT_STORAGE.md) — M1.3 SQLite schema, canonical authority, source evidence, atomic publication, integrity checks, retention, and verification.
+- [Roster valuation](docs/ROSTER_VALUATION.md) — M2.3c unified V(R), exact shared-pool allocation, and approximation boundaries.
+- [Weekly transactions](docs/WEEKLY_TRANSACTIONS.md) — M2.3d essential-only acquisition execution and legality diagnostics.
+- [Complete-cycle reference](docs/TRANSACTION_CYCLE_REFERENCE.md) — M2.3e exhaustive small-case and sequential-policy references.
+- [Postseason](docs/POSTSEASON.md) — M2.4 settings-driven championship and consolation graphs.
+- [Season simulator](docs/SEASON_SIMULATOR.md) — M2.5 deterministic full-path coordination.
+- [Player outcome model](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo runner](docs/MONTE_CARLO.md) — M2.6 provisional score generation, replay, identity, and aggregation.
+- [League configuration audit](docs/LEAGUE_CONFIGURATION_AUDIT.md) — standing inventory of API-derived rules, configuration, assumptions, and unsupported modes.
+- [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
@@ -220,7 +228,7 @@ lineup = optimize_starting_lineup(
 )
 ```
 
-Available primitives cover explicit add, drop, compound replacement, IR placement/activation, waiver-priority transitions, semantically authorized hold release, and cycle advancement. Release authorization is player- and boundary-specific; strict IR evidence is player- and week-specific; and season and matchup-period acquisition limits are counted independently. Directly constructed eligibility claims are rejected: accepted determinations must cross the checksum- and contract-validating evidence boundary. Projection-based IR recovery is explicitly ledger-labeled as an approved simulation assumption, while controlled fixture evidence remains labeled `validated_fixture` rather than verified ESPN evidence. Matchup counters reset only when the canonical matchup period changes, not on every scoring week. These primitives validate legality but never choose a transaction. Raw live `player.droppable` polarity remains unverified against an individual ESPN UI control, so automatic drops from current live-adapter snapshots fail until that interpretation is reviewed or corroborated. Exact ESPN clearance timing and future strict-IR eligibility also remain unresolved because no live evidence provider exists for them. M2.3d cycle orchestration is not implemented.
+Available primitives cover explicit add, drop, compound replacement, IR placement/activation, waiver-priority transitions, semantically authorized hold release, and cycle advancement. Release authorization is player- and boundary-specific; strict IR evidence is player- and week-specific; and season and matchup-period acquisition limits are counted independently. Directly constructed eligibility claims are rejected: accepted determinations must cross the checksum- and contract-validating evidence boundary. Projection-based IR recovery is explicitly ledger-labeled as an approved simulation assumption, while controlled fixture evidence remains labeled `validated_fixture` rather than verified ESPN evidence. Matchup counters reset only when the canonical matchup period changes, not on every scoring week. These primitives validate legality but never choose a transaction. Raw live `player.droppable` polarity remains unverified against an individual ESPN UI control, so automatic drops from current live-adapter snapshots fail until that interpretation is reviewed or corroborated. Exact ESPN clearance timing and future strict-IR eligibility also remain unresolved because no live evidence provider exists for them. Weekly essential transaction execution and its complete-cycle correctness references are implemented in M2.3d/e; they remain programmatic engine interfaces rather than a user-facing transaction CLI.
 
 ## Remaining-season roster valuation
 

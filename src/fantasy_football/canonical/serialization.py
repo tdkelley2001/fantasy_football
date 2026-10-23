@@ -35,7 +35,6 @@ from fantasy_football.canonical.model import (
     RosterEntry,
     RuleGap,
     RuleInterpretation,
-    SCHEMA_VERSION,
     SUPPORTED_SCHEMA_VERSIONS,
     ScoringRule,
     SlotKind,

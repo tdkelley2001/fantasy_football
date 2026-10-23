@@ -35,6 +35,14 @@ class FutureDataAuditError(RuntimeError):
     """Raised when ESPN data violates an M0.3 discovery invariant."""
 
 
+def schedule_coverage_statement(expected_team_count: int) -> str:
+    """Describe verified schedule coverage without assuming one league size."""
+    return (
+        "Every future regular-season fantasy week contains each of the "
+        f"{expected_team_count} expected teams exactly once across home/away matchups."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class PoolPlayer:
     player_id: int
@@ -716,7 +724,7 @@ def audit_live(settings: Settings, *, expected_team_count: int, page_size: int =
             "Pool ONTEAM ownership exactly reconciles with the M0.2 roster view.",
             "Raw player IDs, default positions, eligible slot IDs, pro-team IDs, pool status, ownership and injury status were validated.",
             "ESPN exposes byeWeek directly and it did not conflict with proGamesByScoringPeriod.",
-            "Every future regular-season fantasy week contains each of the 14 teams exactly once across home/away matchups.",
+            schedule_coverage_statement(expected_team_count),
         ),
         verified_by_tests=(
             "Missing, zero and negative projections remain distinct.",

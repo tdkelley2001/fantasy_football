@@ -154,20 +154,6 @@ def _deterministic_value(value):
     )
 
 
-def _order_independent(value):
-    if isinstance(value, dict):
-        return {key: _order_independent(item) for key, item in sorted(value.items())}
-    if isinstance(value, list):
-        normalized = [_order_independent(item) for item in value]
-        return sorted(
-            normalized,
-            key=lambda item: json.dumps(
-                item, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-            ),
-        )
-    return value
-
-
 def _canonical_snapshot_fingerprint_content(snapshot: LeagueSnapshot):
     """Normalize record collections while preserving ordered field values."""
 
@@ -246,7 +232,6 @@ def simulation_configuration_fingerprint(
         "require_complete": config.require_complete,
         "semantics": _deterministic_value(SIMULATION_SEMANTICS),
     }
-    payload = _order_independent(payload)
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")

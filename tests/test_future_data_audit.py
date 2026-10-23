@@ -12,6 +12,7 @@ from fantasy_football.future_data_audit import (
     parse_pro_team_byes,
     parse_remaining_schedule,
     retrieve_player_pool,
+    schedule_coverage_statement,
 )
 
 
@@ -258,6 +259,11 @@ def test_remaining_schedule_requires_every_team_once() -> None:
             future_weeks=[6],
             expected_team_count=4,
         )
+
+
+def test_schedule_coverage_statement_uses_explicit_expected_count() -> None:
+    assert "4 expected teams" in schedule_coverage_statement(4)
+    assert "14 teams" not in schedule_coverage_statement(4)
 
 
 def test_remaining_schedule_rejects_missing_side() -> None:

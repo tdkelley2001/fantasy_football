@@ -90,6 +90,15 @@ class EffectiveProjectionModel:
         )
 
 
+@dataclass(frozen=True)
+class OrderedParametersModel(PrescribedModel):
+    parameter_order: tuple[str, ...] = ("first", "second")
+
+    @property
+    def parameters(self):
+        return self.parameter_order
+
+
 def test_path_alone_matches_same_path_in_batch_and_replay() -> None:
     snapshot = _snapshot()
     model = ProvisionalNormalModel(2.0, 0.2)
@@ -177,6 +186,14 @@ def test_configuration_fingerprint_covers_every_simulation_policy() -> None:
         roster_entries=tuple(reversed(snapshot.roster_entries)),
     )
     assert simulation_configuration_fingerprint(reordered, base, model) == expected
+
+    # Canonical record collections are unordered, but a model may expose an
+    # ordered parameter sequence whose order is part of its configuration.
+    ordered = OrderedParametersModel(("first", "second"))
+    reversed_order = OrderedParametersModel(("second", "first"))
+    assert simulation_configuration_fingerprint(snapshot, base, ordered) != (
+        simulation_configuration_fingerprint(snapshot, base, reversed_order)
+    )
 
 
 @pytest.mark.parametrize("variant", ("transaction", "ir", "postseason", "consolation", "model", "snapshot"))

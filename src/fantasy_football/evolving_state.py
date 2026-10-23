@@ -216,7 +216,7 @@ def _matchup_period_id(snapshot: LeagueSnapshot, scoring_week: int) -> int:
 def _parse_utc(value: str, field: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError):
         _fail(f"{field} must be an ISO-8601 timestamp")
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         _fail(f"{field} must include a UTC offset")
@@ -256,7 +256,7 @@ def validate_eligibility_evidence_artifact(
         _fail(f"source {source_id!r} eligibility payload checksum does not match canonical provenance")
     try:
         document = json.loads(payload)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError):
         _fail(f"source {source_id!r} eligibility payload is malformed JSON")
     if not isinstance(document, dict) or document.get("schema") != "transaction_eligibility_v1":
         _fail(f"source {source_id!r} eligibility payload has an unsupported schema")
