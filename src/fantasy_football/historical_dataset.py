@@ -7,7 +7,7 @@ does not fetch ESPN data, mutate canonical snapshots, or apply projection policy
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
 import hashlib
@@ -600,7 +600,7 @@ def _json_default(value):
     if isinstance(value, ValidatedPregameCapture):
         return {field: getattr(value, field) for field in value.__dataclass_fields__ if field != "_validation_token"}
     if hasattr(value, "__dataclass_fields__"):
-        return asdict(value)
+        return {field: getattr(value, field) for field in value.__dataclass_fields__}
     raise TypeError(f"unsupported research dataset value {type(value).__name__}")
 
 
