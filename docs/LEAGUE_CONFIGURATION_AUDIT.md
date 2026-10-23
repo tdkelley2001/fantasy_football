@@ -71,11 +71,18 @@ current slot mix was found in the reviewed M1/M2 modules.
 These limitations are capability-specific. Structurally valid snapshots remain
 inspectable and reproducible; only the affected simulator operation fails.
 
-## M2.5 boundary
+## M2.5 integration
 
-M2.5 must iterate every team in the configured canonical league and carry
-configuration/evidence classifications into path diagnostics. The current
-14-team league remains a representative acceptance fixture, not the production
-universe. The corrected waiver gate and postseason tri-state/preflight checks
-remove the material hardcoding blockers found by this audit; unsupported modes
-must continue to fail closed.
+The deterministic season coordinator iterates every team in the configured
+canonical league and carries configuration/evidence classifications into path
+diagnostics. The current 14-team league is exercised as a representative
+acceptance fixture, not the production universe; a separate four-team complete
+path uses the same API without source changes.
+
+Weekly priority handling is configuration-driven. `waiver_order_resets=True`
+uses the verified inverse-modeled-standings reset, false preserves the dynamic
+queue, and null fails preflight. Each advanced cycle freezes its actual opening
+queue for the separately approved reverse-priority free-agent policy. No hold
+is cleared by cycle advancement. The existing acquisition gate continues to
+reject FAAB and alternative modes. No new material league-size or current-slot
+hardcoding was found during M2.5 integration.

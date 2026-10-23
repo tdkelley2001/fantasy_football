@@ -1022,6 +1022,7 @@ def advance_cycle(
         scoring_week=scoring_week,
         current_matchup_period_id=next_period,
         matchup_acquisition_counts=matchup_counts,
+        initial_window_waiver_priority=state.current_waiver_priority,
     )
     result = _append(
         result, phase=TransactionPhase.CYCLE_BOUNDARY, action=TransactionAction.CYCLE_ADVANCE,
