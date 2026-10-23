@@ -1,7 +1,7 @@
 # League Configuration Audit
 
-This M2.4 acceptance audit reviews production paths that can affect a simulated
-league. The standing rule is that a league-specific mechanic must be API-derived
+This standing audit reviews production paths that can affect a simulated
+league and was refreshed during the pre-M3 consolidation. The standing rule is that a league-specific mechanic must be API-derived
 from the immutable canonical snapshot, supplied through validated configuration,
 or explicitly identified as an approved modeled policy. Current-league numbers
 may appear in sanitized fixtures and historical evidence, but not as production
@@ -41,9 +41,10 @@ simulation defaults.
   verified ESPN identifier semantics, not configured capacities. Slot 25 and
   other observed-only IDs do not become playable. The 32-team check is the
   supported NFL universe invariant, not a fantasy-league team-count template.
-- `future_data_audit.py` contains a statement about all 14 teams in the audited
-  2026 live league. It is historical evidence/reporting and is not imported by
-  deterministic simulation. It must not be promoted to a simulation invariant.
+- `future_data_audit.py` now derives its verified schedule-coverage description
+  from the command's explicit expected team count. Historical documents retain
+  the observed 14-team result as evidence, but neither diagnostics nor simulation
+  promote it to a universal invariant.
 - `weekly_transactions.py` and `transaction_cycle.py` previously allowed the
   approved traditional/reverse-priority V1 policies without independently
   checking the canonical acquisition type. This was **problematic hardcoding**:
@@ -114,8 +115,9 @@ hardcoding was found. Unsupported deterministic capabilities remain unsupported
 inside each path rather than receiving probabilistic fallbacks.
 
 The final M2.6 fingerprint serializes every currently supported simulator policy
-and explicit consolation provenance rather than trusting labels. It also hashes
-an order-independent canonical snapshot representation and named semantics
-versions. Acquisition-count and eligibility-evidence overrides are not exposed
+and explicit consolation provenance rather than trusting labels. It canonicalizes
+only known unordered canonical record collections; nested sequences and model
+parameters retain their order, so semantically ordered changes alter identity.
+Named semantics versions are also hashed. Acquisition-count and eligibility-evidence overrides are not exposed
 by the M2.6 runner; adding either later requires including its complete validated
 content in the fingerprint before batch combination is permitted.

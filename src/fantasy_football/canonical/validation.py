@@ -208,7 +208,7 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
         _integer(item.capacity, entity="LineupSlotRule", identifier=item.slot_id, field="capacity", minimum=0)
         if not isinstance(item.kind, SlotKind):
             _fail("LineupSlotRule", item.slot_id, "kind", "must use a supported SlotKind")
-    position_ids = _unique((item.position_id for item in rules.position_limits), entity="PositionLimit", field="position_id")
+    _unique((item.position_id for item in rules.position_limits), entity="PositionLimit", field="position_id")
     for item in rules.position_limits:
         _integer(item.position_id, entity="PositionLimit", identifier=item.position_id, field="position_id", minimum=1)
         if item.maximum is not None:
@@ -250,7 +250,6 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             _fail("ConsolationRules", "league", "participant_count", "must be <= team_count")
 
     interpretation_ids = _unique((item.rule_id for item in rules.interpretations), entity="RuleInterpretation", field="rule_id")
-    interpretation_by_id = {item.rule_id: item for item in rules.interpretations}
     for item in rules.interpretations:
         _nonempty(item.rule_id, entity="RuleInterpretation", identifier=item.rule_id, field="rule_id")
         _nonempty(item.raw_field, entity="RuleInterpretation", identifier=item.rule_id, field="raw_field")
@@ -383,7 +382,7 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
         if maximum is not None and count > maximum:
             _fail("FantasyTeam", team_id, "position limit", f"position {position_id} count {count} exceeds {maximum}")
 
-    week_keys = _unique(((week.player_id, week.season, week.scoring_week) for week in snapshot.player_weeks), entity="PlayerWeek", field="composite key")
+    _unique(((week.player_id, week.season, week.scoring_week) for week in snapshot.player_weeks), entity="PlayerWeek", field="composite key")
     required_weeks = set(range(snapshot.first_simulation_week, snapshot.final_simulation_week + 1))
     weeks_by_player: dict[int, set[int]] = {player_id: set() for player_id in player_ids}
     for week in snapshot.player_weeks:
@@ -441,7 +440,7 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
 
     period_by_id = {period.matchup_period_id: period for period in snapshot.matchup_periods}
     for group, rounds in (("championship", rules.championship.rounds), ("consolation", rules.consolation.rounds)):
-        round_numbers = _unique((item.round_number for item in rounds), entity=f"{group} round", field="round_number")
+        _unique((item.round_number for item in rounds), entity=f"{group} round", field="round_number")
         for item in rounds:
             _integer(item.round_number, entity="LeagueRules", identifier=group, field="round_number", minimum=1)
             _integer(item.matchup_period_id, entity="LeagueRules", identifier=group, field="matchup_period_id", minimum=1)
@@ -450,7 +449,7 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
             if period_by_id[item.matchup_period_id].phase is not MatchupPhase.POSTSEASON:
                 _fail("LeagueRules", group, "rounds", f"round {item.round_number} references non-postseason period {item.matchup_period_id}")
 
-    matchup_ids = _unique((matchup.matchup_id for matchup in snapshot.fantasy_matchups), entity="FantasyMatchup", field="matchup_id")
+    _unique((matchup.matchup_id for matchup in snapshot.fantasy_matchups), entity="FantasyMatchup", field="matchup_id")
     appearances: Counter[tuple[int, int]] = Counter()
     for matchup in snapshot.fantasy_matchups:
         _integer(matchup.matchup_id, entity="FantasyMatchup", identifier=matchup.matchup_id, field="matchup_id", minimum=1)
@@ -496,7 +495,7 @@ def validate_snapshot(snapshot: LeagueSnapshot) -> None:
     for player in snapshot.players:
         if player.nfl_team_id != 0 and player.nfl_team_id not in nfl_team_ids:
             _fail("Player", player.player_id, "nfl_team_id", f"references unknown NFL team {player.nfl_team_id}")
-    game_ids = _unique((game.game_id for game in snapshot.nfl_games), entity="NFLGame", field="game_id")
+    _unique((game.game_id for game in snapshot.nfl_games), entity="NFLGame", field="game_id")
     bye_by_team = {team.nfl_team_id: team.bye_week for team in snapshot.nfl_teams}
     nfl_appearances: Counter[tuple[int, int]] = Counter()
     for game in snapshot.nfl_games:
