@@ -8,6 +8,7 @@ import json
 import pytest
 
 from fantasy_football.historical_dataset import (
+    CAPTURE_MANIFEST_SCHEMA,
     EvidenceClassification,
     HistoricalDatasetError,
     HistoricalResearchInputRecord,
@@ -19,6 +20,7 @@ from fantasy_football.historical_dataset import (
     SourceRole,
     build_historical_research_dataset,
     historical_research_dataset_to_json,
+    validate_pregame_capture_manifest,
 )
 from fantasy_football.historical_projection_audit import (
     PROVENANCE_CLASS,
@@ -116,6 +118,30 @@ def _sources(*, season: int = 2025, week: int = 1) -> tuple[HistoricalResearchSo
     )
 
 
+def _validated_capture(source: HistoricalResearchSource, *, payload: bytes | None = None):
+    payload = payload if payload is not None else source.source_id.encode()
+    manifest = {
+        "schema": CAPTURE_MANIFEST_SCHEMA,
+        "source_id": source.source_id,
+        "target_season": source.target_season,
+        "target_week": source.target_week,
+        "captured_at_utc": source.retrieved_at_utc.isoformat(),
+        "observation_period_start_utc": PERIOD_START.isoformat(),
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "endpoint": source.endpoint,
+        "view": source.view,
+        "parameters_json": source.parameters_json,
+        "verification_authority": "sanitized-test-trust-anchor",
+        "verification_reference": "fixture-manifest-1",
+    }
+    manifest_bytes = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    return validate_pregame_capture_manifest(
+        manifest_bytes,
+        payload,
+        independently_trusted_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+    )
+
+
 def test_unverified_historical_pairs_remain_exploratory_and_deterministic() -> None:
     sample = _sample(
         HistoricalResearchInputRecord(_record(3, 0.0, 4.0)),
@@ -161,7 +187,7 @@ def test_policy_imputation_must_be_zero_and_cannot_replace_raw_values(imputed: f
         )
 
 
-def test_authenticated_pregame_requires_verified_timestamped_capture() -> None:
+def test_authenticated_pregame_requires_validated_manifest_and_exact_payload() -> None:
     projection = _source(
         "projection-2025-1",
         roles=(SourceRole.PROJECTION,),
@@ -174,25 +200,82 @@ def test_authenticated_pregame_requires_verified_timestamped_capture() -> None:
     dataset = build_historical_research_dataset(
         (_sample(HistoricalResearchInputRecord(record)),),
         (projection, *_sources()[1:]),
+        (_validated_capture(projection),),
     )
     assert dataset.rows[0].eligible_authenticated_pair
     assert not dataset.rows[0].eligible_unverified_exploratory_pair
 
 
-def test_fixture_or_post_start_timestamp_cannot_authenticate_pregame_projection() -> None:
-    fixture_claim = _source(
+def test_caller_declared_metadata_cannot_authenticate_pregame_projection() -> None:
+    fabricated_claim = _source(
         "projection-2025-1",
         roles=(SourceRole.PROJECTION,),
         kind=SourceKind.IMMUTABLE_PREGAME_CAPTURE,
         retrieved_at=PERIOD_START - timedelta(hours=1),
-        evidence=EvidenceClassification.VERIFIED_BY_TESTS,
-        verification_reference="fixture",
+        evidence=EvidenceClassification.VERIFIED_LIVE,
+        verification_reference="fabricated-live-verification",
     )
-    with pytest.raises(HistoricalDatasetError, match="requires verified_live"):
-        build_historical_research_dataset((_sample(HistoricalResearchInputRecord(_record(1, 2.0, 3.0))),), (fixture_claim, *_sources()[1:]))
-    late = replace(fixture_claim, evidence_classification=EvidenceClassification.VERIFIED_LIVE, retrieved_at_utc=PERIOD_START)
-    with pytest.raises(HistoricalDatasetError, match="not completed before"):
-        build_historical_research_dataset((_sample(HistoricalResearchInputRecord(_record(1, 2.0, 3.0))),), (late, *_sources()[1:]))
+    dataset = build_historical_research_dataset(
+        (_sample(HistoricalResearchInputRecord(_record(1, 2.0, 3.0))),),
+        (fabricated_claim, *_sources()[1:]),
+    )
+    assert dataset.rows[0].projection_temporal_provenance is ProjectionTemporalProvenance.HISTORICAL_PREGAME_UNVERIFIED
+    assert not dataset.rows[0].eligible_authenticated_pair
+    assert dataset.rows[0].eligible_unverified_exploratory_pair
+
+
+def test_fabricated_manifest_identity_and_payload_digest_are_rejected() -> None:
+    source = _source(
+        "projection-2025-1", roles=(SourceRole.PROJECTION,),
+        kind=SourceKind.IMMUTABLE_PREGAME_CAPTURE,
+        retrieved_at=PERIOD_START - timedelta(hours=1),
+        evidence=EvidenceClassification.VERIFIED_LIVE,
+        verification_reference="caller-declared",
+    )
+    payload = source.source_id.encode()
+    capture = _validated_capture(source, payload=payload)
+    manifest = {
+        "schema": CAPTURE_MANIFEST_SCHEMA, "source_id": source.source_id,
+        "target_season": 2025, "target_week": 1,
+        "captured_at_utc": source.retrieved_at_utc.isoformat(),
+        "observation_period_start_utc": PERIOD_START.isoformat(),
+        "payload_sha256": hashlib.sha256(payload).hexdigest(), "endpoint": source.endpoint,
+        "view": source.view, "parameters_json": source.parameters_json,
+        "verification_authority": "fabricated", "verification_reference": "fabricated",
+    }
+    manifest_bytes = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    with pytest.raises(HistoricalDatasetError, match="independently trusted manifest identity"):
+        validate_pregame_capture_manifest(manifest_bytes, payload, independently_trusted_manifest_sha256="0" * 64)
+    with pytest.raises(HistoricalDatasetError, match="payload identity"):
+        validate_pregame_capture_manifest(
+            manifest_bytes, b"different payload",
+            independently_trusted_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        )
+    late_source = replace(source, retrieved_at_utc=PERIOD_START)
+    with pytest.raises(HistoricalDatasetError, match="completion before the observation period"):
+        _validated_capture(late_source)
+    assert capture.payload_sha256 == source.payload_sha256
+
+
+def test_validated_capture_must_match_source_and_observation_boundary() -> None:
+    source = _source(
+        "projection-2025-1", roles=(SourceRole.PROJECTION,),
+        kind=SourceKind.IMMUTABLE_PREGAME_CAPTURE,
+        retrieved_at=PERIOD_START - timedelta(hours=1),
+    )
+    capture = _validated_capture(source)
+    with pytest.raises(HistoricalDatasetError, match="contradicts source metadata"):
+        build_historical_research_dataset(
+            (_sample(HistoricalResearchInputRecord(_record(1, 2.0, 3.0, provenance="authenticated_pregame"))),),
+            (replace(source, endpoint="https://example.invalid/other"), *_sources()[1:]),
+            (capture,),
+        )
+    shifted_sample = replace(
+        _sample(HistoricalResearchInputRecord(_record(1, 2.0, 3.0, provenance="authenticated_pregame"))),
+        observation_period_start_utc=PERIOD_START + timedelta(minutes=1),
+    )
+    with pytest.raises(HistoricalDatasetError, match="wrong observation boundary"):
+        build_historical_research_dataset((shifted_sample,), (source, *_sources()[1:]), (capture,))
 
 
 def test_historical_as_of_flag_does_not_promote_current_response() -> None:

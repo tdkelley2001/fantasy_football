@@ -19,7 +19,8 @@ from typing import Sequence
 from fantasy_football.historical_projection_audit import HistoricalPlayerWeek
 
 
-DATASET_SCHEMA_VERSION = 1
+DATASET_SCHEMA_VERSION = 2
+CAPTURE_MANIFEST_SCHEMA = "fantasy_football.pregame_capture.v1"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _LIMITATIONS = (
     "Historical ESPN response projections retain unverified pregame provenance.",
@@ -79,6 +80,25 @@ class HistoricalResearchSource:
     target_week: int
     evidence_classification: EvidenceClassification
     verification_reference: str | None = None
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class ValidatedPregameCapture:
+    """A capture whose manifest and payload were checked at the trust boundary."""
+
+    source_id: str
+    target_season: int
+    target_week: int
+    captured_at_utc: datetime
+    observation_period_start_utc: datetime
+    payload_sha256: str
+    manifest_sha256: str
+    endpoint: str
+    view: str
+    parameters_json: str
+    verification_authority: str
+    verification_reference: str
+    _validation_token: object
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +166,7 @@ class HistoricalResearchDataset:
     selected_samples: tuple[tuple[int, int], ...]
     scoring_signature: str
     sources: tuple[HistoricalResearchSource, ...]
+    validated_pregame_captures: tuple[ValidatedPregameCapture, ...]
     rows: tuple[HistoricalResearchRow, ...]
     coverage: tuple[CoverageSummary, ...]
     limitations: tuple[str, ...]
@@ -201,13 +222,90 @@ def _validate_source(source: HistoricalResearchSource) -> None:
     _aware(source.retrieved_at_utc, f"source {source.source_id!r} retrieved_at_utc")
     if not isinstance(source.payload_sha256, str) or not _SHA256.fullmatch(source.payload_sha256):
         _fail(f"source {source.source_id!r} payload_sha256 must be lowercase SHA-256")
-    if source.kind is SourceKind.IMMUTABLE_PREGAME_CAPTURE:
-        if source.evidence_classification is not EvidenceClassification.VERIFIED_LIVE:
-            _fail(f"source {source.source_id!r} pregame capture requires verified_live evidence")
-        if not isinstance(source.verification_reference, str) or not source.verification_reference.strip():
-            _fail(f"source {source.source_id!r} pregame capture requires a verification reference")
-    elif source.evidence_classification is EvidenceClassification.VERIFIED_LIVE and source.kind is SourceKind.SANITIZED_FIXTURE:
+    if source.evidence_classification is EvidenceClassification.VERIFIED_LIVE and source.kind is SourceKind.SANITIZED_FIXTURE:
         _fail(f"source {source.source_id!r} sanitized fixture cannot claim verified_live evidence")
+
+
+_CAPTURE_VALIDATION_TOKEN = object()
+_CAPTURE_MANIFEST_FIELDS = {
+    "schema", "source_id", "target_season", "target_week", "captured_at_utc",
+    "observation_period_start_utc", "payload_sha256", "endpoint", "view",
+    "parameters_json", "verification_authority", "verification_reference",
+}
+
+
+def validate_pregame_capture_manifest(
+    manifest_bytes: bytes,
+    payload_bytes: bytes,
+    *,
+    independently_trusted_manifest_sha256: str,
+) -> ValidatedPregameCapture:
+    """Bind exact capture bytes to an independently provisioned manifest ID.
+
+    The expected digest is the external trust anchor. Calculating it from
+    untrusted manifest bytes and passing it back does not establish independent
+    authenticity.
+    """
+
+    if not isinstance(manifest_bytes, bytes) or not isinstance(payload_bytes, bytes):
+        _fail("capture manifest and payload must be bytes")
+    if not isinstance(independently_trusted_manifest_sha256, str) or not _SHA256.fullmatch(independently_trusted_manifest_sha256):
+        _fail("independently trusted manifest identity must be lowercase SHA-256")
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    if manifest_sha256 != independently_trusted_manifest_sha256:
+        _fail("capture manifest does not match the independently trusted manifest identity")
+    try:
+        manifest = json.loads(manifest_bytes, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        _fail(f"capture manifest is invalid JSON: {exc}")
+    if not isinstance(manifest, dict) or set(manifest) != _CAPTURE_MANIFEST_FIELDS:
+        _fail("capture manifest fields do not match the v1 contract")
+    if _json_bytes(manifest) != manifest_bytes:
+        _fail("capture manifest must use canonical JSON encoding")
+    if manifest["schema"] != CAPTURE_MANIFEST_SCHEMA:
+        _fail(f"unsupported capture manifest schema {manifest['schema']!r}")
+    for field in ("source_id", "endpoint", "view", "verification_authority", "verification_reference"):
+        if not isinstance(manifest[field], str) or not manifest[field].strip():
+            _fail(f"capture manifest {field} must be nonempty")
+    if not isinstance(manifest["parameters_json"], str):
+        _fail("capture manifest parameters_json must be canonical JSON")
+    try:
+        parameters = json.loads(manifest["parameters_json"])
+    except json.JSONDecodeError as exc:
+        _fail(f"capture manifest parameters_json is invalid: {exc}")
+    if not isinstance(parameters, dict) or json.dumps(parameters, sort_keys=True, separators=(",", ":")) != manifest["parameters_json"]:
+        _fail("capture manifest parameters_json must be a canonical JSON object")
+    season, week = manifest["target_season"], manifest["target_week"]
+    if isinstance(season, bool) or not isinstance(season, int) or season < 2000 or isinstance(week, bool) or not isinstance(week, int) or week < 1:
+        _fail("capture manifest has invalid target season/week")
+    try:
+        captured_at = datetime.fromisoformat(manifest["captured_at_utc"])
+        period_start = datetime.fromisoformat(manifest["observation_period_start_utc"])
+    except (TypeError, ValueError) as exc:
+        _fail(f"capture manifest has invalid timing: {exc}")
+    _aware(captured_at, "capture manifest captured_at_utc")
+    _aware(period_start, "capture manifest observation_period_start_utc")
+    if captured_at >= period_start:
+        _fail("capture manifest does not establish completion before the observation period")
+    payload_sha256 = manifest["payload_sha256"]
+    if not isinstance(payload_sha256, str) or not _SHA256.fullmatch(payload_sha256):
+        _fail("capture manifest payload_sha256 must be lowercase SHA-256")
+    if hashlib.sha256(payload_bytes).hexdigest() != payload_sha256:
+        _fail("captured payload does not match the manifest payload identity")
+    capture = object.__new__(ValidatedPregameCapture)
+    values = {
+        "source_id": manifest["source_id"], "target_season": season, "target_week": week,
+        "captured_at_utc": captured_at, "observation_period_start_utc": period_start,
+        "payload_sha256": payload_sha256, "manifest_sha256": manifest_sha256,
+        "endpoint": manifest["endpoint"], "view": manifest["view"],
+        "parameters_json": manifest["parameters_json"],
+        "verification_authority": manifest["verification_authority"],
+        "verification_reference": manifest["verification_reference"],
+        "_validation_token": _CAPTURE_VALIDATION_TOKEN,
+    }
+    for field, value in values.items():
+        object.__setattr__(capture, field, value)
+    return capture
 
 
 def _projection_level(row: HistoricalResearchRow) -> str:
@@ -258,13 +356,8 @@ def _coverage(rows: tuple[HistoricalResearchRow, ...]) -> tuple[CoverageSummary,
     return tuple(_summarize(dimension, key, grouped) for (dimension, key), grouped in sorted(groups.items()))
 
 
-def _temporal_provenance(source: HistoricalResearchSource, sample: HistoricalResearchSample) -> ProjectionTemporalProvenance:
-    if source.kind is SourceKind.IMMUTABLE_PREGAME_CAPTURE:
-        if source.retrieved_at_utc >= sample.observation_period_start_utc:
-            _fail(
-                f"source {source.source_id!r} cannot authenticate season={sample.season}, week={sample.week}: "
-                "capture was not completed before the observation period"
-            )
+def _temporal_provenance(capture: ValidatedPregameCapture | None) -> ProjectionTemporalProvenance:
+    if capture is not None:
         return ProjectionTemporalProvenance.AUTHENTICATED_PREGAME
     return ProjectionTemporalProvenance.HISTORICAL_PREGAME_UNVERIFIED
 
@@ -272,6 +365,7 @@ def _temporal_provenance(source: HistoricalResearchSource, sample: HistoricalRes
 def build_historical_research_dataset(
     samples: Sequence[HistoricalResearchSample],
     sources: Sequence[HistoricalResearchSource],
+    validated_pregame_captures: Sequence[ValidatedPregameCapture] = (),
 ) -> HistoricalResearchDataset:
     """Build a deterministic research dataset from explicitly selected samples."""
 
@@ -284,6 +378,23 @@ def build_historical_research_dataset(
         if source.source_id in source_by_id:
             _fail(f"duplicate source_id={source.source_id!r}")
         source_by_id[source.source_id] = source
+
+    capture_by_source: dict[str, ValidatedPregameCapture] = {}
+    for capture in validated_pregame_captures:
+        if not isinstance(capture, ValidatedPregameCapture) or capture._validation_token is not _CAPTURE_VALIDATION_TOKEN:
+            _fail("pregame capture authorization must be produced by validate_pregame_capture_manifest()")
+        if capture.source_id in capture_by_source:
+            _fail(f"duplicate validated pregame capture for source_id={capture.source_id!r}")
+        source = source_by_id.get(capture.source_id)
+        if source is None:
+            _fail(f"validated pregame capture references unknown source {capture.source_id!r}")
+        if source.kind is not SourceKind.IMMUTABLE_PREGAME_CAPTURE:
+            _fail(f"validated pregame capture source {capture.source_id!r} is not an immutable capture")
+        expected = (source.target_season, source.target_week, source.retrieved_at_utc, source.payload_sha256, source.endpoint, source.view, source.parameters_json)
+        observed = (capture.target_season, capture.target_week, capture.captured_at_utc, capture.payload_sha256, capture.endpoint, capture.view, capture.parameters_json)
+        if observed != expected:
+            _fail(f"validated pregame capture contradicts source metadata for source_id={capture.source_id!r}")
+        capture_by_source[capture.source_id] = capture
 
     selected: set[tuple[int, int]] = set()
     seen_rows: set[tuple[int, int, int]] = set()
@@ -331,7 +442,10 @@ def build_historical_research_dataset(
         actual_source = source_by_id[sample.actual_source_id]
         if actual_source.retrieved_at_utc < sample.observation_period_end_utc:
             _fail(f"sample {sample_key} actual source was retrieved before the observation period ended")
-        temporal = _temporal_provenance(projection_source, sample)
+        capture = capture_by_source.get(projection_source.source_id)
+        if capture is not None and capture.observation_period_start_utc != sample.observation_period_start_utc:
+            _fail(f"validated pregame capture has the wrong observation boundary for sample {sample_key}")
+        temporal = _temporal_provenance(capture)
         if not sample.records:
             _fail(f"sample {sample_key} records must be nonempty")
         if not isinstance(sample.records, tuple):
@@ -413,6 +527,7 @@ def build_historical_research_dataset(
     if len(signatures) != 1:
         _fail(f"selected samples have inconsistent scoring signatures: {sorted(signatures)}")
     ordered_sources = tuple(sorted(source_by_id.values(), key=lambda item: item.source_id))
+    ordered_captures = tuple(sorted(capture_by_source.values(), key=lambda item: item.source_id))
     ordered_rows = tuple(sorted(rows, key=lambda item: (item.season, item.scoring_week, item.player_id)))
     selected_samples = tuple(sorted(selected))
     core = {
@@ -420,6 +535,7 @@ def build_historical_research_dataset(
         "selected_samples": selected_samples,
         "scoring_signature": next(iter(signatures)),
         "sources": ordered_sources,
+        "validated_pregame_captures": ordered_captures,
         "rows": ordered_rows,
     }
     digest = hashlib.sha256(_json_bytes(core)).hexdigest()
@@ -429,6 +545,7 @@ def build_historical_research_dataset(
         selected_samples=selected_samples,
         scoring_signature=next(iter(signatures)),
         sources=ordered_sources,
+        validated_pregame_captures=ordered_captures,
         rows=ordered_rows,
         coverage=_coverage(ordered_rows),
         limitations=_LIMITATIONS,
@@ -440,6 +557,8 @@ def _json_default(value):
         return value.value
     if isinstance(value, datetime):
         return value.isoformat()
+    if isinstance(value, ValidatedPregameCapture):
+        return {field: getattr(value, field) for field in value.__dataclass_fields__ if field != "_validation_token"}
     if hasattr(value, "__dataclass_fields__"):
         return asdict(value)
     raise TypeError(f"unsupported research dataset value {type(value).__name__}")
@@ -459,6 +578,7 @@ def historical_research_dataset_to_json(dataset: HistoricalResearchDataset) -> b
         "selected_samples": dataset.selected_samples,
         "scoring_signature": dataset.scoring_signature,
         "sources": dataset.sources,
+        "validated_pregame_captures": dataset.validated_pregame_captures,
         "rows": dataset.rows,
     })).hexdigest()
     if dataset.schema_version != DATASET_SCHEMA_VERSION or dataset.dataset_sha256 != expected:

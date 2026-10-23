@@ -237,7 +237,8 @@ Available primitives cover explicit add, drop, compound replacement, IR placemen
 
 ## Historical projection research dataset
 
-M3.1 exposes `build_historical_research_dataset(samples, sources)` and
+M3.1 exposes `build_historical_research_dataset(samples, sources,
+validated_pregame_captures=())` and
 `historical_research_dataset_to_json(dataset)` from
 `fantasy_football.historical_dataset`. The builder consumes explicit historical
 samples parsed with the accepted M0.5 raw-record logic and produces deterministic
@@ -247,7 +248,10 @@ network request and does not write to snapshot storage.
 Historical ESPN projections remain labeled pregame-provenance unverified.
 Missing projections, explicit ESPN zeros, and separately supplied
 model-policy-imputed zeros remain distinct; only independently verified immutable
-pregame captures can become authenticated calibration pairs. Generated research
+pregame captures can become authenticated calibration pairs only after their
+canonical manifest and exact payload are validated against an independently
+provisioned manifest identity; caller source labels, references, timestamps, and
+digests alone remain unverified. Generated research
 data can contain private identifiers and should be written only to ignored local
 output. See [the M3.1 contract](docs/HISTORICAL_RESEARCH_DATASET.md).
 
