@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 from enum import Enum
+from contextlib import nullcontext
 import hashlib
 import json
 import math
@@ -18,6 +19,10 @@ from fantasy_football.monte_carlo import (
     run_monte_carlo_batch,
 )
 from fantasy_football.player_outcomes import PlayerOutcomeModel
+from fantasy_football.monte_carlo_parallel import (
+    ParallelMonteCarloExecutor,
+    ParallelExecutionConfiguration,
+)
 
 
 class PrecisionError(ValueError):
@@ -369,8 +374,10 @@ def run_monte_carlo_to_precision(
     simulation_configuration: MonteCarloConfig,
     model: PlayerOutcomeModel,
     precision_configuration: PrecisionConfiguration,
+    *,
+    parallel_execution: ParallelExecutionConfiguration | None = None,
 ) -> MonteCarloPrecisionResult:
-    """Run sequential deterministic path checkpoints until a league-wide stop."""
+    """Run deterministic path checkpoints until a league-wide stop."""
 
     precision_configuration_fingerprint(precision_configuration)
     if simulation_configuration.path_count != precision_configuration.maximum_paths:
@@ -380,44 +387,57 @@ def run_monte_carlo_to_precision(
     batches = []
     checkpoints = []
     used = 0
-    while used < precision_configuration.maximum_paths:
-        if used < precision_configuration.minimum_paths:
-            next_total = precision_configuration.minimum_paths
-        else:
-            next_total = min(
-                precision_configuration.maximum_paths,
-                used + precision_configuration.evaluation_interval,
-            )
-        chunk = replace(
-            simulation_configuration,
-            first_path_index=simulation_configuration.first_path_index + used,
-            path_count=next_total - used,
+    executor_context = (
+        ParallelMonteCarloExecutor(
+            snapshot, simulation_configuration, model, parallel_execution
         )
-        batches.append(run_monte_carlo_batch(snapshot, chunk, model))
-        used = next_total
-        accumulated_config = replace(simulation_configuration, path_count=used)
-        accumulated = combine_monte_carlo_batches(
-            snapshot, accumulated_config, model, tuple(reversed(batches)),
-        )
-        _, checkpoint, _ = _summaries(accumulated, precision_configuration)
-        checkpoints.append(checkpoint)
-        if accumulated.incomplete_paths:
-            return analyze_monte_carlo_precision(
-                accumulated,
-                precision_configuration,
-                stopping_reason=StoppingReason.INCOMPLETE_CAPABILITIES,
-                checkpoints=tuple(checkpoints),
-            )
-        if checkpoint.league_wide_precision_reached:
-            return analyze_monte_carlo_precision(
-                accumulated,
-                precision_configuration,
-                stopping_reason=StoppingReason.PRECISION_REACHED,
-                checkpoints=tuple(checkpoints),
-            )
-    return analyze_monte_carlo_precision(
-        accumulated,
-        precision_configuration,
-        stopping_reason=StoppingReason.MAXIMUM_PATHS_REACHED,
-        checkpoints=tuple(checkpoints),
+        if parallel_execution is not None
+        else nullcontext(None)
     )
+    with executor_context as parallel_executor:
+        while used < precision_configuration.maximum_paths:
+            if used < precision_configuration.minimum_paths:
+                next_total = precision_configuration.minimum_paths
+            else:
+                next_total = min(
+                    precision_configuration.maximum_paths,
+                    used + precision_configuration.evaluation_interval,
+                )
+            chunk = replace(
+                simulation_configuration,
+                first_path_index=simulation_configuration.first_path_index + used,
+                path_count=next_total - used,
+            )
+            batch = (
+                run_monte_carlo_batch(snapshot, chunk, model)
+                if parallel_executor is None
+                else parallel_executor.run_batch(chunk).batch
+            )
+            batches.append(batch)
+            used = next_total
+            accumulated_config = replace(simulation_configuration, path_count=used)
+            accumulated = combine_monte_carlo_batches(
+                snapshot, accumulated_config, model, tuple(reversed(batches)),
+            )
+            _, checkpoint, _ = _summaries(accumulated, precision_configuration)
+            checkpoints.append(checkpoint)
+            if accumulated.incomplete_paths:
+                return analyze_monte_carlo_precision(
+                    accumulated,
+                    precision_configuration,
+                    stopping_reason=StoppingReason.INCOMPLETE_CAPABILITIES,
+                    checkpoints=tuple(checkpoints),
+                )
+            if checkpoint.league_wide_precision_reached:
+                return analyze_monte_carlo_precision(
+                    accumulated,
+                    precision_configuration,
+                    stopping_reason=StoppingReason.PRECISION_REACHED,
+                    checkpoints=tuple(checkpoints),
+                )
+        return analyze_monte_carlo_precision(
+            accumulated,
+            precision_configuration,
+            stopping_reason=StoppingReason.MAXIMUM_PATHS_REACHED,
+            checkpoints=tuple(checkpoints),
+        )

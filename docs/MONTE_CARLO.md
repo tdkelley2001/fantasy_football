@@ -113,8 +113,34 @@ continue to fail rather than becoming a stopping result.
 
 The precision configuration and complete analysis each have deterministic
 SHA-256 identities. Whole-range and partition-combined batches produce identical
-estimates and identities. M3.4 remains sequential; worker execution and durable
-resume belong to M3.5 and M3.6.
+estimates and identities.
+
+## M3.5 bounded parallel execution
+
+`fantasy_football.monte_carlo_parallel` preserves the sequential M2.6 runner as
+the correctness reference and adds `run_monte_carlo_batch_parallel()`. Its
+`ParallelExecutionConfiguration` requires positive worker and paths-per-task
+limits plus an explicitly supported multiprocessing start method. The portable
+default is `spawn`; one effective worker deliberately uses the exact sequential
+implementation.
+
+Workers receive the immutable snapshot, full run configuration, and outcome
+model once through the process initializer. Tasks contain only bounded tuples of
+path IDs, and workers return compact `MonteCarloPathSummary` tuples. The parent
+sorts asynchronously completed results by path ID, requires exact unique
+coverage, and delegates reconciliation to the same M2.6 aggregator. Inputs must
+be process-serializable; unsupported inputs fail before workers launch. Worker
+exceptions, invalid paths, and incomplete-capability behavior retain sequential
+fail-closed semantics.
+
+`ParallelMonteCarloExecutor` keeps one bounded pool alive across M3.4 precision
+checkpoints, avoiding repeated serialization and startup for the same immutable
+run. Each checkpoint still produces an ordinary `MonteCarloBatchResult` and is
+combined through the accepted identity and coverage checks. Worker count, chunk
+size, and completion order do not enter simulation fingerprints and cannot alter
+path-indexed draws. Runtime diagnostics are observational and are not part of
+deterministic result identity. Durable resume and distributed execution remain
+out of scope.
 
 ## Evidence classification and limitations
 
@@ -124,8 +150,8 @@ uncertainty under the selected outcome model. They do not quantify model-family,
 parameter, endpoint-revision, or calibration uncertainty. Player-weeks are conditionally
 independent and future availability is governed only by the existing deterministic
 engine and its explicit policies. The empirical model's historical pregame
-provenance limitation remains explicit. Parallel workers, durable checkpoints,
-paired trade scenarios, stochastic injuries, and correlations are deferred.
+provenance limitation remains explicit. Durable checkpoints, paired trade
+scenarios, stochastic injuries, and correlations are deferred.
 
 ## Initial performance baseline
 
@@ -154,3 +180,39 @@ metrics. Repeating the analysis 1,000 times took 0.269 seconds, or about 269
 microseconds per analysis. Retaining all 1,000 immutable results under
 `tracemalloc` peaked at 7.82 MiB (1.446 seconds instrumented). This isolates
 analysis overhead; it is not a live ESPN or complete-season throughput claim.
+
+## M3.5 profiling and benchmark evidence
+
+Before parallelization, `cProfile` on 20 synthetic four-team paths measured
+0.965 seconds and about 3.41 million calls. Path execution accounted for 0.960
+seconds cumulatively and the deterministic season coordinator for 0.957 seconds;
+snapshot validation reached through lineup and transaction mechanics was the
+dominant measured subcost. This supported independent path processes without
+changing accepted mechanics.
+
+Run the reproducible synthetic matrix with:
+
+```powershell
+python benchmarks/benchmark_monte_carlo_execution.py --path-multiplier 5
+```
+
+Uninstrumented Python 3.12 results used five paths per task:
+
+| Workload | Paths | 1 worker | 2 workers | 4 workers |
+|---|---:|---:|---:|---:|
+| 4 teams, no essential acquisition | 200 | 65.37 paths/s | 93.56 paths/s | 75.56 paths/s |
+| 4 teams, transaction-active | 100 | 31.16 paths/s | 50.64 paths/s | 38.47 paths/s |
+| 14 teams, supported postseason | 100 | 14.28 paths/s | 25.94 paths/s | 28.90 paths/s |
+
+Small 40/20/20-path runs show startup costs: one worker achieved
+62.09/27.81/15.27 paths/s, two achieved 37.70/19.27/14.33, and four achieved
+19.03/9.34/9.29. Parallel mode is configurable, never an automatic speedup.
+On the 100-path 14-team fixture with two workers, chunks of 1, 5, and 20 achieved
+17.39, 28.03, and 19.04 paths/s. The benchmark exposes workload, worker, chunk,
+and path-multiplier controls.
+
+Optional `--trace-parent-memory` reports only parent Python allocations and
+explicitly makes its timings incomparable; it cannot measure aggregate child
+resident memory. The small traced matrix observed parent peaks below 0.55 MiB,
+but no total multiprocess memory claim is made without OS-level measurement.
+These are sanitized synthetic fixtures, not live ESPN forecasts.

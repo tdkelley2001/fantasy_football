@@ -524,6 +524,22 @@ def run_monte_carlo_batch(
     return _aggregate(snapshot, config, model, paths)
 
 
+def aggregate_monte_carlo_paths(
+    snapshot: LeagueSnapshot,
+    config: MonteCarloConfig,
+    model: PlayerOutcomeModel,
+    paths: tuple[MonteCarloPathSummary, ...],
+) -> MonteCarloBatchResult:
+    """Reconcile an exact configured path set produced by an execution backend."""
+
+    ordered = tuple(sorted(paths, key=lambda item: item.path_index))
+    if len({item.path_index for item in ordered}) != len(ordered):
+        raise MonteCarloError("path results contain duplicate path IDs")
+    if tuple(item.path_index for item in ordered) != config.path_indices:
+        raise MonteCarloError("path results do not exactly cover configured path range")
+    return _aggregate(snapshot, config, model, ordered)
+
+
 def combine_monte_carlo_batches(
     snapshot: LeagueSnapshot,
     config: MonteCarloConfig,
@@ -550,4 +566,4 @@ def combine_monte_carlo_batches(
             or batch.master_seed != config.master_seed
         ):
             raise MonteCarloError("combined batch identity does not match")
-    return _aggregate(snapshot, config, model, paths)
+    return aggregate_monte_carlo_paths(snapshot, config, model, paths)

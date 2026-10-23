@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, M1, M2.1–M2.6, and M3.1–M3.3 are **COMPLETE AND ACCEPTED**. M3.4's league-wide probability intervals and convergence controls are **IMPLEMENTED — REVIEW PENDING**; M3.5 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, and batch reconciliation are implemented. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and M3.4 intervals quantify Monte Carlo sampling uncertainty rather than that calibration uncertainty.
+M0, M1, M2.1–M2.6, and M3.1–M3.4 are **COMPLETE AND ACCEPTED**. M3.5's bounded reproducible multiprocessing executor is **IMPLEMENTED — REVIEW PENDING**; M3.6 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, batch reconciliation, and league-wide precision controls are implemented. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than that calibration uncertainty.
 
 ## Authoritative documentation
 
@@ -26,7 +26,7 @@ M0, M1, M2.1–M2.6, and M3.1–M3.3 are **COMPLETE AND ACCEPTED**. M3.4's leagu
 - [Complete-cycle reference](docs/TRANSACTION_CYCLE_REFERENCE.md) — M2.3e exhaustive small-case and sequential-policy references.
 - [Postseason](docs/POSTSEASON.md) — M2.4 settings-driven championship and consolation graphs.
 - [Season simulator](docs/SEASON_SIMULATOR.md) — M2.5 deterministic full-path coordination.
-- [Player outcome model](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo runner](docs/MONTE_CARLO.md) — provisional score generation, replay, aggregation, league-wide Wilson intervals, and deterministic precision stopping.
+- [Player outcome model](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo runner](docs/MONTE_CARLO.md) — provisional score generation, replay, aggregation, league-wide Wilson intervals, deterministic precision stopping, and exact bounded multiprocessing.
 - [League configuration audit](docs/LEAGUE_CONFIGURATION_AUDIT.md) — standing inventory of API-derived rules, configuration, assumptions, and unsupported modes.
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
 - [Historical research dataset](docs/HISTORICAL_RESEARCH_DATASET.md) — M3.1 immutable projection/actual evidence contract, leakage safeguards, coverage, and limitations.
