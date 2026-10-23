@@ -11,9 +11,16 @@ from fantasy_football.monte_carlo import (
     combine_monte_carlo_batches,
     run_monte_carlo_batch,
     run_monte_carlo_path,
+    simulation_configuration_fingerprint,
 )
 from fantasy_football.player_outcomes import ProvisionalNormalModel
-from fantasy_football.season_simulator import DeterministicScoreScenario
+from fantasy_football.postseason import ConsolationLadderConfiguration
+from fantasy_football.season_simulator import (
+    DeterministicScoreScenario,
+    ParticipationProvenance,
+    PostseasonTransactionParticipationMode,
+    PostseasonTransactionParticipationPolicy,
+)
 from fantasy_football.weekly_engine import RealizedPlayerScore
 from fantasy_football.weekly_transactions import (
     WaiverBoundaryPolicy,
@@ -122,6 +129,213 @@ def test_batch_partition_and_merge_are_exactly_equivalent() -> None:
         snapshot, whole_config, model, (right, left)
     )
     assert merged == whole
+
+
+def test_configuration_fingerprint_covers_every_simulation_policy() -> None:
+    snapshot = _snapshot()
+    model = PrescribedModel()
+    base = _config(0, 1)
+    expected = simulation_configuration_fingerprint(snapshot, base, model)
+    variants = (
+        replace(base, ir_policy=IRPolicy.STRICT),
+        replace(
+            base,
+            transaction_policy=replace(
+                base.transaction_policy, reject_incomplete_valuations=False
+            ),
+        ),
+        replace(
+            base,
+            postseason_transaction_policy=PostseasonTransactionParticipationPolicy(
+                PostseasonTransactionParticipationMode.UNRESOLVED,
+                ParticipationProvenance.UNRESOLVED,
+                None,
+            ),
+        ),
+        replace(
+            base,
+            consolation_configuration=ConsolationLadderConfiguration(
+                (), (), source_id=snapshot.sources[0].source_id,
+                approval_reference="approved-test-configuration",
+            ),
+        ),
+    )
+    assert all(
+        simulation_configuration_fingerprint(snapshot, item, model) != expected
+        for item in variants
+    )
+    changed_snapshot = replace(snapshot, league_name="Changed canonical content")
+    assert simulation_configuration_fingerprint(changed_snapshot, base, model) != expected
+    changed_model = ProvisionalNormalModel(2.0, 0.1)
+    assert simulation_configuration_fingerprint(snapshot, base, changed_model) != expected
+    assert simulation_configuration_fingerprint(snapshot, replace(base, first_path_index=99), model) == expected
+    assert simulation_configuration_fingerprint(snapshot, replace(base, path_count=99), model) == expected
+    reordered = replace(
+        snapshot,
+        players=tuple(reversed(snapshot.players)),
+        player_weeks=tuple(reversed(snapshot.player_weeks)),
+        roster_entries=tuple(reversed(snapshot.roster_entries)),
+    )
+    assert simulation_configuration_fingerprint(reordered, base, model) == expected
+
+
+@pytest.mark.parametrize("variant", ("transaction", "ir", "postseason", "consolation", "model", "snapshot"))
+def test_batch_combination_rejects_material_identity_mismatch(variant: str) -> None:
+    snapshot = _snapshot()
+    model = PrescribedModel()
+    whole_config = _config(0, 2)
+    left = run_monte_carlo_batch(snapshot, _config(0, 1), model)
+    right = run_monte_carlo_batch(snapshot, _config(1, 1), model)
+    changed_config = _config(1, 1)
+    changed_snapshot = snapshot
+    changed_model = model
+    if variant == "transaction":
+        changed_config = replace(
+            changed_config,
+            transaction_policy=replace(
+                changed_config.transaction_policy, reject_incomplete_valuations=False
+            ),
+        )
+    elif variant == "ir":
+        changed_config = replace(changed_config, ir_policy=IRPolicy.STRICT)
+    elif variant == "postseason":
+        changed_config = replace(
+            changed_config,
+            postseason_transaction_policy=PostseasonTransactionParticipationPolicy(
+                PostseasonTransactionParticipationMode.UNRESOLVED,
+                ParticipationProvenance.UNRESOLVED,
+                None,
+            ),
+        )
+    elif variant == "consolation":
+        changed_config = replace(
+            changed_config,
+            consolation_configuration=ConsolationLadderConfiguration(
+                (), (), approval_reference="different-approved-config"
+            ),
+        )
+    elif variant == "model":
+        changed_model = ProvisionalNormalModel(9.0, 0.3)
+    else:
+        changed_snapshot = replace(snapshot, league_name="Different canonical content")
+    changed_fingerprint = simulation_configuration_fingerprint(
+        changed_snapshot, changed_config, changed_model
+    )
+    mismatched = replace(right, simulation_config_sha256=changed_fingerprint)
+    with pytest.raises(MonteCarloError, match="simulation configuration"):
+        combine_monte_carlo_batches(
+            snapshot, whole_config, model, (left, mismatched)
+        )
+
+
+def _tampered_batch(transform):
+    snapshot = _snapshot()
+    config = _config(0, 2)
+    model = PrescribedModel()
+    batch = run_monte_carlo_batch(snapshot, config, model)
+    changed_path = replace(batch.paths[0], teams=transform(batch.paths[0].teams))
+    return snapshot, config, model, replace(
+        batch, paths=(changed_path, batch.paths[1])
+    )
+
+
+@pytest.mark.parametrize(
+    ("transform", "message"),
+    (
+        (lambda teams: teams + (teams[0],), "duplicate team"),
+        (lambda teams: (replace(teams[0], team_id=999),) + teams[1:], "unknown team"),
+        (lambda teams: teams[1:], "missing team"),
+        (
+            lambda teams: (
+                replace(teams[0], final_placement=1),
+                replace(teams[1], final_placement=1),
+            )
+            + teams[2:],
+            "duplicate final placements",
+        ),
+        (
+            lambda teams: (replace(teams[0], final_placement=None),) + teams[1:],
+            "complete final placement permutation",
+        ),
+        (
+            lambda teams: tuple(
+                replace(item, playoff_qualified=(item.team_id == 1)) for item in teams
+            ),
+            "qualifiers",
+        ),
+        (
+            lambda teams: tuple(
+                replace(item, playoff_qualified=False)
+                if item.final_placement == 1
+                else replace(item, playoff_qualified=True)
+                if item.final_placement == 3
+                else item
+                for item in teams
+            ),
+            "champion is not",
+        ),
+        (
+            lambda teams: tuple(
+                replace(item, playoff_qualified=False)
+                if item.final_placement == 2
+                else replace(item, playoff_qualified=True)
+                if item.final_placement == 3
+                else item
+                for item in teams
+            ),
+            "placement/qualification inconsistency",
+        ),
+        (
+            lambda teams: (
+                replace(teams[0], final_regular_rank=teams[1].final_regular_rank),
+            )
+            + teams[1:],
+            "regular-rank permutation",
+        ),
+        (
+            lambda teams: (replace(teams[0], regular_points_for=float("nan")),)
+            + teams[1:],
+            "invalid points for",
+        ),
+    ),
+)
+def test_each_complete_path_is_reconciled_before_aggregation(transform, message) -> None:
+    snapshot, config, model, batch = _tampered_batch(transform)
+    with pytest.raises(MonteCarloError, match=message):
+        combine_monte_carlo_batches(snapshot, config, model, (batch,))
+
+
+def test_individually_invalid_paths_cannot_cancel_in_aggregate() -> None:
+    snapshot = _snapshot()
+    config = _config(0, 2)
+    model = PrescribedModel()
+    batch = run_monte_carlo_batch(snapshot, config, model)
+    first = replace(
+        batch.paths[0],
+        teams=(replace(batch.paths[0].teams[0], final_placement=1),)
+        + batch.paths[0].teams[1:],
+    )
+    second = replace(
+        batch.paths[1],
+        teams=(replace(batch.paths[1].teams[0], final_placement=2),)
+        + batch.paths[1].teams[1:],
+    )
+    tampered = replace(batch, paths=(first, second))
+    with pytest.raises(MonteCarloError, match="duplicate final placements"):
+        combine_monte_carlo_batches(snapshot, config, model, (tampered,))
+
+
+def test_duplicate_and_missing_path_ids_fail_before_aggregation() -> None:
+    snapshot = _snapshot()
+    config = _config(0, 2)
+    model = PrescribedModel()
+    batch = run_monte_carlo_batch(snapshot, config, model)
+    duplicate = replace(batch, paths=(batch.paths[0], batch.paths[0]))
+    with pytest.raises(MonteCarloError, match="duplicate path IDs"):
+        combine_monte_carlo_batches(snapshot, config, model, (duplicate,))
+    missing = replace(batch, paths=(batch.paths[0],))
+    with pytest.raises(MonteCarloError, match="configured path range"):
+        combine_monte_carlo_batches(snapshot, config, model, (missing,))
 
 
 def test_capability_incomplete_paths_do_not_publish_probabilities() -> None:
