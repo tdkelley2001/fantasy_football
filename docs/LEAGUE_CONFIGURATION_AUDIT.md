@@ -91,7 +91,13 @@ Postseason acquisition participation is not exposed by a currently verified
 canonical ESPN field. M2.5 therefore makes it explicit and provenance-bearing:
 the default all-team mode is the approved `all_teams_continue_essential_acquisitions_v1`
 model assumption; an active championship/bye/consolation-only mode requires a
-validated manual configuration reference; and unresolved mode stops before a
-material acquisition. Scored-lineup participation is not used as an implicit
-transaction rule. This policy is league-size independent and filters actors
-without deleting inactive teams from shared ownership or valuation state.
+canonical understood manual-rule interpretation with a validated configuration
+key, approval, audited gap and source; and unresolved mode stops before a
+material acquisition. An arbitrary label or source ID cannot establish this
+authority, and no verified ESPN evidence provider is currently implemented.
+Active participation is derived from supported remaining bracket obligations,
+not every historical non-complete record: current byes and graph-proven future
+games qualify, while stale byes and fully completed placement obligations do
+not. Scored-lineup participation remains distinct. This policy is league-size
+independent and filters actors without deleting inactive teams from shared
+ownership or valuation state.

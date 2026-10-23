@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from fantasy_football.canonical.model import (
+    InterpretationStatus,
     LeagueSnapshot,
     MatchupEntryStatus,
     MatchupPhase,
@@ -24,6 +25,7 @@ from fantasy_football.evolving_state import (
 from fantasy_football.lineup_optimizer import OptimizedLineup, optimize_starting_lineup
 from fantasy_football.postseason import (
     ConsolationLadderConfiguration,
+    MatchupStatus,
     PostseasonError,
     PostseasonState,
     final_positions_complete,
@@ -66,6 +68,7 @@ class PostseasonTransactionParticipationMode(StrEnum):
 class ParticipationProvenance(StrEnum):
     APPROVED_V1_ASSUMPTION = "approved_v1_assumption"
     MANUAL_VALIDATED_CONFIGURATION = "manual_validated_configuration"
+    VERIFIED_ESPN_EVIDENCE = "verified_espn_evidence"
     UNRESOLVED = "unresolved"
 
 
@@ -246,14 +249,34 @@ def _preflight(
         participation.mode
         is PostseasonTransactionParticipationMode.ACTIVE_POSTSEASON_PARTICIPANTS
     ):
-        if (
-            participation.provenance
-            is not ParticipationProvenance.MANUAL_VALIDATED_CONFIGURATION
-            or not isinstance(participation.reference, str)
-            or not participation.reference.strip()
-        ):
+        if participation.provenance is ParticipationProvenance.VERIFIED_ESPN_EVIDENCE:
+            raise SeasonSimulationError(
+                "verified ESPN postseason transaction-participation evidence is not currently implemented"
+            )
+        if participation.provenance is not ParticipationProvenance.MANUAL_VALIDATED_CONFIGURATION:
             raise SeasonSimulationError(
                 "active-participant postseason transactions require validated manual configuration provenance"
+            )
+        interpretation = next(
+            (
+                item
+                for item in snapshot.rules.interpretations
+                if item.rule_id == participation.reference
+            ),
+            None,
+        )
+        source_ids = {item.source_id for item in snapshot.sources}
+        if (
+            interpretation is None
+            or interpretation.status is not InterpretationStatus.UNDERSTOOD
+            or interpretation.normalized_value != participation.mode.value
+            or interpretation.manual_config_key
+            != "postseason_transaction_participation"
+            or not interpretation.manual_config_approval
+            or interpretation.source_id not in source_ids
+        ):
+            raise SeasonSimulationError(
+                "active-participant postseason transactions require an understood canonical manual rule interpretation matching the policy reference"
             )
     elif participation.mode is PostseasonTransactionParticipationMode.UNRESOLVED:
         if participation.provenance is not ParticipationProvenance.UNRESOLVED:
@@ -320,13 +343,55 @@ def _postseason_transaction_participants(
         PostseasonTransactionParticipationMode.UNRESOLVED,
     }:
         return None
-    participants = {
-        team_id
-        for matchup in state.championship_matchups + state.consolation_matchups
-        if matchup.status.value != "complete"
-        for team_id in (matchup.home_team_id, matchup.away_team_id)
-        if team_id is not None
-    }
+    def remaining_obligations(matchups, graph):
+        unresolved_rounds = tuple(
+            item.round_number
+            for item in matchups
+            if item.status in {MatchupStatus.SCHEDULED, MatchupStatus.IN_PROGRESS}
+        )
+        if not unresolved_rounds:
+            return set()
+        current_round = min(unresolved_rounds)
+        participants = {
+            team_id
+            for matchup in matchups
+            if matchup.round_number >= current_round
+            and matchup.status in {MatchupStatus.SCHEDULED, MatchupStatus.IN_PROGRESS}
+            for team_id in (matchup.home_team_id, matchup.away_team_id)
+            if team_id is not None
+        }
+        if graph is None:
+            return participants
+        future_sources = {
+            (source.matchup_id, source.outcome)
+            for node in graph.nodes
+            if node.round_number > current_round
+            for source in node.sources
+            if source.matchup_id is not None and source.outcome is not None
+        }
+        for matchup in matchups:
+            if matchup.round_number != current_round or matchup.status not in {
+                MatchupStatus.COMPLETE,
+                MatchupStatus.BYE,
+            }:
+                continue
+            if (
+                (matchup.purpose, "winner") in future_sources
+                and matchup.winner_team_id is not None
+            ):
+                participants.add(matchup.winner_team_id)
+            if (
+                (matchup.purpose, "loser") in future_sources
+                and matchup.loser_team_id is not None
+            ):
+                participants.add(matchup.loser_team_id)
+        return participants
+
+    participants = remaining_obligations(
+        state.championship_matchups, state.championship_graph
+    ) | remaining_obligations(
+        state.consolation_matchups, state.consolation_graph
+    )
     known = {item.team_id for item in snapshot.teams}
     if not participants <= known:
         raise SeasonSimulationError(

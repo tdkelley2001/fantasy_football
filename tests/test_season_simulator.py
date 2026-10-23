@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from fantasy_football.canonical.model import (
+    InterpretationStatus,
     LineupSlotNamespace,
     LineupSlotRule,
     MatchupEntryStatus,
@@ -14,10 +15,21 @@ from fantasy_football.canonical.model import (
     ProjectionClass,
     ProjectionSource,
     RosterEntry,
+    RuleGap,
+    RuleInterpretation,
     SlotKind,
 )
 from fantasy_football.canonical.validation import CanonicalValidationError
 from fantasy_football.evolving_state import IRPolicy
+from fantasy_football.postseason import (
+    BracketGraph,
+    BracketGraphNode,
+    BracketSource,
+    BracketType,
+    MatchupStatus,
+    PostseasonMatchup,
+    PostseasonState,
+)
 from fantasy_football.season_simulator import (
     DeterministicScoreScenario,
     ParticipationProvenance,
@@ -25,6 +37,7 @@ from fantasy_football.season_simulator import (
     PostseasonTransactionParticipationPolicy,
     SeasonCompletionStatus,
     SeasonSimulationError,
+    _postseason_transaction_participants,
     simulate_deterministic_season,
 )
 from fantasy_football.weekly_engine import RealizedPlayerScore
@@ -89,7 +102,52 @@ def _run(snapshot=None, scenario=None, *, policy=None, postseason_policy=None):
     )
 
 
-def _active_only_policy(reference: str = "fixture-active-participants"):
+ACTIVE_PARTICIPATION_RULE_ID = "fixture-active-participants"
+
+
+def _with_active_participation_rule(snapshot, rule_id=ACTIVE_PARTICIPATION_RULE_ID):
+    gap_id = "postseason-transaction-participation-fixture-gap"
+    interpretation = RuleInterpretation(
+        rule_id=rule_id,
+        raw_field="manual.postseason_transaction_participation",
+        raw_value="active postseason participants",
+        normalized_value="active_postseason_participants",
+        status=InterpretationStatus.UNDERSTOOD,
+        source_id=snapshot.sources[0].source_id,
+        manual_config_key="postseason_transaction_participation",
+        manual_config_approval="approved sanitized test configuration",
+        audited_gap_id=gap_id,
+    )
+    return replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            interpretations=tuple(
+                sorted(
+                    snapshot.rules.interpretations + (interpretation,),
+                    key=lambda item: item.rule_id,
+                )
+            ),
+        ),
+        rule_gaps=tuple(
+            sorted(
+                snapshot.rule_gaps
+                + (
+                    RuleGap(
+                        gap_id,
+                        "ESPN postseason transaction participation is not API-derived",
+                        snapshot.sources[0].source_id,
+                        ("postseason_transactions",),
+                        True,
+                    ),
+                ),
+                key=lambda item: item.gap_id,
+            )
+        ),
+    )
+
+
+def _active_only_policy(reference: str = ACTIVE_PARTICIPATION_RULE_ID):
     return PostseasonTransactionParticipationPolicy(
         PostseasonTransactionParticipationMode.ACTIVE_POSTSEASON_PARTICIPANTS,
         ParticipationProvenance.MANUAL_VALIDATED_CONFIGURATION,
@@ -98,7 +156,7 @@ def _active_only_policy(reference: str = "fixture-active-participants"):
 
 
 def _postseason_shared_player_fixture(*, consolation_enabled: bool):
-    snapshot = _snapshot()
+    snapshot = _with_active_participation_rule(_snapshot())
     source_id = snapshot.sources[0].source_id
     defense = Player(
         30,
@@ -157,7 +215,7 @@ def _postseason_shared_player_fixture(*, consolation_enabled: bool):
 
 
 def _fourteen_team_postseason_snapshot():
-    snapshot = _postseason_snapshot()
+    snapshot = _with_active_participation_rule(_postseason_snapshot())
     source_id = snapshot.sources[0].source_id
     players = tuple(
         Player(
@@ -487,7 +545,7 @@ def test_championship_bye_teams_remain_transaction_participants() -> None:
     result = _run(
         snapshot,
         scenario,
-        postseason_policy=_active_only_policy("fixture-byes-remain-participants"),
+        postseason_policy=_active_only_policy(),
     )
     first_decisions = {
         item.team_id for item in result.weeks[0].transaction_result.decisions
@@ -495,6 +553,98 @@ def test_championship_bye_teams_remain_transaction_participants() -> None:
     seed_by_team = {item.team_id: item.postseason_seed for item in result.team_records}
     bye_teams = {team_id for team_id, seed in seed_by_team.items() if seed in {1, 2}}
     assert bye_teams <= first_decisions
+
+
+def _postseason_matchup(
+    matchup_id: str,
+    round_number: int,
+    home_team_id: int,
+    away_team_id: int | None,
+    status: MatchupStatus,
+    *,
+    consolation: bool = False,
+) -> PostseasonMatchup:
+    return PostseasonMatchup(
+        matchup_id,
+        BracketType.CONSOLATION if consolation else BracketType.CHAMPIONSHIP,
+        round_number,
+        round_number,
+        (14 + round_number,),
+        home_team_id,
+        away_team_id,
+        matchup_id,
+        status=status,
+        winner_team_id=home_team_id if status is MatchupStatus.BYE else None,
+    )
+
+
+def test_active_participation_uses_remaining_obligations_not_historical_byes() -> None:
+    snapshot = _with_active_participation_rule(_snapshot())
+    policy = _active_only_policy()
+    genuine_bye = PostseasonState(
+        snapshot.snapshot_id,
+        snapshot.season,
+        (),
+        (
+            _postseason_matchup("old-bye", 1, 1, None, MatchupStatus.BYE),
+            _postseason_matchup("round-one", 1, 2, 3, MatchupStatus.SCHEDULED),
+        ),
+        (_postseason_matchup("c-one", 1, 4, 2, MatchupStatus.SCHEDULED, consolation=True),),
+        (),
+        (),
+        (),
+        championship_graph=BracketGraph(
+            (1, 2, 3),
+            2,
+            (
+                BracketGraphNode(
+                    "next-round",
+                    BracketType.CHAMPIONSHIP,
+                    2,
+                    0,
+                    (
+                        BracketSource(matchup_id="old-bye", outcome="winner"),
+                        BracketSource(matchup_id="round-one", outcome="winner"),
+                    ),
+                ),
+            ),
+        ),
+    )
+    assert _postseason_transaction_participants(snapshot, genuine_bye, policy) == (
+        1,
+        2,
+        3,
+        4,
+    )
+
+    pending_placement = replace(
+        genuine_bye,
+        championship_matchups=genuine_bye.championship_matchups
+        + (
+            _postseason_matchup("semifinal", 2, 1, 2, MatchupStatus.COMPLETE),
+            _postseason_matchup("placement", 3, 1, 3, MatchupStatus.SCHEDULED),
+        ),
+        consolation_matchups=(
+            _postseason_matchup("c-final", 3, 4, 2, MatchupStatus.SCHEDULED, consolation=True),
+        ),
+    )
+    assert 1 in _postseason_transaction_participants(snapshot, pending_placement, policy)
+
+    finished = replace(
+        pending_placement,
+        championship_matchups=tuple(
+            replace(item, status=MatchupStatus.COMPLETE)
+            if item.matchup_id in {"round-one", "placement"}
+            else item
+            for item in pending_placement.championship_matchups
+        ),
+    )
+    participants = _postseason_transaction_participants(snapshot, finished, policy)
+    assert participants == (2, 4)
+    assert 1 not in participants
+    assert _postseason_transaction_participants(
+        snapshot, finished, PostseasonTransactionParticipationPolicy()
+    ) is None
 
 
 def test_unresolved_postseason_participation_stops_only_when_acquisition_is_material() -> (
@@ -557,6 +707,18 @@ def test_participation_policy_provenance_is_validated() -> None:
     )
     with pytest.raises(SeasonSimulationError, match="validated manual configuration"):
         _run(postseason_policy=invalid)
+
+    fabricated = _active_only_policy("existing-looking-but-unresolvable-source")
+    with pytest.raises(SeasonSimulationError, match="canonical manual rule interpretation"):
+        _run(postseason_policy=fabricated)
+
+    claimed_espn = PostseasonTransactionParticipationPolicy(
+        PostseasonTransactionParticipationMode.ACTIVE_POSTSEASON_PARTICIPANTS,
+        ParticipationProvenance.VERIFIED_ESPN_EVIDENCE,
+        _snapshot().sources[0].source_id,
+    )
+    with pytest.raises(SeasonSimulationError, match="not currently implemented"):
+        _run(postseason_policy=claimed_espn)
 
 
 def test_replay_is_deterministic_and_inputs_are_immutable() -> None:
