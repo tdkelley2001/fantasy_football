@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, M1, M2.1–M2.6, and M3.1 are **COMPLETE AND ACCEPTED**. M3.2's outcome-distribution research framework is **IMPLEMENTED — REVIEW PENDING**; M3.3 and later statistical work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented; the provisional outcome distribution remains explicitly uncalibrated. No row-level M3.1 artifact is committed, so M3.2 records an evidence-insufficiency conclusion rather than fabricated empirical model results.
+M0, M1, M2.1–M2.6, and M3.1 are **COMPLETE AND ACCEPTED**. M3.2's outcome-distribution research framework and private historical evidence workflow are **IMPLEMENTED — REVIEW PENDING**; M3.3 and later statistical work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented; the provisional outcome distribution remains explicitly uncalibrated. A bounded local historical comparison exists, but all projections retain unverified pregame provenance and no model is promoted.
 
 ## Authoritative documentation
 
@@ -257,6 +257,21 @@ week, projection, position, and NFL-team evidence parsed from those exact payloa
 bytes. Generated research
 data can contain private identifiers and should be written only to ignored local
 output. See [the M3.1 contract](docs/HISTORICAL_RESEARCH_DATASET.md).
+
+For the M3.2 evidence workflow, copy or edit the explicit
+[research plan](docs/examples/m32_historical_research_plan.json), then run:
+
+```powershell
+python -m fantasy_football.historical_research_workflow `
+  --plan docs/examples/m32_historical_research_plan.json `
+  --output-dir outputs/m32-evidence-local
+```
+
+The destination must be a new or empty child of ignored `outputs/`. The command
+uses configured ESPN credentials, performs read-only retrieval, preserves raw
+private evidence locally, builds the M3.1 dataset, and emits M3.2 aggregate
+diagnostics. Historical projections remain unverified even when retrieval
+succeeds. See [the M3.2 research report](docs/OUTCOME_DISTRIBUTION_RESEARCH.md).
 
 ## Historical implementation
 
