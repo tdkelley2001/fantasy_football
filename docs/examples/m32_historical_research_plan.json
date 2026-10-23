@@ -1,0 +1,26 @@
+{
+  "schema": "fantasy_football.historical_research_plan.v1",
+  "page_size": 250,
+  "samples": [
+    {"season": 2024, "week": 1, "observation_period_start_utc": "2024-09-05T00:00:00+00:00", "observation_period_end_utc": "2024-09-10T12:00:00+00:00"},
+    {"season": 2024, "week": 8, "observation_period_start_utc": "2024-10-24T00:00:00+00:00", "observation_period_end_utc": "2024-10-29T12:00:00+00:00"},
+    {"season": 2024, "week": 14, "observation_period_start_utc": "2024-12-05T00:00:00+00:00", "observation_period_end_utc": "2024-12-10T12:00:00+00:00"},
+    {"season": 2024, "week": 17, "observation_period_start_utc": "2024-12-25T00:00:00+00:00", "observation_period_end_utc": "2024-12-31T12:00:00+00:00"},
+    {"season": 2025, "week": 1, "observation_period_start_utc": "2025-09-04T00:00:00+00:00", "observation_period_end_utc": "2025-09-09T12:00:00+00:00"},
+    {"season": 2025, "week": 8, "observation_period_start_utc": "2025-10-23T00:00:00+00:00", "observation_period_end_utc": "2025-10-28T12:00:00+00:00"},
+    {"season": 2025, "week": 14, "observation_period_start_utc": "2025-12-04T00:00:00+00:00", "observation_period_end_utc": "2025-12-09T12:00:00+00:00"},
+    {"season": 2025, "week": 17, "observation_period_start_utc": "2025-12-25T00:00:00+00:00", "observation_period_end_utc": "2025-12-30T12:00:00+00:00"}
+  ],
+  "research_configuration": {
+    "evidence_policy": "include_unverified_exploratory",
+    "evaluation_start_season": 2025,
+    "evaluation_start_week": 1,
+    "projection_bin_edges": [5.0, 15.0],
+    "minimum_group_size": 100,
+    "minimum_training_rows": 500,
+    "minimum_evaluation_rows": 500,
+    "hybrid_shrinkage_strength": 100.0,
+    "density_bandwidth_floor": 0.25,
+    "normal_quadrature_points": 101
+  }
+}

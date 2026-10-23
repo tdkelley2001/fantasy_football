@@ -223,18 +223,25 @@ def parse_historical_player_page(response: Mapping[str, Any], *, season: int, we
     return tuple(result)
 
 
-def retrieve_historical_week(request_page: Callable[[int, int], Mapping[str, Any]], *, season: int, week: int, page_size: int) -> tuple[tuple[HistoricalPlayerWeek, ...], tuple[int, ...], Mapping[str, Any]]:
+def retrieve_historical_week_with_pages(
+    request_page: Callable[[int, int], Mapping[str, Any]],
+    *,
+    season: int,
+    week: int,
+    page_size: int,
+) -> tuple[tuple[HistoricalPlayerWeek, ...], tuple[int, ...], tuple[Mapping[str, Any], ...]]:
+    """Retrieve one complete historical week and retain every exact page object."""
+
     if page_size <= 0:
         raise HistoricalProjectionAuditError("page_size must be positive")
     offset = 0
     result: list[HistoricalPlayerWeek] = []
     seen: set[int] = set()
     lengths: list[int] = []
-    first_response: Mapping[str, Any] | None = None
+    pages: list[Mapping[str, Any]] = []
     while True:
         response = request_page(offset, page_size)
-        if first_response is None:
-            first_response = response
+        pages.append(response)
         page = parse_historical_player_page(response, season=season, week=week)
         if len(page) > page_size:
             raise HistoricalProjectionAuditError(f"season={season}, week={week}, offset={offset}: page exceeds requested limit")
@@ -249,9 +256,18 @@ def retrieve_historical_week(request_page: Callable[[int, int], Mapping[str, Any
         offset += page_size
         if len(lengths) > 100:
             raise HistoricalProjectionAuditError("historical pagination exceeded 100 full pages")
-    if not result or first_response is None:
+    if not result or not pages:
         raise HistoricalProjectionAuditError(f"season={season}, week={week}: historical player universe is empty")
-    return tuple(result), tuple(lengths), first_response
+    return tuple(result), tuple(lengths), tuple(pages)
+
+
+def retrieve_historical_week(request_page: Callable[[int, int], Mapping[str, Any]], *, season: int, week: int, page_size: int) -> tuple[tuple[HistoricalPlayerWeek, ...], tuple[int, ...], Mapping[str, Any]]:
+    """Backward-compatible audit retrieval returning the first raw page."""
+
+    records, lengths, pages = retrieve_historical_week_with_pages(
+        request_page, season=season, week=week, page_size=page_size,
+    )
+    return records, lengths, pages[0]
 
 
 def scoring_signature(raw_league: Mapping[str, Any]) -> tuple[str, int]:
@@ -361,7 +377,9 @@ def compare_playercard(records_by_week: Mapping[int, Sequence[HistoricalPlayerWe
     }
 
 
-def _request_filters(offset: int, limit: int) -> dict[str, object]:
+def historical_player_filter(offset: int, limit: int) -> dict[str, object]:
+    """Return the accepted complete-pool filter for historical player pages."""
+
     return {"players": {"filterStatus": {"value": list(POOL_STATUSES)}, "limit": limit, "offset": offset, "sortPercOwned": {"sortPriority": 1, "sortAsc": False}}}
 
 
@@ -391,7 +409,7 @@ def audit_live(settings: Settings, *, samples: Sequence[tuple[int, int]], page_s
                 nonlocal first_page_raw
                 response = league.espn_request.league_get(
                     params={"view": PLAYER_INFO_VIEW, "scoringPeriodId": week},
-                    headers={"x-fantasy-filter": json.dumps(_request_filters(offset, limit))},
+                    headers={"x-fantasy-filter": json.dumps(historical_player_filter(offset, limit))},
                 )
                 if offset == 0:
                     first_page_raw = response
@@ -403,7 +421,7 @@ def audit_live(settings: Settings, *, samples: Sequence[tuple[int, int]], page_s
                 raise HistoricalProjectionAuditError("first historical page was not captured")
             repeated_raw = league.espn_request.league_get(
                 params={"view": PLAYER_INFO_VIEW, "scoringPeriodId": week},
-                headers={"x-fantasy-filter": json.dumps(_request_filters(0, page_size))},
+                headers={"x-fantasy-filter": json.dumps(historical_player_filter(0, page_size))},
             )
             original_first = parse_historical_player_page(first_page_raw, season=season, week=week)
             repeated_first = parse_historical_player_page(repeated_raw, season=season, week=week)

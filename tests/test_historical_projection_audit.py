@@ -8,6 +8,7 @@ from fantasy_football.historical_projection_audit import (
     compare_playercard,
     parse_historical_player_page,
     retrieve_historical_week,
+    retrieve_historical_week_with_pages,
     scoring_signature,
     summarize_sample,
 )
@@ -139,6 +140,19 @@ def test_pagination_rejects_duplicate_players() -> None:
     }
     with pytest.raises(HistoricalProjectionAuditError, match="duplicate player IDs across pages"):
         retrieve_historical_week(lambda offset, _: pages[offset], season=2025, week=8, page_size=2)
+
+
+def test_pagination_can_preserve_every_raw_page_for_research_provenance() -> None:
+    pages = {
+        0: response(player(1, [stat(1, 5.0)]), player(2, [stat(1, 6.0)])),
+        2: response(player(3, [stat(1, 7.0)])),
+    }
+    records, lengths, retained_pages = retrieve_historical_week_with_pages(
+        lambda offset, _: pages[offset], season=2025, week=8, page_size=2,
+    )
+    assert [record.player_id for record in records] == [1, 2, 3]
+    assert lengths == (2, 1)
+    assert retained_pages == (pages[0], pages[2])
 
 
 def test_scoring_signatures_detect_scoring_system_mismatch() -> None:
