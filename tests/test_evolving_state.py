@@ -307,6 +307,9 @@ def test_waiver_priority_transitions_preserve_initial_frozen_order() -> None:
     assert moved.current_waiver_priority == (2, 3, 4, 1)
     assert moved.initial_window_waiver_priority == (1, 2, 3, 4)
     assert state.current_waiver_priority == (1, 2, 3, 4)
+    advanced = advance_cycle(moved, snapshot, cycle_id=2, scoring_week=16)
+    assert advanced.current_waiver_priority == (2, 3, 4, 1)
+    assert advanced.initial_window_waiver_priority == (2, 3, 4, 1)
     assert apply_failed_waiver_claim(state, snapshot, team_id=2) is state
     reset = reset_waiver_priority(moved, snapshot, ordered_team_ids=(4, 3, 2, 1))
     assert reset.current_waiver_priority == reset.initial_window_waiver_priority == (4, 3, 2, 1)
