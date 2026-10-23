@@ -118,8 +118,28 @@ def _sources(*, season: int = 2025, week: int = 1) -> tuple[HistoricalResearchSo
     )
 
 
-def _validated_capture(source: HistoricalResearchSource, *, payload: bytes | None = None):
-    payload = payload if payload is not None else source.source_id.encode()
+def _capture_payload(*, player_id: int = 1, projection: float = 10.0, season: int = 2025, week: int = 1) -> bytes:
+    return json.dumps({
+        "players": [{
+            "id": player_id,
+            "player": {
+                "id": player_id,
+                "defaultPositionId": 2,
+                "proTeamId": 10,
+                "stats": [{
+                    "seasonId": season,
+                    "scoringPeriodId": week,
+                    "statSourceId": 1,
+                    "statSplitTypeId": 1,
+                    "appliedTotal": projection,
+                    "stats": {},
+                }],
+            },
+        }],
+    }, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _validated_capture(source: HistoricalResearchSource, *, payload: bytes):
     manifest = {
         "schema": CAPTURE_MANIFEST_SCHEMA,
         "source_id": source.source_id,
@@ -196,11 +216,13 @@ def test_authenticated_pregame_requires_validated_manifest_and_exact_payload() -
         evidence=EvidenceClassification.VERIFIED_LIVE,
         verification_reference="immutable-capture-manifest:sample-1",
     )
+    payload = _capture_payload()
+    projection = replace(projection, payload_sha256=hashlib.sha256(payload).hexdigest())
     record = _record(1, 10.0, 8.0, provenance=ProjectionTemporalProvenance.AUTHENTICATED_PREGAME.value)
     dataset = build_historical_research_dataset(
         (_sample(HistoricalResearchInputRecord(record)),),
         (projection, *_sources()[1:]),
-        (_validated_capture(projection),),
+        (_validated_capture(projection, payload=payload),),
     )
     assert dataset.rows[0].eligible_authenticated_pair
     assert not dataset.rows[0].eligible_unverified_exploratory_pair
@@ -232,7 +254,8 @@ def test_fabricated_manifest_identity_and_payload_digest_are_rejected() -> None:
         evidence=EvidenceClassification.VERIFIED_LIVE,
         verification_reference="caller-declared",
     )
-    payload = source.source_id.encode()
+    payload = _capture_payload()
+    source = replace(source, payload_sha256=hashlib.sha256(payload).hexdigest())
     capture = _validated_capture(source, payload=payload)
     manifest = {
         "schema": CAPTURE_MANIFEST_SCHEMA, "source_id": source.source_id,
@@ -253,7 +276,7 @@ def test_fabricated_manifest_identity_and_payload_digest_are_rejected() -> None:
         )
     late_source = replace(source, retrieved_at_utc=PERIOD_START)
     with pytest.raises(HistoricalDatasetError, match="completion before the observation period"):
-        _validated_capture(late_source)
+        _validated_capture(late_source, payload=payload)
     assert capture.payload_sha256 == source.payload_sha256
 
 
@@ -263,7 +286,9 @@ def test_validated_capture_must_match_source_and_observation_boundary() -> None:
         kind=SourceKind.IMMUTABLE_PREGAME_CAPTURE,
         retrieved_at=PERIOD_START - timedelta(hours=1),
     )
-    capture = _validated_capture(source)
+    payload = _capture_payload(projection=2.0)
+    source = replace(source, payload_sha256=hashlib.sha256(payload).hexdigest())
+    capture = _validated_capture(source, payload=payload)
     with pytest.raises(HistoricalDatasetError, match="contradicts source metadata"):
         build_historical_research_dataset(
             (_sample(HistoricalResearchInputRecord(_record(1, 2.0, 3.0, provenance="authenticated_pregame"))),),
@@ -276,6 +301,49 @@ def test_validated_capture_must_match_source_and_observation_boundary() -> None:
     )
     with pytest.raises(HistoricalDatasetError, match="wrong observation boundary"):
         build_historical_research_dataset((shifted_sample,), (source, *_sources()[1:]), (capture,))
+
+
+@pytest.mark.parametrize(
+    ("record", "message"),
+    (
+        (_record(1, 9.5, 8.0, provenance="authenticated_pregame"), "contradicts the authenticated capture"),
+        (_record(999, 10.0, 8.0, provenance="authenticated_pregame"), "does not contain player-week"),
+    ),
+)
+def test_authenticated_capture_cannot_authorize_altered_or_nonexistent_observations(
+    record: HistoricalPlayerWeek,
+    message: str,
+) -> None:
+    payload = _capture_payload(player_id=1, projection=10.0)
+    source = replace(
+        _source(
+            "projection-2025-1", roles=(SourceRole.PROJECTION,),
+            kind=SourceKind.IMMUTABLE_PREGAME_CAPTURE,
+            retrieved_at=PERIOD_START - timedelta(hours=1),
+        ),
+        payload_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    capture = _validated_capture(source, payload=payload)
+    with pytest.raises(HistoricalDatasetError, match=message):
+        build_historical_research_dataset(
+            (_sample(HistoricalResearchInputRecord(record)),),
+            (source, *_sources()[1:]),
+            (capture,),
+        )
+
+
+def test_authenticated_capture_rejects_payload_week_mismatch() -> None:
+    payload = _capture_payload(week=2)
+    source = replace(
+        _source(
+            "projection-2025-1", roles=(SourceRole.PROJECTION,),
+            kind=SourceKind.IMMUTABLE_PREGAME_CAPTURE,
+            retrieved_at=PERIOD_START - timedelta(hours=1),
+        ),
+        payload_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    with pytest.raises(HistoricalDatasetError, match="weekly stat association"):
+        _validated_capture(source, payload=payload)
 
 
 def test_historical_as_of_flag_does_not_promote_current_response() -> None:
