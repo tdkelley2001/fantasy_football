@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, M1, M2.1–M2.6, and M3.1 are **COMPLETE AND ACCEPTED**. M3.2's outcome-distribution research framework and private historical evidence workflow are **IMPLEMENTED — REVIEW PENDING**; M3.3 and later statistical work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented; the provisional outcome distribution remains explicitly uncalibrated. A bounded local historical comparison exists, but all projections retain unverified pregame provenance and no model is promoted.
+M0, M1, M2.1–M2.6, M3.1, and M3.2 are **COMPLETE AND ACCEPTED**. M3.3's provisional empirical draw model and matched player-week randomness are **IMPLEMENTED — REVIEW PENDING**; M3.4 and later statistical work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, provisional repeated-season runner, and batch reconciliation are implemented. The empirical model is deliberately provisional: its selected historical evidence retains unverified pregame provenance, while the earlier Normal model remains supported.
 
 ## Authoritative documentation
 
@@ -30,7 +30,7 @@ M0, M1, M2.1–M2.6, and M3.1 are **COMPLETE AND ACCEPTED**. M3.2's outcome-dist
 - [League configuration audit](docs/LEAGUE_CONFIGURATION_AUDIT.md) — standing inventory of API-derived rules, configuration, assumptions, and unsupported modes.
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
 - [Historical research dataset](docs/HISTORICAL_RESEARCH_DATASET.md) — M3.1 immutable projection/actual evidence contract, leakage safeguards, coverage, and limitations.
-- [Outcome-distribution research](docs/OUTCOME_DISTRIBUTION_RESEARCH.md) — M3.2 temporal holdout, candidate comparison, calibration diagnostics, and current evidence insufficiency.
+- [Outcome-distribution research](docs/OUTCOME_DISTRIBUTION_RESEARCH.md) — accepted M3.2 temporal holdout, candidate comparison, calibration diagnostics, and unverified-evidence limitations.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
 
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
