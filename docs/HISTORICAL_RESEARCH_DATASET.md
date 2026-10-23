@@ -100,7 +100,7 @@ but are not copied into the research dataset.
 `HistoricalResearchDataset` schema v2 contains sorted source records, validated
 capture-manifest identities, sorted player-week
 rows, selected sample identities, scoring signature, structured coverage, fixed
-limitations, schema version 1, and a SHA-256 identity over the evidence-bearing
+limitations, schema version 2, and a SHA-256 identity over the evidence-bearing
 core. `historical_research_dataset_to_json()` emits deterministic UTF-8 JSON and
 rejects an inconsistent dataset identity.
 
