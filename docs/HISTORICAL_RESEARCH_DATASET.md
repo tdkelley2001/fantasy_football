@@ -14,7 +14,7 @@ and the historical evidence boundary recorded in
 
 ## Input contract
 
-`build_historical_research_dataset(samples, sources)` accepts:
+`build_historical_research_dataset(samples, sources, validated_pregame_captures=())` accepts:
 
 - explicitly selected `(season, scoring_week)` samples;
 - complete immutable player-week input records derived from the existing raw
@@ -26,7 +26,8 @@ and the historical evidence boundary recorded in
 
 Sources declare a role, target season/week, source kind, and one of the standing
 evidence classifications: `verified_live`, `verified_by_tests`, `unverified`, or
-`unsupported`. Source IDs must be unique and every sample reference must match
+`unsupported`. These fields are descriptive caller declarations, not proof of
+authenticity. Source IDs must be unique and every sample reference must match
 the source role and target period. Actual evidence must have been retrieved no
 earlier than the end of the observation period. Player IDs, season/week
 associations, duplicate player-weeks, finite values, raw status labels, temporal
@@ -49,21 +50,45 @@ Value origin and temporal provenance are deliberately separate.
 
 `ProjectionTemporalProvenance` distinguishes:
 
-- `authenticated_pregame`: an immutable capture classified `verified_live`,
-  carrying a verification reference, completed before the observation period;
+- `authenticated_pregame`: an immutable capture authorized through the separate
+  validated-manifest trust boundary described below;
 - `historical_projection_pregame_provenance_unverified`: a currently returned
   historical ESPN projection; and
 - `not_applicable`: missing or policy-imputed values that are not forecasts.
 
 A historical ESPN response is never promoted by a suggestive raw timestamp,
-same-session stability, a fixture, or caller-selected retrieval time. A
-sanitized fixture cannot claim `verified_live`. An authenticated pair requires
+same-session stability, a fixture, caller-selected retrieval time, caller
+verification reference, or caller digest. An authenticated pair requires
 both an authenticated raw projection and a post-period actual. Policy-imputed
 zeros and missing projections are never eligible projection-error pairs.
 
+## Authenticated-capture trust boundary
+
+`validate_pregame_capture_manifest()` is the only supported constructor for a
+`ValidatedPregameCapture`. It takes canonical manifest bytes, the exact captured
+payload bytes, and an `independently_trusted_manifest_sha256` provisioned outside
+the source record. It verifies the manifest identity, exact payload identity,
+source ID, endpoint/view/parameters, target player-week boundary, timezone-aware
+capture time, and strict capture-before-period ordering. The builder then binds
+that validated result back to identical source metadata and sample boundary.
+
+The expected manifest digest is the external trust anchor; the code cannot prove
+where a caller obtained it. Hashing an arbitrary manifest and passing that hash
+back is structurally valid but does **not** create independent real-world
+authentication. Operational authenticated calibration therefore additionally
+requires an independently controlled manifest registry or review record. No
+such live manifest was added in M3.1, and all existing historical ESPN pairs
+remain unverified exploratory evidence. A capture lacking this authorization is
+preserved rather than rejected, but it receives the unverified classification.
+
+The validated manifest identity and non-sensitive authority/reference are stored
+in schema-v2 research output. Raw payload bytes are checked at validation time
+but are not copied into the research dataset.
+
 ## Output contract and reproducibility
 
-`HistoricalResearchDataset` contains sorted source records, sorted player-week
+`HistoricalResearchDataset` schema v2 contains sorted source records, validated
+capture-manifest identities, sorted player-week
 rows, selected sample identities, scoring signature, structured coverage, fixed
 limitations, schema version 1, and a SHA-256 identity over the evidence-bearing
 core. `historical_research_dataset_to_json()` emits deterministic UTF-8 JSON and
@@ -113,8 +138,9 @@ and do not claim new live verification.
 - A player-week must match its selected season and scoring period exactly.
 - Duplicate records and cross-sample collisions fail.
 - An actual captured before the observation period ends fails.
-- Only independently classified immutable pregame captures can produce
-  authenticated pairs, and their retrieval must precede the period.
+- Only captures bound to an independently provisioned manifest identity and
+  exact payload can produce authenticated pairs; caller source metadata alone
+  cannot, and capture completion must precede the period.
 - Historical endpoint values remain unverified regardless of raw as-of-like
   fields.
 - Missing values stay missing; a separate policy-imputation field cannot replace
@@ -145,12 +171,13 @@ The caller controls any local write and must use an ignored private output path.
 
 ## Tests and limitations
 
-Seventeen focused credential-free tests cover deterministic order, missing versus explicit and
-imputed zeros, authenticated and unverified evidence, fixture/non-pregame
-promotion attempts, source role/period/digest/parameters, early actual leakage,
+Nineteen focused credential-free tests cover deterministic order, missing versus explicit and
+imputed zeros, authenticated and unverified evidence, fabricated source metadata,
+manifest and payload identity failures, boundary mismatches, source
+role/period/digest/parameters, early actual leakage,
 duplicate and mismatched player-weeks, status/provenance contradictions,
 nonmatching scoring rules, coverage reconciliation, and identity tampering.
-The complete repository suite passed **529 tests in 17.40 seconds** on Python
+The complete repository suite passed **531 tests in 13.61 seconds** on Python
 3.12.10. No live ESPN retrieval was performed for M3.1; fixture verification
 proves code behavior only.
 
