@@ -535,3 +535,25 @@ Status labels are prospective until code, tests, benchmarks and source evidence 
 Design synthesis basis: the original project outline's foundational decisions 1–7 and all individually numbered decisions 8–76, including later clarifications/supersessions. Consolidation domains: objective and scope (1–7, 35–39, 57, 68–69, 76); ESPNsourced inputs and snapshots (14–15, 26, 55–60, 73–76); lineups, waivers and standings (8–11, 19–30); stochastic simulation and reporting (12–18, 31–34, 53–54); manual roster state and completion (27–28, 37–52); persistence/performance/checkpoints (56, 61–67); promotion, testing and historical replay (54, 70–72); future decisions/action search and dashboard (35–36, 53, 68–70). This reference is only a completeness aid; substantive rules are integrated above.
 
 Design conflicts resolved in favor of the most recent agreed refinements: no speculative future waivers in V1; zero vs missing forecasts distinct; hypothetical initial completion can reuse same-cycle releases and ignore temporary waiver lockdown whereas simulated future essential waivers cannot; manual user pins protect the initial state only; structural achievability differs from actually executable trade chains; no persistent scenario caching but short-lived detailed-run checkpoints; detailed run time is a soft target with hard safety ceiling; only official models are surfaced to normal users.
+## M2.6 provisional repeated-season simulation
+
+M2.6 supplies hypothetical realized player-week scores to the unchanged M2.5
+deterministic coordinator. The initial replaceable model is explicitly
+uncalibrated: independent Normal draws are centered on canonical effective ESPN
+projections with caller-supplied absolute and projection-scaled dispersion.
+Negative outcomes are permitted; missing-policy zero and explicit ESPN zero
+retain distinct source evidence even though both use zero as this provisional
+mean. No bias correction, correlation, stochastic injury, or availability event
+is implied.
+
+Random identity is a SHA-256-derived function of master seed, path index, player,
+season, week, model version, and all model parameters. It is independent of input
+and batch ordering. Every canonical in-horizon player-week is generated before a
+path starts so later acquisitions cannot trigger outcome-dependent resampling.
+
+Repeated execution reports exact requested/completed/incomplete/invalid coverage
+and all-team reconciled counts. An incomplete requested path prevents publication
+of unconditional frequencies; it is neither discarded, replaced, treated as a
+loss, nor removed from the denominator. M2.6 results describe sampling under a
+provisional structural model only. Empirical calibration, adaptive precision,
+parallel execution, paired scenarios, and scenario search remain M3 or later.
