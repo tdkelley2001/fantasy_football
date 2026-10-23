@@ -56,10 +56,15 @@ modes:
   behavior that every manager may continue essential acquisition competition.
   It requires the exact named `approved_v1_assumption` reference and is not
   represented as an ESPN rule.
-- `active_postseason_participants` is available only with a nonempty
-  `manual_validated_configuration` reference. It permits championship teams in
-  scheduled games or byes and active consolation-ladder teams. Teams no longer
-  participating in scored competition cannot act, but remain in ownership and
+- `active_postseason_participants` requires a matching, understood canonical
+  `RuleInterpretation` whose manual configuration key, approval, audited gap,
+  and source provenance all validate. A free-form reference is not authority.
+  Eligibility comes from scheduled/in-progress current or future games and
+  graph-proven downstream obligations. Thus a current bye, a team awaiting a
+  known advancement, and a semifinal loser awaiting a placement game remain
+  eligible; a historical bye or completed placement game does not keep a team
+  eligible after its bracket obligations end. Teams that cannot be proven to
+  have a remaining obligation fail closed, but remain in ownership and
   shared-pool valuation state.
 - `unresolved` makes no permission claim. The coordinator performs an immutable
   probe; if any acquisition would occur, the path stops before mutation with a
@@ -67,12 +72,13 @@ modes:
   proceed because the unresolved distinction cannot affect that transition.
 
 No live ESPN provider currently verifies a universal postseason acquisition
-permission rule. The precedence is verified evidence when a provider exists,
+permission rule, and selecting `verified_espn_evidence` therefore fails
+explicitly. The precedence is verified evidence when a real provider exists,
 then validated explicit configuration, then the named V1 assumption, otherwise
-unresolved. Merely having an ESPN team record or lacking a scored matchup is not
-treated as transaction authority. Bye teams remain participants, while disabled
-or unresolved consolation creates no implicit nonqualifier permission under the
-active-participant configuration.
+unresolved. Merely having an ESPN team record, a caller-supplied source label,
+or a historical bye is not transaction authority. A genuine current bye remains
+eligible, while disabled or unresolved consolation creates no implicit
+nonqualifier permission under the active-participant configuration.
 
 M2.3d's optional `eligible_team_ids` input filters only managers allowed to act.
 It does not remove teams from ownership, availability, competing-demand, or
@@ -110,9 +116,10 @@ scenario results, or implement a dashboard.
 Credential-free tests include a hand-calculated two-week regular season plus
 postseason, exact standings/PF reconciliation, a settings-driven 14-team
 1/1/2-week bracket, multiweek championship reversal, exact consolation ranks,
-disabled consolation, unresolved transaction authorization, malformed score
-inputs, replay determinism and input immutability. The acceptance run passed
-110 targeted integration tests and all 440 credential-free repository tests.
+disabled consolation, historical-bye exclusion, current-bye and pending-
+placement eligibility, rejected fabricated provenance, unresolved transaction
+authorization, malformed score inputs, replay determinism and input
+immutability. Current test counts are recorded in `ROADMAP.md`.
 Synthetic uninstrumented averages were 14.58 ms for the compact three-week
 path, 52.06 ms for the 14-team four-week postseason path, and 19.07 ms for the
 compact transaction-active path. `tracemalloc` measured peaks of 337.4 KiB and
