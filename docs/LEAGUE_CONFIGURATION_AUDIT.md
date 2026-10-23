@@ -112,3 +112,10 @@ complete league-wide output is mandatory. These are approved explicit simulator
 inputs, not ESPN fields. No new league-size, position, playoff, or current-season
 hardcoding was found. Unsupported deterministic capabilities remain unsupported
 inside each path rather than receiving probabilistic fallbacks.
+
+The final M2.6 fingerprint serializes every currently supported simulator policy
+and explicit consolation provenance rather than trusting labels. It also hashes
+an order-independent canonical snapshot representation and named semantics
+versions. Acquisition-count and eligibility-evidence overrides are not exposed
+by the M2.6 runner; adding either later requires including its complete validated
+content in the fingerprint before batch combination is permitted.

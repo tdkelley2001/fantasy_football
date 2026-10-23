@@ -29,12 +29,38 @@ and parameters, seed, exact path IDs, complete/incomplete/invalid counts,
 projection-class coverage, assumptions, compact replay metadata, capability
 diagnostics, and one aggregate for every configured team.
 
+Every result also retains two SHA-256 identities. The simulation-configuration
+fingerprint covers snapshot UUID, league/season/schema and order-independent
+canonical-content digest; model ID and every parameter; IR, weekly transaction,
+and postseason participation policies; complete optional consolation mapping
+including source/approval provenance; complete-result policy; and named material
+semantics versions. Path range and path count are deliberately excluded so valid
+partitions share the fingerprint. The run identity adds the master seed. Current
+M2.6 does not accept acquisition-count or IR-evidence overrides; those must be
+added to this contract before such inputs can be supported.
+
+Batch combination requires both identities to match the requested configuration
+before inspecting results. Exact path coverage must then be contiguous,
+duplicate-free, and complete. Thus batches with different transaction, IR,
+participation, consolation, outcome-model, seed, snapshot identity, or snapshot
+content cannot be combined, while disjoint ranges under one configuration can.
+
 For a fully complete batch, team aggregates contain championships, playoff
 qualifications, runner-up finishes, every placement count, and averages for
 placement, regular rank, wins, and points for. Frequencies use all requested
 paths. Reconciliation requires one champion and one owner of every placement per
 path, the configured championship qualifier count, known team IDs, and complete
 per-team placement distributions.
+
+Reconciliation is first performed independently for every path. Each complete
+path must contain exactly one record for every configured team, no unknown or
+duplicate IDs, one champion, the exact `1..team_count` placement permutation,
+the configured number of championship qualifiers, a qualified champion, and
+finite structurally valid regular-season fields. An incomplete path retains the
+same team-identity and numeric checks but may omit unresolved qualification or
+placement values. Only after every path passes are league-wide totals reconciled.
+Malformed paths never become capability-incomplete paths and cannot offset one
+another through aggregate totals.
 
 A capability-incomplete path is retained with its path ID and reason. If any
 requested path is incomplete, unconditional championship and playoff frequencies
@@ -69,3 +95,7 @@ respectively and is reported only as memory instrumentation. Separately, 1,000
 that deterministic season mechanics—not key generation—dominate these fixtures.
 Exact M2.3 valuation can be substantially more expensive in larger contested
 transaction universes; no candidate truncation or legality shortcut was added.
+
+The final identity/reconciliation benchmark combined two validated 50-path
+partitions 1,000 times in 4.095 seconds, or 4.10 ms per 100-path combination on
+the same workstation. This remains small beside complete path simulation.
