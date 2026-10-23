@@ -1,4 +1,4 @@
-# Provisional Repeated Season Simulation
+# Provisional Repeated Season Simulation and Probability Precision
 
 M2.6 is implemented by `fantasy_football.monte_carlo`. It sequentially generates
 path-indexed score scenarios and passes each one to the accepted, unchanged M2.5
@@ -67,16 +67,65 @@ requested path is incomplete, unconditional championship and playoff frequencies
 are `None`; observed complete counts are not renormalized. `require_complete=True`
 instead fails on the first incomplete path. Domain-invalid paths fail immediately
 with the path ID and are never silently replaced. Programming exceptions are not
-swallowed. M2.6 does not implement adaptive stopping or forecast intervals.
+swallowed.
+
+## M3.4 probability precision contract
+
+`fantasy_football.monte_carlo_precision` adds an immutable analysis and stopping
+layer over the accepted M2.6 batches. `analyze_monte_carlo_precision()` analyzes
+an already reconciled batch. `run_monte_carlo_to_precision()` executes contiguous
+path-indexed chunks, combines them with `combine_monte_carlo_batches()`, and checks
+precision only at the configured checkpoints. Its `MonteCarloConfig.path_count`
+must equal the explicit maximum path count; path identities and the simulation
+fingerprint otherwise retain the M2.6 contract.
+
+`PrecisionConfiguration` requires a family confidence level, absolute target
+half-width, minimum and maximum path counts, and positive evaluation interval.
+At least the minimum is run before the first decision. Subsequent checks occur at
+that interval and at the maximum. A result records every checkpoint and exactly
+one stopping reason: `precision_reached`, `maximum_paths_reached`, or
+`incomplete_capabilities`.
+
+For every configured team, the analysis reports championship, playoff
+qualification, and every exact final-placement probability. Counts remain the
+authoritative M2.6 counts. With `T` teams the monitored family contains
+`T * (T + 2)` binomial estimands: two outcomes and `T` placements for each team.
+The number of planned looks is derived exactly from the minimum, maximum, and
+evaluation interval. Each interval is a two-sided Wilson score interval using
+Bonferroni allocation across every metric and every planned look:
+
+`alpha_interval = (1 - family_confidence_level) / (monitored_metric_count * planned_look_count)`
+
+The reported interval confidence is `1 - alpha_interval`; endpoint events retain
+exact logical bounds of zero or one. Half-width is `(upper - lower) / 2`. This is
+a conservative family-wise policy over league outcomes and the entire configured
+sequential checking schedule; it does not require the league outcomes to be
+independent. League-wide convergence requires every monitored
+interval, for every team, to meet the configured half-width after the minimum
+path count. A single converged manager or outcome cannot stop the run.
+
+If any path is capability-incomplete, no unconditional probability or interval
+is emitted for any team and no complete-only denominator is substituted. With
+`require_complete=False`, the precision runner returns
+`incomplete_capabilities`; with `require_complete=True`, the underlying accepted
+M2.6 fail-fast behavior raises at the incomplete path. Invalid structural paths
+continue to fail rather than becoming a stopping result.
+
+The precision configuration and complete analysis each have deterministic
+SHA-256 identities. Whole-range and partition-combined batches produce identical
+estimates and identities. M3.4 remains sequential; worker execution and durable
+resume belong to M3.5 and M3.6.
 
 ## Evidence classification and limitations
 
-All output frequencies are provisional structural Monte Carlo results, not
-calibrated forecasts. Fixed-run sampling variation is distinct from unmeasured
-model-parameter and calibration uncertainty. Player-weeks are conditionally
+All output probabilities remain provisional structural Monte Carlo results, not
+fully calibrated forecasts. Wilson intervals quantify only finite path-sampling
+uncertainty under the selected outcome model. They do not quantify model-family,
+parameter, endpoint-revision, or calibration uncertainty. Player-weeks are conditionally
 independent and future availability is governed only by the existing deterministic
-engine and its explicit policies. Parallel workers, checkpoints, paired trade
-scenarios, stochastic injuries, correlations, and empirical fitting are deferred.
+engine and its explicit policies. The empirical model's historical pregame
+provenance limitation remains explicit. Parallel workers, durable checkpoints,
+paired trade scenarios, stochastic injuries, and correlations are deferred.
 
 ## Initial performance baseline
 
@@ -99,3 +148,9 @@ transaction universes; no candidate truncation or legality shortcut was added.
 The final identity/reconciliation benchmark combined two validated 50-path
 partitions 1,000 times in 4.095 seconds, or 4.10 ms per 100-path combination on
 the same workstation. This remains small beside complete path simulation.
+
+M3.4's interval analysis of a reconciled synthetic four-team batch monitors 24
+metrics. Repeating the analysis 1,000 times took 0.269 seconds, or about 269
+microseconds per analysis. Retaining all 1,000 immutable results under
+`tracemalloc` peaked at 7.82 MiB (1.446 seconds instrumented). This isolates
+analysis overhead; it is not a live ESPN or complete-season throughput claim.
