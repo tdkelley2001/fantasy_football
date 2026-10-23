@@ -2,7 +2,7 @@
 
 ## Status and evidence conclusion
 
-M3.2 is **IMPLEMENTED — REVIEW PENDING**. The deterministic research framework
+M3.2 is **COMPLETE AND ACCEPTED**. The deterministic research framework
 is implemented in `fantasy_football.outcome_distribution_research`; it does not
 replace or configure the provisional M2.6 draw model.
 
