@@ -200,6 +200,19 @@ def _canonical_snapshot_fingerprint_content(snapshot: LeagueSnapshot):
     return content
 
 
+def canonical_snapshot_fingerprint(snapshot: LeagueSnapshot) -> str:
+    """Return the order-normalized authoritative canonical-content identity."""
+
+    return hashlib.sha256(
+        json.dumps(
+            _canonical_snapshot_fingerprint_content(snapshot),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def simulation_configuration_fingerprint(
     snapshot: LeagueSnapshot,
     config: MonteCarloConfig,
@@ -207,7 +220,6 @@ def simulation_configuration_fingerprint(
 ) -> str:
     """Hash every common, simulation-relevant input except seed/path range."""
 
-    canonical_content = _canonical_snapshot_fingerprint_content(snapshot)
     payload = {
         "contract": "m2.6-simulation-config-v1",
         "snapshot": {
@@ -215,14 +227,7 @@ def simulation_configuration_fingerprint(
             "league_id": snapshot.league_id,
             "season": snapshot.season,
             "schema_version": snapshot.schema_version,
-            "canonical_sha256": hashlib.sha256(
-                json.dumps(
-                    canonical_content,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    ensure_ascii=True,
-                ).encode("utf-8")
-            ).hexdigest(),
+            "canonical_sha256": canonical_snapshot_fingerprint(snapshot),
         },
         "model": {
             "model_id": model.model_id,
