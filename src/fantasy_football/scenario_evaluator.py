@@ -22,6 +22,7 @@ from fantasy_football.evolving_state import (
     validate_evolving_state,
     initialize_evolving_state,
 )
+from fantasy_football.lineup_optimizer import optimize_starting_lineup
 from fantasy_football.monte_carlo import (
     MonteCarloBatchResult,
     MonteCarloConfig,
@@ -124,11 +125,37 @@ class TeamScenarioComparison:
 
 
 @dataclass(frozen=True, slots=True)
+class WeeklyLineupExplanation:
+    """Projection-only before/after optimal-lineup explanation for one week."""
+
+    scoring_week: int
+    baseline_starter_player_ids: tuple[int, ...]
+    hypothetical_starter_player_ids: tuple[int, ...]
+    baseline_bench_player_ids: tuple[int, ...]
+    hypothetical_bench_player_ids: tuple[int, ...]
+    baseline_reserve_player_ids: tuple[int, ...]
+    hypothetical_reserve_player_ids: tuple[int, ...]
+    baseline_projected_points: float
+    hypothetical_projected_points: float
+    projected_points_difference: float
+    baseline_vacancy_count: int
+    hypothetical_vacancy_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class TeamLineupExplanation:
+    team_id: int
+    changed_scoring_weeks: tuple[int, ...]
+    weeks: tuple[WeeklyLineupExplanation, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ManualScenarioComparison:
     scenario: CompletedManualScenario
     baseline: MonteCarloPrecisionResult
     hypothetical: MonteCarloPrecisionResult
     teams: tuple[TeamScenarioComparison, ...]
+    lineup_explanations: tuple[TeamLineupExplanation, ...]
     comparison_sha256: str
     matched_path_count: int
     confidence_level: float
@@ -676,6 +703,81 @@ def _paired_metric(
     )
 
 
+def _lineup_explanations(
+    snapshot: LeagueSnapshot,
+    baseline_state: EvolvingLeagueState,
+    hypothetical_state: EvolvingLeagueState,
+) -> tuple[TeamLineupExplanation, ...]:
+    reserve_slot_ids = {
+        rule.slot_id for rule in snapshot.rules.lineup_slots if rule.kind is SlotKind.RESERVE
+    }
+
+    def player_sets(state: EvolvingLeagueState, team_id: int, starters: set[int]):
+        entries = tuple(item for item in state.roster_entries if item.team_id == team_id)
+        reserve = tuple(
+            sorted(item.player_id for item in entries if item.lineup_slot_id in reserve_slot_ids)
+        )
+        ordinary = {item.player_id for item in entries if item.lineup_slot_id not in reserve_slot_ids}
+        return tuple(sorted(ordinary - starters)), reserve
+
+    results = []
+    for team_id in sorted(item.team_id for item in snapshot.teams):
+        weeks = []
+        changed = []
+        for scoring_week in range(
+            snapshot.first_simulation_week, snapshot.final_simulation_week + 1
+        ):
+            baseline = optimize_starting_lineup(
+                snapshot,
+                team_id,
+                scoring_week,
+                roster_entries=baseline_state.roster_entries,
+            )
+            hypothetical = optimize_starting_lineup(
+                snapshot,
+                team_id,
+                scoring_week,
+                roster_entries=hypothetical_state.roster_entries,
+            )
+            baseline_starters = {item.player_id for item in baseline.assignments}
+            hypothetical_starters = {item.player_id for item in hypothetical.assignments}
+            baseline_bench, baseline_reserve = player_sets(
+                baseline_state, team_id, baseline_starters
+            )
+            hypothetical_bench, hypothetical_reserve = player_sets(
+                hypothetical_state, team_id, hypothetical_starters
+            )
+            explanation = WeeklyLineupExplanation(
+                scoring_week,
+                tuple(sorted(baseline_starters)),
+                tuple(sorted(hypothetical_starters)),
+                baseline_bench,
+                hypothetical_bench,
+                baseline_reserve,
+                hypothetical_reserve,
+                baseline.total_projected_points,
+                hypothetical.total_projected_points,
+                hypothetical.total_projected_points - baseline.total_projected_points,
+                baseline.vacancy_count,
+                hypothetical.vacancy_count,
+            )
+            weeks.append(explanation)
+            if (
+                explanation.baseline_starter_player_ids
+                != explanation.hypothetical_starter_player_ids
+                or explanation.baseline_bench_player_ids
+                != explanation.hypothetical_bench_player_ids
+                or explanation.baseline_reserve_player_ids
+                != explanation.hypothetical_reserve_player_ids
+                or explanation.projected_points_difference != 0.0
+                or explanation.baseline_vacancy_count
+                != explanation.hypothetical_vacancy_count
+            ):
+                changed.append(scoring_week)
+        results.append(TeamLineupExplanation(team_id, tuple(changed), tuple(weeks)))
+    return tuple(results)
+
+
 def evaluate_manual_scenario(
     snapshot: LeagueSnapshot,
     baseline_state: EvolvingLeagueState,
@@ -747,6 +849,7 @@ def evaluate_manual_scenario(
             for place in range(1, team_count + 1)
         )
         comparisons.append(TeamScenarioComparison(team_id, championship, playoff, placements))
+    lineup_explanations = _lineup_explanations(snapshot, baseline_state, completed.state)
     identity_core = {
         "contract": "m4-paired-scenario-comparison-v1",
         "scenario_sha256": completed.scenario_sha256,
@@ -754,6 +857,7 @@ def evaluate_manual_scenario(
         "hypothetical_run": scenario_batch.run_identity_sha256,
         "precision": baseline_precision.precision_config_sha256,
         "teams": [asdict(item) for item in comparisons],
+        "lineup_explanations": [asdict(item) for item in lineup_explanations],
     }
     comparison_sha256 = hashlib.sha256(
         json.dumps(identity_core, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
@@ -763,6 +867,7 @@ def evaluate_manual_scenario(
         baseline_precision,
         scenario_precision,
         tuple(comparisons),
+        lineup_explanations,
         comparison_sha256,
         simulation.path_count,
         precision.confidence_level,
@@ -802,6 +907,7 @@ def manual_scenario_comparison_to_json(result: ManualScenarioComparison) -> str:
         "automatic_additions": [asdict(item) for item in result.scenario.automatic_additions],
         "final_roster_entries": [asdict(item) for item in result.scenario.state.roster_entries],
         "teams": [asdict(item) for item in result.teams],
+        "lineup_explanations": [asdict(item) for item in result.lineup_explanations],
         "assumptions": list(result.assumptions),
         "scenario_assumptions": list(result.scenario.assumptions),
     }
