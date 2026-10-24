@@ -262,6 +262,24 @@ batch from claiming a different master seed while workers still hold the seed
 installed at pool initialization. Path subsets may vary within the initialized
 range; the model, simulation policy, snapshot, and master seed may not.
 
+## M4 paired manual scenarios
+
+`MonteCarloConfig.initial_evolving_state` optionally supplies a complete,
+validated first-week roster/availability state. Its full deterministic content
+is part of the simulation fingerprint. The season coordinator rejects a snapshot,
+week, IR-policy, or override mismatch before simulation. Baseline and completed
+manual scenarios therefore have distinct configuration/run identities while the
+M3.3 score keys remain identical for equal model, seed, path, player, season, and
+week.
+
+M4 verifies equal score-scenario digests for every paired path and reports the
+mean binary path difference for championship, playoff qualification, and every
+final placement. Paired intervals conservatively difference simultaneous Wilson
+bounds for the improvement and worsening probabilities, with a Bonferroni family
+across both directions and all league metrics. They are reported separately from
+M3.4's standalone Wilson probability intervals. Both quantify path-sampling uncertainty only. Full details
+are in `MANUAL_SCENARIOS.md`.
+
 The reproducible recovery benchmark is:
 
 ```powershell

@@ -552,6 +552,7 @@ def simulate_deterministic_season(
     season_acquisition_counts: dict[int, int] | None = None,
     matchup_acquisition_counts: dict[int, int] | None = None,
     ir_eligibility_evidence: tuple[IREligibilityEvidence, ...] = (),
+    initial_evolving_state: EvolvingLeagueState | None = None,
 ) -> DeterministicSeasonResult:
     """Execute one settings-driven deterministic path without network or randomness."""
 
@@ -569,14 +570,33 @@ def simulate_deterministic_season(
     phases = _phase_by_week(snapshot)
     initial_standings = initialize_standings(snapshot)
     standings = initial_standings
-    evolving = initialize_evolving_state(
-        snapshot,
-        scoring_week=snapshot.first_simulation_week,
-        ir_policy=ir_policy,
-        season_acquisition_counts=season_acquisition_counts,
-        matchup_acquisition_counts=matchup_acquisition_counts,
-        ir_eligibility_evidence=ir_eligibility_evidence,
-    )
+    if initial_evolving_state is None:
+        evolving = initialize_evolving_state(
+            snapshot,
+            scoring_week=snapshot.first_simulation_week,
+            ir_policy=ir_policy,
+            season_acquisition_counts=season_acquisition_counts,
+            matchup_acquisition_counts=matchup_acquisition_counts,
+            ir_eligibility_evidence=ir_eligibility_evidence,
+        )
+    else:
+        if any(
+            item is not None
+            for item in (season_acquisition_counts, matchup_acquisition_counts)
+        ) or ir_eligibility_evidence:
+            raise SeasonSimulationError(
+                "initial_evolving_state cannot be combined with acquisition-count or IR-evidence overrides"
+            )
+        validate_evolving_state(initial_evolving_state, snapshot)
+        if initial_evolving_state.scoring_week != snapshot.first_simulation_week:
+            raise SeasonSimulationError(
+                "initial evolving state must begin at the first simulation week"
+            )
+        if initial_evolving_state.ir_policy is not ir_policy:
+            raise SeasonSimulationError(
+                "initial evolving state IR policy does not match requested policy"
+            )
+        evolving = initial_evolving_state
     postseason: PostseasonState | None = None
     weeks: list[SeasonWeekTransition] = []
 

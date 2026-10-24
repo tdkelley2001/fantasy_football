@@ -18,7 +18,7 @@ proves rejection before worker execution.
 
 No other blocking consistency, league-hardcoding, private-data, checkpoint, or
 reconciliation defect was established. M4 remains unstarted. This consolidation
-is **IMPLEMENTED — REVIEW PENDING**.
+was subsequently accepted before M4 began.
 
 ## End-to-end contract review
 
@@ -128,9 +128,8 @@ empirical distribution is provisional; future waiver clearance and strict-IR
 facts are unresolved; some league transaction/bracket modes remain unsupported;
 and exact transaction searches are combinatorial.
 
-Recommendation: **GO for independent consolidation review**. After acceptance,
-M4 may begin from the existing public scenario, run-identity, and matched-draw
-contracts. Do not treat this audit as M4 approval or implementation.
+Final disposition: **ACCEPTED**. M4 began only after that review, from the
+existing public scenario, run-identity, and matched-draw contracts.
 
 ## Verification evidence
 

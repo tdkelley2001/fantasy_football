@@ -10,7 +10,7 @@ from enum import Enum
 
 from fantasy_football.canonical.model import LeagueSnapshot
 from fantasy_football.canonical.serialization import snapshot_to_json
-from fantasy_football.evolving_state import IRPolicy
+from fantasy_football.evolving_state import EvolvingLeagueState, IRPolicy
 from fantasy_football.player_outcomes import PlayerOutcomeModel, projection_class_counts
 from fantasy_football.postseason import ConsolationLadderConfiguration
 from fantasy_football.season_simulator import (
@@ -39,6 +39,7 @@ class MonteCarloConfig:
     )
     consolation_configuration: ConsolationLadderConfiguration | None = None
     require_complete: bool = True
+    initial_evolving_state: EvolvingLeagueState | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.master_seed, bool) or not isinstance(self.master_seed, int):
@@ -57,6 +58,12 @@ class MonteCarloConfig:
             raise MonteCarloError("transaction_policy must be WeeklyTransactionPolicy")
         if not isinstance(self.require_complete, bool):
             raise MonteCarloError("require_complete must be bool")
+        if self.initial_evolving_state is not None and not isinstance(
+            self.initial_evolving_state, EvolvingLeagueState
+        ):
+            raise MonteCarloError(
+                "initial_evolving_state must be EvolvingLeagueState or None"
+            )
 
     @property
     def path_indices(self) -> tuple[int, ...]:
@@ -232,6 +239,10 @@ def simulation_configuration_fingerprint(
         "require_complete": config.require_complete,
         "semantics": _deterministic_value(SIMULATION_SEMANTICS),
     }
+    if config.initial_evolving_state is not None:
+        payload["initial_evolving_state"] = _deterministic_value(
+            config.initial_evolving_state
+        )
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")
@@ -295,6 +306,7 @@ def run_monte_carlo_path(
             transaction_policy=config.transaction_policy,
             postseason_transaction_policy=config.postseason_transaction_policy,
             consolation_configuration=config.consolation_configuration,
+            initial_evolving_state=config.initial_evolving_state,
         )
     except ValueError as exc:
         raise MonteCarloError(f"invalid path {path_index}: {exc}") from exc
