@@ -121,3 +121,14 @@ parameters retain their order, so semantically ordered changes alter identity.
 Named semantics versions are also hashed. Acquisition-count and eligibility-evidence overrides are not exposed
 by the M2.6 runner; adding either later requires including its complete validated
 content in the fingerprint before batch combination is permitted.
+
+## Pre-M4 refresh
+
+The M3 production review found no new league-size, roster-shape, scoring-format,
+or postseason-format constant in the outcome, precision, parallel, or recovery
+layers. Those layers consume the configured canonical team universe and existing
+validated simulation policies. Quick/detailed path budgets and worker counts are
+runtime profiles, not league rules. A corrected reusable-worker check now binds
+each process pool to the seed-bearing Monte Carlo run identity as well as the
+seed-independent, partition-compatible simulation fingerprint; this changes no
+league mechanic. Remaining supported and unsupported modes above are unchanged.

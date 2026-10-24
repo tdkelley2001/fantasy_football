@@ -15,6 +15,7 @@ from fantasy_football.monte_carlo import (
     MonteCarloError,
     MonteCarloPathSummary,
     aggregate_monte_carlo_paths,
+    monte_carlo_run_identity,
     run_monte_carlo_batch,
     run_monte_carlo_path,
     simulation_configuration_fingerprint,
@@ -166,6 +167,14 @@ class ParallelMonteCarloExecutor:
         ):
             raise ParallelExecutionError(
                 "batch configuration does not match initialized simulation identity"
+            )
+        if monte_carlo_run_identity(
+            self._snapshot, config, self._model
+        ) != monte_carlo_run_identity(
+            self._snapshot, self._config, self._model
+        ):
+            raise ParallelExecutionError(
+                "batch run identity does not match initialized executor"
             )
         if not set(config.path_indices).issubset(self._config.path_indices):
             raise ParallelExecutionError(

@@ -15,7 +15,6 @@ from fantasy_football.canonical.model import (
     LineupSlotRule,
     MatchupEntryStatus,
     MatchupPhase,
-    PlayerWeek,
     ProjectionClass,
     ProjectionSource,
     RosterEntry,

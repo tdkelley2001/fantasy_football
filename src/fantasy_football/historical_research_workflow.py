@@ -175,7 +175,7 @@ def _private_output_directory(path: Path, repository_root: Path) -> Path:
         if ignore_file.is_file() and line.strip() and not line.lstrip().startswith("#")
     } if ignore_file.is_file() else set()
     if "outputs/" not in ignored_entries:
-        _fail(f"repository .gitignore must explicitly ignore outputs/ before private research materialization")
+        _fail("repository .gitignore must explicitly ignore outputs/ before private research materialization")
     resolved = path.resolve()
     if resolved == output_root or output_root not in resolved.parents:
         _fail(f"private research output must be a child of ignored directory {output_root}")

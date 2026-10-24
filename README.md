@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0, M1, M2.1–M2.6, and M3.1–M3.5 are **COMPLETE AND ACCEPTED**. M3.6's quick/detailed runtime policies, progressive results, and durable recovery are **IMPLEMENTED — REVIEW PENDING**; M4 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, and bounded multiprocessing are implemented. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+M0–M3.6 are **COMPLETE AND ACCEPTED**. The pre-M4 integration consolidation is **IMPLEMENTED — REVIEW PENDING**; M4 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution, and recovery are implemented. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
 
 ## Authoritative documentation
 
@@ -29,6 +29,7 @@ M0, M1, M2.1–M2.6, and M3.1–M3.5 are **COMPLETE AND ACCEPTED**. M3.6's quick
 - [Player outcome model](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo runner](docs/MONTE_CARLO.md) — provisional score generation, replay, aggregation, league-wide Wilson intervals, bounded multiprocessing, progressive execution, and recovery.
 - [League configuration audit](docs/LEAGUE_CONFIGURATION_AUDIT.md) — standing inventory of API-derived rules, configuration, assumptions, and unsupported modes.
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
+- [Pre-M4 integration audit](docs/PRE_M4_INTEGRATION_AUDIT.md) — end-to-end identity, configuration, storage, performance, and consolidation findings.
 - [Historical research dataset](docs/HISTORICAL_RESEARCH_DATASET.md) — M3.1 immutable projection/actual evidence contract, leakage safeguards, coverage, and limitations.
 - [Outcome-distribution research](docs/OUTCOME_DISTRIBUTION_RESEARCH.md) — accepted M3.2 temporal holdout, candidate comparison, calibration diagnostics, and unverified-evidence limitations.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.
