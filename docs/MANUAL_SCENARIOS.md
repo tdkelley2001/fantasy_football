@@ -24,6 +24,15 @@ assumption identifiers. The input snapshot and state are never modified. Pins
 protect initial automatic completion only and are not persisted into later
 modeled weekly manager behavior.
 
+The comparison also returns one `TeamLineupExplanation` per configured team.
+For every remaining scoring week it runs the accepted M2.1 exact optimizer over
+both complete roster states and reports optimal starter IDs, projected bench
+(ordinary-roster nonstarter) IDs, reserve/IR IDs, explicit vacancies, projected
+lineup totals, and their difference. `changed_scoring_weeks` is a compact index
+of any roster-set, starter-set, vacancy, or projection change. These are
+projection-only explanations of the roster consequence; they are not realized
+scores and do not reinterpret Monte Carlo outcomes.
+
 `evaluate_manual_scenario(...)` completes the scenario, runs baseline and
 hypothetical configurations, verifies exact path coverage and equal score-scenario
 digests for every paired path, and returns standalone M3.4 probability analyses
@@ -123,9 +132,31 @@ Focused tests cover multi-team swaps, asymmetric capacity, protected pins,
 undroppable players, shared-pool round-robin refill, invalid ownership, reordered
 input, immutability, exact all-team reconciliation, zero-delta identity scenarios,
 matched score digests, paired intervals, compact deterministic output, and
-sequential/parallel equality.
+sequential/parallel equality. Separate fixtures prove both a trade that changes
+the exact optimal starter and a bench-only trade that leaves the starter and
+projected lineup points unchanged. The CLI gate publishes a sanitized canonical
+snapshot through the real SQLite store, reads a strict scenario JSON file, runs
+the actual entry point twice, and verifies byte-identical all-team output without
+network access; invalid JSON and output outside `outputs/` fail explicitly.
 
-Acceptance evidence: **16 focused M4 tests** and the complete **636-test
+## M4.3 requirement reconciliation
+
+M4.3 does not introduce a duplicate utility. The accepted M2.3c
+`value_roster()` contract already supplies the required remaining-week utility:
+`test_equal_weight_multiweek_value_and_replacement_diagnostics` proves equal
+week weighting and replacement diagnostics; the nonpositive-pool and
+held/unresolved tests prove missing-access behavior; shared-pool, overlapping
+eligibility, target-adverse, and exhaustive-oracle tests prove exact replacement
+effects; add/drop tests prove one unified resulting-roster value; and the
+representative-pool test records timing and no-network behavior. Known byes and
+other unavailable weeks enter through the canonical week projection contract,
+so a nonpositive or missing projection cannot start. Bench value arises only
+when the exact weekly lineup selects that player or through the approved
+replacement comparison. The implementation is exact rather than a new heuristic
+"fast V(R)"; repeated exact V(R) remains the documented combinatorial performance
+limit.
+
+Acceptance evidence: **20 focused M4 tests** and the complete **640-test
 credential-free repository suite** pass. Python compilation, documentation-link
 validation, Ruff `F,E9`, and Git whitespace checks also pass.
 
