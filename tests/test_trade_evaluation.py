@@ -291,6 +291,66 @@ def test_malformed_registry_and_conflicting_identity_fail_closed() -> None:
         validate_candidate_state_registry(snapshot, duplicate_path)
 
 
+def test_candidate_paths_cannot_exchange_completed_states_even_if_groups_reconcile() -> None:
+    snapshot, _, screening = _screening()
+    registry = build_candidate_state_registry(snapshot, screening)
+    paths = list(registry.paths)
+    left = paths[0]
+    right_index = next(
+        index
+        for index, item in enumerate(paths[1:], start=1)
+        if item.completed_state_sha256 != left.completed_state_sha256
+    )
+    right = paths[right_index]
+    paths[0] = replace(left, completed_state_sha256=right.completed_state_sha256)
+    paths[right_index] = replace(right, completed_state_sha256=left.completed_state_sha256)
+    memberships = {}
+    for path in paths:
+        memberships.setdefault(path.completed_state_sha256, []).append(path.candidate_id)
+    states = tuple(
+        replace(group, candidate_ids=tuple(sorted(memberships[group.completed_state_sha256])))
+        for group in registry.states
+    )
+    forged = replace(registry, paths=tuple(paths), states=states)
+
+    with pytest.raises(TradeEvaluationError, match="path completed state conflicts"):
+        validate_candidate_state_registry(snapshot, forged)
+
+
+def test_wrong_valid_baseline_is_rejected_before_paired_evaluation(monkeypatch) -> None:
+    snapshot, state, screening = _screening()
+    registry = build_candidate_state_registry(snapshot, screening)
+    wrong_baseline = replace(
+        state,
+        current_waiver_priority=tuple(reversed(state.current_waiver_priority)),
+    )
+    calls = 0
+
+    def forbidden(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("paired evaluator must not be called")
+
+    monkeypatch.setattr(evaluation_module, "evaluate_completed_manual_scenario", forbidden)
+    with pytest.raises(TradeEvaluationError, match="baseline state identity differs"):
+        evaluate_trade_candidate_states(
+            snapshot,
+            wrong_baseline,
+            registry,
+            _simulation_config(1),
+            PrescribedModel(),
+            PrecisionConfiguration(0.95, 0.9, 1, 1, 1),
+        )
+    assert calls == 0
+
+
+def test_registry_construction_rejects_screening_baseline_provenance_mismatch() -> None:
+    snapshot, _, screening = _screening()
+    forged = replace(screening, baseline_state_sha256="0" * 64)
+    with pytest.raises(TradeEvaluationError, match="enumeration baseline identities differ"):
+        build_candidate_state_registry(snapshot, forged)
+
+
 def test_registry_and_evaluation_do_not_mutate_inputs_or_call_network(monkeypatch) -> None:
     snapshot, state, screening = _screening()
     before = (snapshot, state, screening)
