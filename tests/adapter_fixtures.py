@@ -170,8 +170,6 @@ def source_bundle() -> EspnSourceBundle:
     player_ids = (-101, 2, 3, 4, 5)
     statuses = {player_id: ("ONTEAM", index) for index, player_id in enumerate(player_ids[:4], 1)}
     statuses[5] = ("FREEAGENT", 0)
-    current_rows = [_player(player_id, *statuses[player_id], None, 2) for player_id in player_ids]
-
     def pages(week: int, role: str, values: dict[int, float | None]) -> tuple[PlayerPage, ...]:
         rows = [_player(player_id, *statuses[player_id], values.get(player_id), week) for player_id in player_ids]
         result = []

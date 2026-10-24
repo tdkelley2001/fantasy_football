@@ -256,6 +256,12 @@ recoverable. Resumed and uninterrupted runs retain identical final batches,
 intervals, checkpoint histories, stopping decisions, and analysis identities.
 M3.6 adds no cross-run completed-scenario cache or distributed recovery.
 
+A reusable M3.5 worker pool is also bound to the seed-bearing run identity, not
+only the partition-compatible simulation fingerprint. This prevents a later
+batch from claiming a different master seed while workers still hold the seed
+installed at pool initialization. Path subsets may vary within the initialized
+range; the model, simulation policy, snapshot, and master seed may not.
+
 The reproducible recovery benchmark is:
 
 ```powershell

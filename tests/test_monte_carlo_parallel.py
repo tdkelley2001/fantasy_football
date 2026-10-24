@@ -143,3 +143,13 @@ def test_reusable_executor_requires_explicit_bounded_lifecycle() -> None:
     )
     with pytest.raises(ParallelExecutionError, match="context manager"):
         executor.run_batch(_config(0, 2))
+
+
+def test_reusable_executor_rejects_batch_with_different_master_seed() -> None:
+    snapshot = _snapshot()
+    initialized = _config(0, 2)
+    with ParallelMonteCarloExecutor(
+        snapshot, initialized, PrescribedModel(), _execution(2, 1)
+    ) as executor:
+        with pytest.raises(ParallelExecutionError, match="run identity"):
+            executor.run_batch(replace(initialized, master_seed=9876))

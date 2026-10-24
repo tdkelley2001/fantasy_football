@@ -14,7 +14,6 @@ from fantasy_football.canonical.model import LeagueSnapshot
 from fantasy_football.monte_carlo import (
     MonteCarloBatchResult,
     MonteCarloConfig,
-    MonteCarloError,
     combine_monte_carlo_batches,
     run_monte_carlo_batch,
 )
