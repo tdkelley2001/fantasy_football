@@ -1,0 +1,310 @@
+from __future__ import annotations
+
+from dataclasses import replace
+import json
+
+import pytest
+
+from fantasy_football.canonical.model import LineupSlotRule, SlotKind
+from fantasy_football.evolving_state import IRPolicy, initialize_evolving_state
+from fantasy_football.monte_carlo import MonteCarloConfig
+from fantasy_football.monte_carlo_parallel import ParallelExecutionConfiguration
+from fantasy_football.monte_carlo_precision import PrecisionConfiguration
+from fantasy_football.scenario_evaluator import (
+    ExplicitRosterChange,
+    ManualScenario,
+    ProtectedPlayerPin,
+    ScenarioEvaluationError,
+    complete_manual_scenario,
+    evaluate_manual_scenario,
+    manual_scenario_comparison_to_json,
+    manual_scenario_from_json,
+)
+from fantasy_football.weekly_transactions import (
+    WaiverBoundaryPolicy,
+    WeeklyTransactionPolicy,
+)
+from tests.test_monte_carlo import PrescribedModel
+from tests.test_season_simulator import _snapshot
+
+
+def _scenario_snapshot():
+    snapshot = _snapshot()
+    players = tuple(
+        replace(item, acquisition_status="FREEAGENT")
+        if item.player_id == -101
+        else item
+        for item in snapshot.players
+    )
+    rules = replace(
+        snapshot.rules,
+        lineup_slots=(
+            LineupSlotRule(0, 1, SlotKind.STARTER, "QB"),
+            LineupSlotRule(21, 1, SlotKind.RESERVE, "IR"),
+        ),
+        position_limits=(),
+    )
+    roster = tuple(item for item in snapshot.roster_entries if item.player_id != -101)
+    return replace(snapshot, rules=rules, players=players, roster_entries=roster)
+
+
+def _state(snapshot=None):
+    snapshot = _scenario_snapshot() if snapshot is None else snapshot
+    return initialize_evolving_state(
+        snapshot,
+        scoring_week=snapshot.first_simulation_week,
+        ir_policy=IRPolicy.PROJECTION_BASED,
+    )
+
+
+def _config(count=4):
+    return MonteCarloConfig(
+        master_seed=8128,
+        path_count=count,
+        first_path_index=0,
+        ir_policy=IRPolicy.PROJECTION_BASED,
+        transaction_policy=WeeklyTransactionPolicy(
+            waiver_boundary=WaiverBoundaryPolicy.MODELED_WEEKLY_V1
+        ),
+    )
+
+
+def test_multi_team_explicit_swap_is_complete_immutable_and_deterministic() -> None:
+    snapshot = _scenario_snapshot()
+    state = _state(snapshot)
+    scenario = ManualScenario(
+        "swap-1-2",
+        (
+            ExplicitRosterChange(2, 2, 1),
+            ExplicitRosterChange(1, 1, 2),
+        ),
+        (ProtectedPlayerPin(2, 1),),
+    )
+    result = complete_manual_scenario(snapshot, state, scenario)
+    owners = {item.player_id: item.team_id for item in result.state.roster_entries}
+    assert owners[1] == 2 and owners[2] == 1
+    assert result.forced_drops == result.automatic_additions == ()
+    assert complete_manual_scenario(snapshot, state, scenario) == result
+    assert {item.player_id: item.team_id for item in state.roster_entries}[1] == 1
+    assert snapshot.roster_entries != result.state.roster_entries
+
+
+def test_asymmetric_transfer_forces_drop_then_refills_from_shared_pool() -> None:
+    snapshot = _scenario_snapshot()
+    state = _state(snapshot)
+    result = complete_manual_scenario(
+        snapshot,
+        state,
+        ManualScenario(
+            "asymmetric",
+            (ExplicitRosterChange(1, 1, 2),),
+            (ProtectedPlayerPin(2, 1),),
+        ),
+    )
+    owners = {item.player_id: item.team_id for item in result.state.roster_entries}
+    assert tuple((item.team_id, item.player_id) for item in result.forced_drops) == ((2, 2),)
+    assert tuple((item.team_id, item.player_id, item.pass_number) for item in result.automatic_additions) == (
+        (1, 2, 1),
+    )
+    assert owners[1] == 2 and owners[2] == 1
+    assert len(owners) == len(set(owners))
+
+
+def test_two_vacancies_refill_in_frozen_priority_round_robin_order() -> None:
+    snapshot = _scenario_snapshot()
+    snapshot = replace(
+        snapshot,
+        rules=replace(snapshot.rules, undroppable_list_enabled=False),
+    )
+    result = complete_manual_scenario(
+        snapshot,
+        _state(snapshot),
+        ManualScenario(
+            "two-releases",
+            (ExplicitRosterChange(1, 1, None), ExplicitRosterChange(2, 2, None)),
+        ),
+    )
+    assert tuple((item.team_id, item.pass_number) for item in result.automatic_additions) == (
+        (1, 1),
+        (2, 1),
+    )
+    assert {item.player_id for item in result.automatic_additions}.issubset({-101, 1, 2})
+
+
+def test_pin_can_make_capacity_correction_infeasible() -> None:
+    snapshot = _scenario_snapshot()
+    with pytest.raises(ScenarioEvaluationError, match="honoring protected pins"):
+        complete_manual_scenario(
+            snapshot,
+            _state(snapshot),
+            ManualScenario(
+                "blocked",
+                (ExplicitRosterChange(1, 1, 2),),
+                (ProtectedPlayerPin(2, 1), ProtectedPlayerPin(2, 2)),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "changes,match",
+    (
+        ((ExplicitRosterChange(999, None, 1),), "unknown or multiply"),
+        ((ExplicitRosterChange(1, 2, 1),), "contradicts current owner"),
+        (
+            (ExplicitRosterChange(1, 1, 2), ExplicitRosterChange(1, 2, 3)),
+            "multiply changed",
+        ),
+        ((ExplicitRosterChange(1, 1, 1),), "identical source"),
+    ),
+)
+def test_invalid_or_contradictory_explicit_changes_fail(changes, match) -> None:
+    snapshot = _scenario_snapshot()
+    with pytest.raises(ScenarioEvaluationError, match=match):
+        complete_manual_scenario(snapshot, _state(snapshot), ManualScenario("bad", changes))
+
+
+def test_unprotected_undroppable_player_cannot_be_forced_out() -> None:
+    snapshot = _scenario_snapshot()
+    snapshot = replace(
+        snapshot,
+        players=tuple(
+            replace(item, is_undroppable=True) if item.player_id == 2 else item
+            for item in snapshot.players
+        ),
+    )
+    with pytest.raises(ScenarioEvaluationError, match="cannot reach ordinary capacity"):
+        complete_manual_scenario(
+            snapshot,
+            _state(snapshot),
+            ManualScenario("protected-by-espn", (ExplicitRosterChange(2, 2, 1),)),
+        )
+
+
+def test_identical_scenario_has_zero_paired_differences_for_every_team() -> None:
+    snapshot = _scenario_snapshot()
+    result = evaluate_manual_scenario(
+        snapshot,
+        _state(snapshot),
+        ManualScenario("identity", ()),
+        _config(),
+        PrescribedModel(),
+        PrecisionConfiguration(0.95, 0.5, 1, 4, 1),
+    )
+    assert result.matched_path_count == 4
+    assert result.baseline.batch.paths[0].scenario_sha256 == result.hypothetical.batch.paths[0].scenario_sha256
+    for team in result.teams:
+        metrics = (team.championship, team.playoff_qualification, *team.final_placements)
+        assert all(item.difference == 0 for item in metrics)
+        assert all(item.unchanged_paths == 4 for item in metrics)
+        assert all(item.interval.method == "paired_discordance_wilson_bonferroni_familywise_v1" for item in metrics)
+        assert all(item.interval.half_width > 0 for item in metrics)
+    assert sum(item.championship.scenario_probability for item in result.teams) == 1
+    for place in range(1, len(result.teams) + 1):
+        assert sum(item.final_placements[place - 1].scenario_probability for item in result.teams) == 1
+
+
+def test_paired_parallel_and_sequential_results_match_except_run_timing() -> None:
+    snapshot = _scenario_snapshot()
+    args = (
+        snapshot,
+        _state(snapshot),
+        ManualScenario(
+            "swap",
+            (ExplicitRosterChange(1, 1, 2), ExplicitRosterChange(2, 2, 1)),
+        ),
+        _config(2),
+        PrescribedModel(),
+        PrecisionConfiguration(0.95, 0.75, 1, 2, 1),
+    )
+    sequential = evaluate_manual_scenario(*args)
+    parallel = evaluate_manual_scenario(
+        *args, parallel_execution=ParallelExecutionConfiguration(2, 1)
+    )
+    assert parallel == sequential
+
+
+def test_paired_diagnostics_capture_pathwise_changes_hidden_by_equal_marginals() -> None:
+    snapshot = _scenario_snapshot()
+    result = evaluate_manual_scenario(
+        snapshot,
+        _state(snapshot),
+        ManualScenario(
+            "paired-churn",
+            (ExplicitRosterChange(1, 1, 2), ExplicitRosterChange(2, 2, 1)),
+        ),
+        _config(4),
+        PrescribedModel(),
+        PrecisionConfiguration(0.95, 0.75, 1, 4, 1),
+    )
+    team_one = next(item for item in result.teams if item.team_id == 1)
+    assert team_one.championship.baseline_probability == 0.5
+    assert team_one.championship.scenario_probability == 0.5
+    assert team_one.championship.difference == 0.0
+    assert (team_one.championship.improved_paths, team_one.championship.worsened_paths) == (2, 2)
+    assert team_one.championship.interval.half_width > 0
+    assert result.baseline.simulation_config_sha256 != result.hypothetical.simulation_config_sha256
+
+
+def test_reordered_changes_and_pins_have_stable_scenario_identity() -> None:
+    snapshot = _scenario_snapshot()
+    state = _state(snapshot)
+    changes = (ExplicitRosterChange(1, 1, 2), ExplicitRosterChange(2, 2, 1))
+    pins = (ProtectedPlayerPin(2, 1), ProtectedPlayerPin(1, 2))
+    first = complete_manual_scenario(snapshot, state, ManualScenario("ordered", changes, pins))
+    second = complete_manual_scenario(
+        snapshot, state, ManualScenario("ordered", tuple(reversed(changes)), tuple(reversed(pins)))
+    )
+    assert first == second
+
+
+def test_simulation_rejects_mismatched_initial_state_policy() -> None:
+    snapshot = _scenario_snapshot()
+    strict = initialize_evolving_state(
+        snapshot, scoring_week=snapshot.first_simulation_week, ir_policy=IRPolicy.STRICT
+    )
+    with pytest.raises(ScenarioEvaluationError, match="IR policies differ"):
+        evaluate_manual_scenario(
+            snapshot,
+            strict,
+            ManualScenario("wrong-policy", ()),
+            _config(1),
+            PrescribedModel(),
+            PrecisionConfiguration(0.95, 0.9, 1, 1, 1),
+        )
+
+
+def test_scenario_json_contract_is_strict_and_order_independent_after_completion() -> None:
+    payload = json.dumps(
+        {
+            "scenario_id": "json-swap",
+            "changes": [
+                {"player_id": 2, "from_team_id": 2, "to_team_id": 1},
+                {"player_id": 1, "from_team_id": 1, "to_team_id": 2},
+            ],
+            "protected_pins": [{"team_id": 2, "player_id": 1}],
+        }
+    )
+    parsed = manual_scenario_from_json(payload)
+    assert parsed.scenario_id == "json-swap"
+    result = complete_manual_scenario(_scenario_snapshot(), _state(), parsed)
+    assert result.scenario_sha256
+    with pytest.raises(ScenarioEvaluationError, match="requires exactly"):
+        manual_scenario_from_json('{"scenario_id":"bad","changes":[]}')
+
+
+def test_compact_comparison_json_is_deterministic_and_omits_path_rows() -> None:
+    snapshot = _scenario_snapshot()
+    result = evaluate_manual_scenario(
+        snapshot,
+        _state(snapshot),
+        ManualScenario("json-output", ()),
+        _config(2),
+        PrescribedModel(),
+        PrecisionConfiguration(0.95, 0.75, 1, 2, 1),
+    )
+    payload = manual_scenario_comparison_to_json(result)
+    assert payload == manual_scenario_comparison_to_json(result)
+    document = json.loads(payload)
+    assert document["comparison_sha256"] == result.comparison_sha256
+    assert "paths" not in document["baseline"]
+    assert len(document["teams"]) == len(snapshot.teams)
