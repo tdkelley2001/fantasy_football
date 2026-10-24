@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0–M4 and the pre-M4 consolidation are **COMPLETE AND ACCEPTED**. M5.1 is **IMPLEMENTED — REVIEW PENDING**; M5.2–M6 remain planned and not started, and M7 is deferred. No legacy implementation is credited toward these statuses.
+M0–M4 and M5.1 are **COMPLETE AND ACCEPTED**. M5.2 is **IMPLEMENTED — REVIEW PENDING**; M5.3–M6 remain planned and not started, and M7 is deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -22,7 +22,7 @@ Dependencies are sequential within each milestone and across the M0 → M7 miles
 
 #### M4 — Manual generalized scenario evaluator [COMPLETE AND ACCEPTED]. Explicit multi-team roster changes, protected pins, deterministic capacity drops then round-robin refills, full legal states, unified replacement-adjusted roster utility, paired baseline comparison, lineup/roster explanations, and churn diagnostics. PASS EVIDENCE: invalid scenarios are rejected, no ownership duplication is possible, every configured team's championship/playoff/placement delta has paired uncertainty, matched sequential/parallel paths reconcile, and the persisted-snapshot CLI workflow is reproducible offline. Accepted after independent review. See `MANUAL_SCENARIOS.md`.
 
-#### M5 — Automated actionable decision search [IN PROGRESS — M5.1 REVIEW PENDING]. M5.1 implements exhaustive finite single-trade generation; screening, simulation, waivers, chains, and combined searches remain unstarted. PASS: recommendations are grounded in executable modeled transitions; candidate search validates feasibility, quality and time cost.
+#### M5 — Automated actionable decision search [IN PROGRESS — M5.2 REVIEW PENDING]. M5.1 provides accepted exhaustive finite single-trade generation. M5.2 adds optional exact two-sided V(R) screens while retaining all candidates by default; simulation, waivers, chains, and combined searches remain unstarted. PASS: recommendations are grounded in executable modeled transitions; candidate search validates feasibility, quality and time cost.
 
 #### M6 — Integrated CLI V1 and release acceptance [NOT STARTED]. One official versioned model, consolidated commands and reports, documentation, unit/property/statistical/performance tests, operational diagnostics and troubleshooting. PASS: refresh → baseline → manual/automated decision analysis works without spreadsheets and satisfies critical requirements.
 
@@ -116,9 +116,9 @@ M4.5 [COMPLETE AND ACCEPTED, 24 October 2026] Add a strict JSON scenario contrac
 
 #### M5 — Automated action searches, divided into explicit release slices
 
-M5.1 [IMPLEMENTED — REVIEW PENDING, 24 October 2026] Exhaustively enumerate configured positive trade shapes over an explicit finite player universe and allowed counterparties. Omitted filters select all correctly owned players in the universe; explicit empty filters select none. Each stable candidate retains exact M4 changes, a complete structurally validated hypothetical state, snapshot/baseline/configuration identities, and execution caveats. Coverage reconciles every raw combination as feasible or rejected; the iterator has no hidden cap or pruning. GATE: hand-counted fixtures and an independent brute-force leaf oracle match production exactly; 17 focused tests and all 658 credential-free tests pass. See `TRADE_CANDIDATES.md`.
+M5.1 [COMPLETE AND ACCEPTED, 24 October 2026] Exhaustively enumerate configured positive trade shapes over an explicit finite player universe and allowed counterparties. Omitted filters select all correctly owned players in the universe; explicit empty filters select none. Each stable candidate retains exact M4 changes, a complete structurally validated hypothetical state, snapshot/baseline/configuration identities, and execution caveats. Coverage reconciles every raw combination as feasible or rejected; the iterator has no hidden cap or pruning. GATE: hand-counted fixtures and an independent brute-force leaf oracle match production exactly; accepted after independent review. See `TRADE_CANDIDATES.md`.
 
-M5.2 Add optional V(R) and separate counterparty-attractiveness screens, with disableable screening and full coverage/status reporting. GATE: exhaustive mode never silently removes a legally feasible candidate.
+M5.2 [IMPLEMENTED — REVIEW PENDING, 24 October 2026] Evaluate every feasible candidate with unchanged unified V(R) for both participants over the baseline and actual completed shared state. Disabled screening retains all candidates. Explicit requester and counterparty minimum deltas are inclusive, unrounded, optional, and reported with structured overlapping reasons without changing structural legality. Coverage reconciles every assessed, retained, and uniquely excluded candidate; incomplete V(R) returns no false complete result. GATE: direct V(R) comparisons and an independent threshold oracle agree; 17 focused and all 675 credential-free tests pass. See `TRADE_CANDIDATES.md`.
 
 M5.3 Add canonical completed-state fingerprinting, path-to-state mapping and single shared paired MC evaluation per unique final state. GATE: distinct sequences with same completed state produce byte-identical results, including CIs.
 
@@ -152,7 +152,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M4 and the pre-M4 consolidation are complete and accepted; M5.1 is implemented for review, and M5.2 remains not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M4 and M5.1 are complete and accepted; M5.2 is implemented for review, and M5.3 remains not started.
 
 ### 12.2 Practical development method
 
