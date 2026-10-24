@@ -152,3 +152,66 @@ untraced (about 159 candidates/second), retaining 11 under a nonnegative
 counterparty-delta screen; a separate traced run peaked at 0.119 MiB. This small
 fixture does not predict live-league performance. Exact V(R), not threshold
 comparison, is the measured computational bottleneck.
+
+## Canonical completed states and shared evaluation (M5.3)
+
+M5.3 deliberately keeps three identities separate:
+
+- The accepted M5.1 candidate ID identifies one proposed transaction path.
+- `m5.3-completed-simulation-state-v1` identifies the normalized authoritative
+  snapshot content and the complete M4-produced `EvolvingLeagueState`.
+- `m5.3-shared-paired-evaluation-v1` identifies the baseline/completed state
+  pair together with the accepted simulation fingerprints and run identities,
+  master seed, exact path range, outcome-model evidence and parameters,
+  transaction/postseason/IR policies, numerical semantics, and precision policy.
+
+`completed_state_fingerprint()` uses the accepted order-normalized canonical
+snapshot identity. The state portion contains all teams' ownership and slot
+assignments, shared availability and holds, dynamic and frozen waiver orders,
+week/cycle/matchup position, season and matchup acquisition counters, IR policy
+and evidence, assumption IDs, and transaction ledger. Snapshot content supplies
+standings, projections and evidence, schedules, eligibility, scoring, roster,
+transaction, and postseason rules. No numeric rounding occurs. The ledger is
+retained because its sequence base and records remain observable in later
+transaction audit output. Candidate labels, explicit-trade descriptions,
+search filters, and M4 explanation records are excluded from state identity;
+they do not alter the completed state and remain on the candidate path.
+
+`build_candidate_state_registry()` produces a deterministic many-to-one map.
+Every `CandidateStatePath` retains its complete M5.2 outcome, which in turn
+retains the M5.1 trade and M4 drops, refills, caveats, and diagnostics. State
+groups and candidate IDs are canonically ordered. Recomputed hashes, mapping
+reconciliation, snapshot provenance, and screening provenance are validated;
+conflicts and collisions fail rather than overwrite records. By default only
+screen-retained paths are eligible, while an explicit inspection mode can map
+excluded paths without evaluating them as recommendations.
+
+`evaluate_trade_candidate_states()` invokes the accepted M4 paired statistical
+engine once per unique completed state. All candidates in that group point to
+the same immutable `ManualScenarioComparison` object, so probabilities, paired
+deltas, path counts, confidence intervals, and all-team reconciliation are not
+recomputed or copied into path-specific numerical results. The narrow
+`evaluate_completed_manual_scenario()` boundary prevents rerunning M4 roster
+completion; it does not change M3/M4 estimators. Worker count is intentionally
+absent from the evaluation key because accepted sequential/parallel execution
+is numerically identical. Its actual numerical configuration and path coverage
+remain included.
+
+Reuse is scoped to one explicit function call. There is no persistent or global
+cache, and a projection/snapshot refresh, changed state, model, seed, path range,
+policy, or precision configuration creates a different key. Future trade chains
+and waiver sequences may use the same identity after they produce a complete
+validated state, but their search and execution are not implemented here.
+
+Focused tests construct distinct transaction records with identical completed
+states, prove that both remain inspectable, count one actual paired call, and
+verify the shared result object. Adversarial tests cover priority, availability,
+counter/state, snapshot, model, seed, path-range and precision isolation;
+reordered candidates; malformed maps and conflicting content; immutability; and
+offline execution. The synthetic exhaustive benchmark has 27 genuine candidate
+paths and 25 unique states: 25 paired evaluations execute and two are avoided.
+It took 1.337 seconds untraced with 1.364 MiB traced peak memory on 24 October 2026.
+This fixture demonstrates exact reuse, not realistic live-league throughput.
+All **10 focused M5.3 tests**, **125 focused M3/M4/M5 integration tests**, and
+the complete **685-test credential-free suite** pass; Ruff `F,E9`, compilation,
+documentation-link, and whitespace checks also pass.

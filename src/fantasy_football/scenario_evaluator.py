@@ -790,11 +790,48 @@ def evaluate_manual_scenario(
 ) -> ManualScenarioComparison:
     """Compare complete baseline/scenario batches with matched player-week draws."""
 
+    completed = complete_manual_scenario(snapshot, baseline_state, scenario)
+    return evaluate_completed_manual_scenario(
+        snapshot,
+        baseline_state,
+        completed,
+        simulation,
+        model,
+        precision,
+        parallel_execution=parallel_execution,
+    )
+
+
+def evaluate_completed_manual_scenario(
+    snapshot: LeagueSnapshot,
+    baseline_state: EvolvingLeagueState,
+    completed: CompletedManualScenario,
+    simulation: MonteCarloConfig,
+    model: PlayerOutcomeModel,
+    precision: PrecisionConfiguration,
+    *,
+    parallel_execution: ParallelExecutionConfiguration | None = None,
+) -> ManualScenarioComparison:
+    """Compare one already validated M4-completed state with the baseline.
+
+    This is the narrow reuse boundary for M5.3. It performs the same paired
+    numerical evaluation as :func:`evaluate_manual_scenario` without executing
+    roster completion a second time.
+    """
+
     if simulation.path_count != precision.maximum_paths:
         _fail("simulation path_count must equal precision maximum_paths")
     if simulation.ir_policy is not baseline_state.ir_policy:
         _fail("simulation and baseline state IR policies differ")
-    completed = complete_manual_scenario(snapshot, baseline_state, scenario)
+    validate_snapshot(snapshot)
+    validate_evolving_state(baseline_state, snapshot)
+    if not isinstance(completed, CompletedManualScenario):
+        _fail("completed scenario must be CompletedManualScenario")
+    if completed.snapshot_id != snapshot.snapshot_id:
+        _fail("completed scenario snapshot identity differs from canonical snapshot")
+    validate_evolving_state(completed.state, snapshot)
+    if completed.state.scoring_week != baseline_state.scoring_week:
+        _fail("completed scenario and baseline scoring weeks differ")
     baseline_config = replace(simulation, initial_evolving_state=baseline_state)
     scenario_config = replace(simulation, initial_evolving_state=completed.state)
     baseline_batch = _run_batch(snapshot, baseline_config, model, parallel_execution)
