@@ -58,6 +58,7 @@ class CompletedStateGroup:
 class CandidateStateRegistry:
     snapshot_id: str
     canonical_snapshot_sha256: str
+    baseline_state_sha256: str
     screening_configuration_sha256: str
     paths: tuple[CandidateStatePath, ...]
     states: tuple[CompletedStateGroup, ...]
@@ -113,6 +114,14 @@ def _hash(payload: object) -> str:
     ).hexdigest()
 
 
+def _evolving_state_sha256(
+    snapshot: LeagueSnapshot,
+    state: EvolvingLeagueState,
+) -> str:
+    validate_evolving_state(state, snapshot)
+    return hashlib.sha256(state_to_json(state, snapshot).encode("utf-8")).hexdigest()
+
+
 def completed_state_fingerprint(
     snapshot: LeagueSnapshot,
     state: EvolvingLeagueState,
@@ -156,6 +165,9 @@ def build_candidate_state_registry(
     if expected_outcomes != len(screening.outcomes):
         _fail("trade screening assessed count does not match outcomes")
     retained = set(screening.retained_candidate_ids)
+    baseline_sha256 = screening.baseline_state_sha256
+    if baseline_sha256 != screening.candidate_enumeration.baseline_state_sha256:
+        _fail("screening and candidate enumeration baseline identities differ")
     outcome_ids = tuple(item.candidate.candidate_id for item in screening.outcomes)
     if len(outcome_ids) != len(set(outcome_ids)):
         _fail("trade screening contains duplicate candidate identities")
@@ -187,6 +199,10 @@ def build_candidate_state_registry(
         seen.add(candidate.candidate_id)
         if candidate.snapshot_id != snapshot.snapshot_id:
             _fail(f"candidate {candidate.candidate_id} snapshot identity is incompatible")
+        if candidate.source_schema_version != snapshot.schema_version:
+            _fail(f"candidate {candidate.candidate_id} schema identity is incompatible")
+        if candidate.baseline_state_sha256 != baseline_sha256:
+            _fail(f"candidate {candidate.candidate_id} baseline identity is incompatible")
         if outcome.screening_configuration_sha256 != screening.screening_configuration_sha256:
             _fail(f"candidate {candidate.candidate_id} screening identity is incompatible")
         state = candidate.completed_scenario.state
@@ -206,6 +222,7 @@ def build_candidate_state_registry(
     registry = CandidateStateRegistry(
         snapshot.snapshot_id or "",
         canonical_snapshot_fingerprint(snapshot),
+        baseline_sha256,
         screening.screening_configuration_sha256,
         tuple(paths),
         states,
@@ -233,8 +250,23 @@ def validate_candidate_state_registry(
         _fail("registry completed states must have unique canonical ordering")
     expected: dict[str, list[str]] = {}
     for path in registry.paths:
-        if path.candidate_id != path.screening_outcome.candidate.candidate_id:
+        outcome = path.screening_outcome
+        candidate = outcome.candidate
+        if path.candidate_id != candidate.candidate_id:
             _fail(f"registry path candidate metadata conflicts for {path.candidate_id}")
+        if candidate.snapshot_id != registry.snapshot_id:
+            _fail(f"registry path candidate snapshot conflicts for {path.candidate_id}")
+        if candidate.source_schema_version != snapshot.schema_version:
+            _fail(f"registry path candidate schema conflicts for {path.candidate_id}")
+        if candidate.baseline_state_sha256 != registry.baseline_state_sha256:
+            _fail(f"registry path candidate baseline conflicts for {path.candidate_id}")
+        if outcome.screening_configuration_sha256 != registry.screening_configuration_sha256:
+            _fail(f"registry path screening provenance conflicts for {path.candidate_id}")
+        actual_state_id = completed_state_fingerprint(
+            snapshot, candidate.completed_scenario.state
+        )
+        if actual_state_id != path.completed_state_sha256:
+            _fail(f"registry path completed state conflicts for {path.candidate_id}")
         expected.setdefault(path.completed_state_sha256, []).append(path.candidate_id)
     if set(expected) != set(state_ids):
         _fail("registry paths and completed-state groups do not reconcile")
@@ -296,6 +328,9 @@ def evaluate_trade_candidate_states(
 
     validate_evolving_state(baseline_state, snapshot)
     validate_candidate_state_registry(snapshot, registry)
+    supplied_baseline_sha256 = _evolving_state_sha256(snapshot, baseline_state)
+    if supplied_baseline_sha256 != registry.baseline_state_sha256:
+        _fail("supplied baseline state identity differs from candidate registry baseline")
     baseline_id = completed_state_fingerprint(snapshot, baseline_state)
     evaluations = []
     links = []

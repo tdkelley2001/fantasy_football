@@ -186,6 +186,14 @@ conflicts and collisions fail rather than overwrite records. By default only
 screen-retained paths are eligible, while an explicit inspection mode can map
 excluded paths without evaluating them as recommendations.
 
+The registry also preserves the accepted M5.1/M5.2 baseline-state SHA-256.
+Validation independently fingerprints each path's actual
+`candidate.completed_scenario.state`; matching path/group labels alone cannot
+authorize a candidate-to-state relationship. Candidate snapshot, schema,
+baseline, screening, and path identities must all reconcile. Evaluation
+recomputes the supplied baseline SHA from the accepted deterministic evolving-
+state serialization and rejects a mismatch before invoking Monte Carlo.
+
 `evaluate_trade_candidate_states()` invokes the accepted M4 paired statistical
 engine once per unique completed state. All candidates in that group point to
 the same immutable `ManualScenarioComparison` object, so probabilities, paired
@@ -212,6 +220,6 @@ offline execution. The synthetic exhaustive benchmark has 27 genuine candidate
 paths and 25 unique states: 25 paired evaluations execute and two are avoided.
 It took 1.337 seconds untraced with 1.364 MiB traced peak memory on 24 October 2026.
 This fixture demonstrates exact reuse, not realistic live-league throughput.
-All **10 focused M5.3 tests**, **125 focused M3/M4/M5 integration tests**, and
-the complete **685-test credential-free suite** pass; Ruff `F,E9`, compilation,
+All **13 focused M5.3 tests**, **129 focused M3/M4/M5 integration tests**, and
+the complete **688-test credential-free suite** pass; Ruff `F,E9`, compilation,
 documentation-link, and whitespace checks also pass.
