@@ -251,6 +251,19 @@ def _run_identity(simulation_config_sha256: str, master_seed: int) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def monte_carlo_run_identity(
+    snapshot: LeagueSnapshot,
+    config: MonteCarloConfig,
+    model: PlayerOutcomeModel,
+) -> str:
+    """Return the accepted seed-bearing M2.6 run identity."""
+
+    return _run_identity(
+        simulation_configuration_fingerprint(snapshot, config, model),
+        config.master_seed,
+    )
+
+
 def _scenario_digest(result) -> str:
     payload = tuple(
         (item.player_id, item.season, item.scoring_week, item.points)

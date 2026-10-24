@@ -36,6 +36,8 @@ class ProbabilityMetric(str, Enum):
 
 
 class StoppingReason(str, Enum):
+    IN_PROGRESS = "in_progress"
+    CANCELLED = "cancelled"
     PRECISION_REACHED = "precision_reached"
     MAXIMUM_PATHS_REACHED = "maximum_paths_reached"
     INCOMPLETE_CAPABILITIES = "incomplete_capabilities"

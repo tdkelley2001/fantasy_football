@@ -216,3 +216,55 @@ explicitly makes its timings incomparable; it cannot measure aggregate child
 resident memory. The small traced matrix observed parent peaks below 0.55 MiB,
 but no total multiprocess memory claim is made without OS-level measurement.
 These are sanitized synthetic fixtures, not live ESPN forecasts.
+
+## M3.6 execution profiles and recovery
+
+`fantasy_football.monte_carlo_execution` adds runtime policy without placing
+execution choices in canonical league data. `QUICK_PROFILE` uses a 95% family
+confidence level, 3-percentage-point target half-width, 100 minimum and 1,000
+maximum paths, 100-path checks, two workers, and 25 paths per task.
+`DETAILED_PROFILE` uses 95%, 1 percentage point, 1,000 minimum and 10,000
+maximum paths, 500-path checks, four workers, and 50 paths per task. These are
+editable convenience profiles, not league rules or different statistical
+models. `SimulationExecutionProfile` supports fully explicit custom policies.
+
+`execute_monte_carlo_profile()` reuses M3.4 analysis and M3.5 workers. After
+each complete configured path range it reconciles the entire prefix, calculates
+the simultaneous league-wide intervals, and emits a
+`ProgressiveExecutionUpdate`. Intermediate updates carry `in_progress` and
+`is_final=False`; they never imply convergence. Final reasons are precision,
+maximum paths, incomplete capability, or explicit cancellation. The callback
+runs only after reconciliation and any configured durable checkpoint write.
+
+`MonteCarloCheckpointStore` writes deterministic JSON beneath an explicitly
+approved local root (`outputs/` by default). It writes and flushes a temporary
+file, calls `fsync`, and atomically replaces the prior checkpoint. The compact
+document contains path summaries and precision history, not the canonical
+snapshot, ESPN payloads, credentials, or research rows. Custom roots are an
+explicit caller approval; normal private checkpoints remain beneath ignored
+`outputs/` and must not be committed.
+
+Recovery verifies the envelope SHA-256; schema; snapshot, league, and season;
+simulation and seed-bearing run identities; model ID and complete parameters;
+precision and execution-policy fingerprints; configured range; exact contiguous
+path prefix; every path invariant; and every saved precision checkpoint against
+a fresh calculation from its path evidence. Corruption, missing or overlapping
+paths, incompatible seeds/models/policies/workers/chunks, and malformed history
+fail before new paths run. A cancelled or externally interrupted run loses at
+most the currently executing range; the preceding atomic checkpoint remains
+recoverable. Resumed and uninterrupted runs retain identical final batches,
+intervals, checkpoint histories, stopping decisions, and analysis identities.
+M3.6 adds no cross-run completed-scenario cache or distributed recovery.
+
+The reproducible recovery benchmark is:
+
+```powershell
+python benchmarks/benchmark_monte_carlo_recovery.py
+```
+
+On the development workstation, a synthetic 100-path/five-checkpoint sequential
+run took 2.005 seconds without persistence and 2.400 seconds with persistence
+(0.394 seconds measured overhead). Its final checkpoint was 72,558 bytes. Full
+validation and recovery of all 100 paths took 0.029 seconds, executed zero new
+paths, and reproduced the final precision result exactly. These measurements are
+synthetic and filesystem-specific.
