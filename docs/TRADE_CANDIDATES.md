@@ -102,6 +102,53 @@ checks also pass.
 
 ## Deferred work
 
-M5.2 adds optional V(R) and counterparty-attractiveness screening. M5.3 adds
-completed-state equivalence identity. Monte Carlo evaluation, waivers, trade
-chains, persistence, and CLI integration remain later milestones.
+M5.3 adds completed-state equivalence identity. Monte Carlo evaluation, waivers,
+trade chains, persistence, and CLI integration remain later milestones.
+
+## Optional V(R) screening (M5.2)
+
+`screen_trade_candidates(snapshot, baseline_state, candidate_enumeration,
+configuration)` assesses every structurally feasible M5.1 candidate. It calls
+the accepted `value_roster()` unchanged and records, for both participants, the
+complete baseline result, the result from the actual M4-completed shared league
+state, and `after.total_value - before.total_value`. Baseline values are cached
+once per participating team. After-values are not computed from the exchanged
+players alone; forced drops, automatic refills, all ownership changes, and the
+changed shared replacement pool remain visible to V(R).
+
+`TradeScreeningConfiguration()` disables screening by default and therefore
+retains every assessed candidate, including negative deltas. When explicitly
+enabled, callers may set an inclusive minimum requester delta, an inclusive
+minimum counterparty delta, or the convenience nonnegative-counterparty option.
+The convenience option conflicts with an explicit counterparty minimum rather
+than silently overriding it. Thresholds are finite and compared without prior
+rounding. No default positive-value rule, positional filter, top-N cutoff, or
+acceptance probability exists.
+
+Every `TradeScreeningOutcome` retains the original candidate, both exact V(R)
+diagnostics, pass/fail state, structured failure reasons, screening identity,
+the `m2.3c-unified-vr-v1` policy label, assumptions, and the candidate's existing
+execution caveats. Screen failure never changes structural feasibility. The
+result embeds the complete normalized pre-screen enumeration.
+
+Coverage separately reports raw M5.1 combinations, structural feasibility and
+infeasibility, assessed candidates, unique retained/excluded candidates, and
+possibly overlapping per-reason exclusion counts. `reason_counts_overlap`
+states when one candidate failed multiple criteria. M5.2 has no partial-result
+or interruption contract: a malformed identity or incomplete/unsupported V(R)
+raises an explicit error and returns no misleading `complete=True` result.
+
+Tests independently recompute both participant deltas, exercise disabled,
+requester-only, counterparty-only, convenience, and combined screens, verify
+threshold equality and the next representable float, cover asymmetric and
+multi-partner completion, prove baseline-cache behavior, and reject incomplete
+valuation. The independent threshold oracle exactly matches retained candidate
+IDs. **17 focused M5.2 tests**, **73 combined M2.3c/M4/M5 tests**, and the full
+**675-test credential-free suite** pass. Compilation, Ruff `F,E9`, documentation
+links, and whitespace checks pass.
+
+The sanitized 27-candidate benchmark assessed every candidate in 0.170 seconds
+untraced (about 159 candidates/second), retaining 11 under a nonnegative
+counterparty-delta screen; a separate traced run peaked at 0.119 MiB. This small
+fixture does not predict live-league performance. Exact V(R), not threshold
+comparison, is the measured computational bottleneck.
