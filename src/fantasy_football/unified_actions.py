@@ -20,6 +20,7 @@ from fantasy_football.evolving_state import (
     AcquisitionAvailability,
     EvolvingLeagueState,
     state_to_json,
+    validate_player_drop_permission,
     validate_evolving_state,
 )
 from fantasy_football.monte_carlo import MonteCarloConfig, run_monte_carlo_batch
@@ -136,6 +137,7 @@ class UnifiedActionCandidate:
     completed_state_sha256: str
     required_assumptions: tuple[str, ...]
     execution_caveats: tuple[str, ...]
+    structural_intermediate_only: bool
     screening_applied: bool
     screening_passed: bool
 
@@ -560,32 +562,37 @@ def _proxy_state_for_incomplete_path(
     snapshot: LeagueSnapshot,
     baseline: EvolvingLeagueState,
     path: IncompleteTradeChain,
+    explicit_drop_player_id: int | None,
 ) -> EvolvingLeagueState | None:
-    """Create a valid authorization proxy without consuming completion pickups."""
+    """Build a capacity-neutral view used only for acquisition authorization.
+
+    Ordinary ownership is intentionally absent: it must not manufacture a
+    capacity repair or affect final drop selection. Reserve occupants remain so
+    the accepted IR authorization checks still apply.
+    """
 
     owners = dict(path.resulting_ownership)
     original = {item.player_id: item for item in baseline.roster_entries}
-    capacity = _ordinary_capacity(snapshot)
-    if _ordinary_count(snapshot, owners, original, path.requesting_team_id) > capacity:
-        return None
-    proxy = dict(owners)
-    temporarily_released: set[int] = set()
-    for team in sorted(snapshot.teams, key=lambda item: item.team_id):
-        excess = _ordinary_count(snapshot, proxy, original, team.team_id) - capacity
-        if excess <= 0:
-            continue
-        removable = sorted(
-            (player for player, owner in proxy.items() if owner == team.team_id),
-            reverse=True,
-        )
-        for player_id in removable[:excess]:
-            proxy.pop(player_id)
-            temporarily_released.add(player_id)
+    if explicit_drop_player_id is not None:
+        if owners.get(explicit_drop_player_id) != path.requesting_team_id:
+            return None
+        validate_player_drop_permission(snapshot, explicit_drop_player_id)
+    reserve_slots = {
+        item.slot_id for item in snapshot.rules.lineup_slots
+        if item.kind.value == "reserve"
+    }
+    proxy = {
+        player_id: owner for player_id, owner in owners.items()
+        if player_id != explicit_drop_player_id
+        and player_id in original
+        and original[player_id].lineup_slot_id in reserve_slots
+        and owner == path.requesting_team_id
+    }
     roster = _build_roster(snapshot, proxy, original)
     if roster is None:
         return None
     return _state_with_roster(
-        baseline, snapshot, roster, released_player_ids=frozenset(temporarily_released),
+        baseline, snapshot, roster, released_player_ids=frozenset(set(owners) - set(proxy)),
         completion_pool=False,
     )
 
@@ -597,10 +604,6 @@ def _explicit_acquisition_completions(
     path: IncompleteTradeChain,
     rejections: Counter,
 ):
-    proxy = _proxy_state_for_incomplete_path(snapshot, baseline, path)
-    if proxy is None:
-        rejections["incomplete_trade_state_not_authorizable"] += 1
-        return
     raw_owners = dict(path.resulting_ownership)
     eligible_players = tuple(
         player for player in configuration.acquisition_player_ids
@@ -608,47 +611,130 @@ def _explicit_acquisition_completions(
     )
     if not eligible_players:
         return
-    local_configuration = replace(configuration, acquisition_player_ids=eligible_players)
     original = {item.player_id: item for item in baseline.roster_entries}
     capacity = _ordinary_capacity(snapshot)
-    for acquisition in _eligible_acquisitions(snapshot, proxy, local_configuration, rejections):
-        owners = dict(raw_owners)
-        if acquisition.dropped_player_id is not None:
-            if owners.get(acquisition.dropped_player_id) != configuration.requesting_team_id:
-                continue
-            owners.pop(acquisition.dropped_player_id)
-        owners[acquisition.acquired_player_id] = configuration.requesting_team_id
-        before = max(0, capacity - _ordinary_count(snapshot, raw_owners, original, configuration.requesting_team_id))
-        after = max(0, capacity - _ordinary_count(snapshot, owners, original, configuration.requesting_team_id))
-        events = path.vacancy_events
-        if before != after:
-            events = (*events, VacancyEvent(
-                len(path.trades) + 1, configuration.requesting_team_id,
-                max(0, after - before), max(0, before - after), after,
-                (max((event.chronological_priority or 0 for event in events), default=0) + 1)
-                if after > before else None,
-                VacancyEventOrigin.EXPLICIT_ACQUISITION,
-            ))
-        updated = replace(path, vacancy_events=events, resulting_ownership=tuple(sorted(owners.items())))
+    intermediate_over_capacity = any(
+        _ordinary_count(snapshot, raw_owners, original, team.team_id) > capacity
+        for team in snapshot.teams
+    )
+    selected_drops = configuration.eligible_drop_player_ids
+    if selected_drops is None:
+        selected_drops = tuple(
+            player for player, owner in raw_owners.items()
+            if owner == configuration.requesting_team_id
+        )
+    selected_drops = tuple(
+        player for player in selected_drops
+        if raw_owners.get(player) == configuration.requesting_team_id
+        and player not in set(configuration.protected_player_ids)
+    )
+    for explicit_drop in (None, *sorted(selected_drops)):
         try:
-            completed = complete_trade_path(
-                snapshot, acquisition.resulting_state, updated,
-                tuple(
-                    ProtectedPlayerPin(raw_owners[player], player)
-                    for player in configuration.protected_player_ids if player in raw_owners
-                ),
-                explicit_releases=(frozenset({acquisition.dropped_player_id}) if acquisition.dropped_player_id is not None else frozenset()),
+            proxy = _proxy_state_for_incomplete_path(
+                snapshot, baseline, path, explicit_drop
             )
         except ValueError as exc:
             rejections[str(exc)] += 1
             continue
-        acquisition_scenario = _acquisition_scenario(snapshot, acquisition)
-        completed = replace(
-            completed,
-            explicit_changes=(*completed.explicit_changes, *acquisition_scenario.explicit_changes),
-            assumptions=tuple(sorted({*completed.assumptions, *acquisition_scenario.assumptions})),
+        if proxy is None:
+            rejections["selected_drop_not_owned_after_trades"] += 1
+            continue
+        local_configuration = replace(
+            configuration,
+            acquisition_player_ids=eligible_players,
+            eligible_drop_player_ids=(),
         )
-        yield acquisition, completed
+        acquisition_search = _acquisition_configuration(local_configuration, proxy)
+        acquisition_search = replace(
+            acquisition_search, include_add_only=True, include_drop_and_add=False
+        )
+        source = iter_immediate_acquisition_candidates(snapshot, proxy, acquisition_search)
+        for authorized in source:
+            if authorized.resulting_state is None or authorized.disposition not in {
+                AcquisitionDisposition.AUTHORIZED_IMMEDIATE,
+                AcquisitionDisposition.CONDITIONAL_WAIVER,
+            }:
+                rejections[authorized.disposition.value] += 1
+                continue
+            acquisition = replace(
+                authorized,
+                candidate_id=_hash({
+                    "contract": "m5.7-incomplete-acquisition-v1",
+                    "source_candidate_id": authorized.candidate_id,
+                    "path_id": path.chain_id,
+                    "explicit_drop_player_id": explicit_drop,
+                }),
+                dropped_player_id=explicit_drop,
+            )
+            owners = dict(raw_owners)
+            if explicit_drop is not None:
+                owners.pop(explicit_drop)
+            owners[acquisition.acquired_player_id] = configuration.requesting_team_id
+            before = max(0, capacity - _ordinary_count(snapshot, raw_owners, original, configuration.requesting_team_id))
+            after = max(0, capacity - _ordinary_count(snapshot, owners, original, configuration.requesting_team_id))
+            events = path.vacancy_events
+            if before != after:
+                events = (*events, VacancyEvent(
+                    len(path.trades) + 1, configuration.requesting_team_id,
+                    max(0, after - before), max(0, before - after), after,
+                    (max((event.chronological_priority or 0 for event in events), default=0) + 1)
+                    if after > before else None,
+                    VacancyEventOrigin.EXPLICIT_ACQUISITION,
+                ))
+            updated = replace(path, vacancy_events=events, resulting_ownership=tuple(sorted(owners.items())))
+            authorization_availability = {
+                item.player_id: item for item in acquisition.resulting_state.availability
+            }
+            affected_availability = {acquisition.acquired_player_id}
+            if explicit_drop is not None:
+                affected_availability.add(explicit_drop)
+            completion_baseline = replace(
+                baseline,
+                current_waiver_priority=acquisition.resulting_state.current_waiver_priority,
+                season_acquisition_counts=acquisition.resulting_state.season_acquisition_counts,
+                matchup_acquisition_counts=acquisition.resulting_state.matchup_acquisition_counts,
+                availability=tuple(
+                    authorization_availability[item.player_id]
+                    if item.player_id in affected_availability else item
+                    for item in baseline.availability
+                ),
+                ledger=acquisition.resulting_state.ledger,
+                assumption_ids=tuple(sorted({
+                    *baseline.assumption_ids,
+                    *acquisition.resulting_state.assumption_ids,
+                })),
+            )
+            try:
+                completed = complete_trade_path(
+                    snapshot, completion_baseline, updated,
+                    tuple(
+                        sorted(
+                            (
+                                *(
+                                    ProtectedPlayerPin(raw_owners[player], player)
+                                    for player in configuration.protected_player_ids
+                                    if player in raw_owners
+                                ),
+                                ProtectedPlayerPin(
+                                    configuration.requesting_team_id,
+                                    acquisition.acquired_player_id,
+                                ),
+                            ),
+                            key=lambda item: (item.team_id, item.player_id),
+                        )
+                    ),
+                    explicit_releases=(frozenset({explicit_drop}) if explicit_drop is not None else frozenset()),
+                )
+            except ValueError as exc:
+                rejections[str(exc)] += 1
+                continue
+            acquisition_scenario = _acquisition_scenario(snapshot, acquisition)
+            completed = replace(
+                completed,
+                explicit_changes=(*completed.explicit_changes, *acquisition_scenario.explicit_changes),
+                assumptions=tuple(sorted({*completed.assumptions, *acquisition_scenario.assumptions})),
+            )
+            yield acquisition, completed, intermediate_over_capacity
 
 
 def _candidate(
@@ -660,6 +746,8 @@ def _candidate(
     actions: tuple[UnifiedAction, ...],
     completed: CompletedManualScenario,
     screening: TradeScreeningConfiguration | None,
+    *,
+    structural_intermediate_only: bool = False,
 ) -> UnifiedActionCandidate:
     conditional = any(action.conditional for action in actions)
     identity = _hash({
@@ -686,12 +774,16 @@ def _candidate(
         assumptions.add("modeled_weekly_waiver_boundary_v1")
         caveats.add("conditional_waiver_success_not_actionable_guarantee")
         caveats.add("higher_priority_claim_behavior_unresolved")
+    if structural_intermediate_only:
+        caveats.add("intermediate_capacity_is_structural_what_if_not_transaction_authorization")
     return UnifiedActionCandidate(
         identity, snapshot.snapshot_id or "", baseline_sha256, configuration_sha256,
         ordering, actions,
         UnifiedExecutionStatus.CONDITIONAL_WAIVER if conditional else UnifiedExecutionStatus.AUTHORIZED,
         completed, completed_state_fingerprint(snapshot, completed.state),
-        tuple(sorted(assumptions)), tuple(sorted(caveats)), applied, passed,
+        tuple(sorted(assumptions)), tuple(sorted(caveats)),
+        structural_intermediate_only,
+        applied, passed,
     )
 
 
@@ -720,10 +812,10 @@ def _attempts(snapshot, state, configuration, config_sha, baseline_sha, rejectio
                     trade.counterparty_team_id, trade.outgoing_player_ids,
                     trade.incoming_player_ids, trade.candidate_id,
                 )
-                for acquisition, completed in _explicit_acquisition_completions(
+                for acquisition, completed, structural_only in _explicit_acquisition_completions(
                     snapshot, state, configuration, path, rejections
                 ):
-                    yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.TRADE_THEN_ACQUISITION, (*_trade_actions(trade, 1), *_acquisition_actions(acquisition, 2)), completed, configuration.screening)
+                    yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.TRADE_THEN_ACQUISITION, (*_trade_actions(trade, 1), *_acquisition_actions(acquisition, 2)), completed, configuration.screening, structural_intermediate_only=structural_only)
     if ActionOrdering.ACQUISITION_THEN_TRADE in orderings:
         for acquisition in _eligible_acquisitions(snapshot, state, configuration, rejections):
             trade_config = _trade_configuration(configuration, acquisition.resulting_state)
@@ -740,10 +832,10 @@ def _attempts(snapshot, state, configuration, config_sha, baseline_sha, rejectio
         chain_config = _chain_configuration(configuration, state)
         if chain_config:
             for chain in iter_incomplete_trade_chains(snapshot, state, chain_config):
-                for acquisition, completed in _explicit_acquisition_completions(
+                for acquisition, completed, structural_only in _explicit_acquisition_completions(
                     snapshot, state, configuration, chain, rejections
                 ):
-                    yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.CHAIN_THEN_ACQUISITION, (*_chain_actions(chain, 1), *_acquisition_actions(acquisition, len(chain.trades) + 1)), completed, configuration.screening)
+                    yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.CHAIN_THEN_ACQUISITION, (*_chain_actions(chain, 1), *_acquisition_actions(acquisition, len(chain.trades) + 1)), completed, configuration.screening, structural_intermediate_only=structural_only)
     if ActionOrdering.MULTIPLE_ACQUISITIONS in orderings:
         def extend(current, completed, actions, used):
             if len(actions) >= 2:

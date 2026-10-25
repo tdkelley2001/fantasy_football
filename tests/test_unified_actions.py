@@ -10,7 +10,9 @@ from fantasy_football.acquisition_candidates import (
     enumerate_immediate_acquisition_candidates,
 )
 from fantasy_football.evolving_state import (
+    AcquisitionAvailability,
     IRPolicy,
+    PlayerAvailability,
     initialize_evolving_state,
     validate_evolving_state,
 )
@@ -189,8 +191,10 @@ def test_two_for_one_trade_preserves_explicit_add_before_completion() -> None:
             maximum_total_action_count=2,
         ),
     )
-    assert len(result.candidates) == 1
-    candidate = result.candidates[0]
+    candidate = next(
+        item for item in result.candidates
+        if item.actions[1].dropped_player_id is None
+    )
     assert candidate.actions[0].outgoing_player_ids == (1, 10)
     assert candidate.actions[1].acquired_player_id == -101
     owners = {item.player_id: item.team_id for item in candidate.completed_scenario.state.roster_entries}
@@ -224,6 +228,120 @@ def test_chain_created_vacancy_preserves_explicit_pickup() -> None:
         assert -101 not in {
             item.player_id for item in candidate.completed_scenario.automatic_additions
         }
+
+
+def test_overfull_requester_authorization_is_capacity_neutral() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    result = enumerate_unified_action_candidates(
+        snapshot,
+        _state(snapshot),
+        replace(
+            _mixed_config(),
+            action_orderings=(ActionOrdering.TRADE_THEN_ACQUISITION,),
+            counterparty_team_ids=(2,),
+            tradeable_player_ids=(1, 2, 10, 11),
+            trade_shapes=(TradeShape(1, 2),),
+            maximum_total_action_count=2,
+        ),
+    )
+    add_only = [item for item in result.candidates if item.actions[-1].dropped_player_id is None]
+    drop_add = [item for item in result.candidates if item.actions[-1].dropped_player_id == 10]
+    assert add_only and drop_add
+    assert all(item.structural_intermediate_only for item in (*add_only, *drop_add))
+    assert all(
+        "intermediate_capacity_is_structural_what_if_not_transaction_authorization"
+        in item.execution_caveats
+        for item in (*add_only, *drop_add)
+    )
+    assert all(
+        item.actions[-1].acquired_player_id == -101
+        for item in (*add_only, *drop_add)
+    )
+    assert all(item.completed_scenario.forced_drops for item in add_only)
+
+
+def test_incomplete_path_explicit_drop_still_honors_protection() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    result = enumerate_unified_action_candidates(
+        snapshot,
+        _state(snapshot),
+        replace(
+            _mixed_config(),
+            action_orderings=(ActionOrdering.TRADE_THEN_ACQUISITION,),
+            counterparty_team_ids=(2,),
+            tradeable_player_ids=(1, 2, 10, 11),
+            trade_shapes=(TradeShape(1, 2),),
+            maximum_total_action_count=2,
+            protected_player_ids=(10,),
+        ),
+    )
+    assert result.candidates
+    assert all(item.actions[-1].dropped_player_id != 10 for item in result.candidates)
+
+
+def test_conditional_waiver_is_preserved_on_incomplete_trade_path() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _state(snapshot)
+    availability = tuple(
+        PlayerAvailability(
+            item.player_id,
+            AcquisitionAvailability.WAIVERS,
+            item.clearance_at_utc,
+            item.hold_until_cycle,
+            item.prohibited_cycle_id,
+            item.source_id,
+        )
+        if item.player_id == -101 else item
+        for item in state.availability
+    )
+    state = replace(state, availability=availability)
+    result = enumerate_unified_action_candidates(
+        snapshot,
+        state,
+        replace(
+            _mixed_config(),
+            action_orderings=(ActionOrdering.TRADE_THEN_ACQUISITION,),
+            counterparty_team_ids=(2,),
+            tradeable_player_ids=(1, 2, 10, 11),
+            trade_shapes=(TradeShape(1, 2),),
+            maximum_total_action_count=2,
+            waiver_boundary=WaiverBoundaryPolicy.MODELED_WEEKLY_V1,
+        ),
+    )
+    assert result.candidates
+    assert all(
+        item.execution_status is UnifiedExecutionStatus.CONDITIONAL_WAIVER
+        for item in result.candidates
+    )
+    assert all(
+        item.completed_scenario.state.current_waiver_priority[-1] == 1
+        for item in result.candidates
+    )
+
+
+def test_incomplete_path_does_not_bypass_prohibited_reentry() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _state(snapshot)
+    availability = tuple(
+        replace(item, prohibited_cycle_id=state.cycle_id)
+        if item.player_id == -101 else item
+        for item in state.availability
+    )
+    state = replace(state, availability=availability)
+    result = enumerate_unified_action_candidates(
+        snapshot,
+        state,
+        replace(
+            _mixed_config(),
+            action_orderings=(ActionOrdering.TRADE_THEN_ACQUISITION,),
+            counterparty_team_ids=(2,),
+            tradeable_player_ids=(1, 2, 10, 11),
+            trade_shapes=(TradeShape(1, 2),),
+            maximum_total_action_count=2,
+        ),
+    )
+    assert result.candidates == ()
+    assert dict(result.coverage.source_rejection_counts)["prohibited"] > 0
 
 
 def test_unified_stream_does_not_exhaust_lazy_trade_source(monkeypatch) -> None:

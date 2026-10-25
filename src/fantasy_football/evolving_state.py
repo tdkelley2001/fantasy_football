@@ -615,6 +615,19 @@ def _validate_drop_permission(snapshot: LeagueSnapshot, player_id: int) -> str |
     return player.undroppable_source_id
 
 
+def validate_player_drop_permission(
+    snapshot: LeagueSnapshot, player_id: int
+) -> str | None:
+    """Validate player-level drop protection without asserting current ownership."""
+
+    if player_id not in _player_map(snapshot):
+        _fail(
+            f"unknown player {player_id}",
+            TransactionErrorCode.UNKNOWN_REFERENCE,
+        )
+    return _validate_drop_permission(snapshot, player_id)
+
+
 def drop_player(
     state: EvolvingLeagueState,
     snapshot: LeagueSnapshot,

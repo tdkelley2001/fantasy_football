@@ -63,6 +63,22 @@ all automatic additions. Acquisition→trade preserves acquisition counts and
 availability in the trade baseline. This V1 sequencing is structural what-if
 analysis; it does not authorize ESPN submissions.
 
+Authorization of an acquisition from an incomplete trade path is deliberately
+separate from final structural completion. A capacity-neutral authorization
+view retains the requester's actual reserve occupants and the selected
+player's real shared availability, counters, waiver order, hold/reentry state,
+IR evidence, and destination eligibility. It contains no ordinary-roster proxy
+drops. An explicit selected drop is checked independently for ownership and
+protection before authorization. The accepted M5.6 completion subsequently
+chooses every permanent capacity drop through V(R); the selected acquisition
+is pinned against being discarded by that completion. If a trade leaves an
+intermediate team over capacity, the candidate is marked
+`structural_intermediate_only` and carries the caveat
+`intermediate_capacity_is_structural_what_if_not_transaction_authorization`.
+That label never claims the combined sequence is immediately ESPN-executable.
+Free-agent authorization and conditional-waiver status describe only the
+explicit acquisition boundary.
+
 ## Identity, screening, and evaluation
 
 Every candidate ID includes snapshot, complete baseline-state identity,
@@ -112,3 +128,9 @@ sanitized four-team mixed trade→add, add→trade, and chain→add universe pro
 20 retained paths and 20 final states, while recording 25 structurally
 infeasible acquisition leaves, in 2.182 seconds with 0.661 MiB traced peak.
 This is a small synthetic generation benchmark and includes no Monte Carlo.
+
+The final incomplete-state authorization follow-up also measured an adversarial
+over-capacity requester case (one-for-two trade followed by the selected
+acquisition): three retained structural paths, two exact final states, 1.783
+seconds, and 0.319 MiB traced peak. This is synthetic correctness/performance
+evidence, not a live ESPN transaction benchmark.
