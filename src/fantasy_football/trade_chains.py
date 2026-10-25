@@ -7,7 +7,7 @@ trade, while roster capacity is repaired once, after the explicit chain.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from enum import StrEnum
 import hashlib
 import itertools
@@ -44,6 +44,11 @@ class TradeChainRejectionCode(StrEnum):
     FINAL_COMPLETION_INFEASIBLE = "final_completion_infeasible"
 
 
+class VacancyEventOrigin(StrEnum):
+    PRE_EXISTING = "pre_existing"
+    TRADE = "trade"
+
+
 @dataclass(frozen=True, slots=True)
 class TradeChainSearchConfiguration:
     requesting_team_id: int
@@ -69,12 +74,13 @@ class ChainTrade:
 
 @dataclass(frozen=True, slots=True)
 class VacancyEvent:
-    transaction_index: int
+    transaction_index: int | None
     team_id: int
     created_places: int
     reduced_places: int
     outstanding_places: int
     chronological_priority: int | None
+    origin: VacancyEventOrigin
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,7 +303,17 @@ def _apply_trade(
         if created or reduced:
             if created:
                 priority_counter += 1
-            events.append(VacancyEvent(transaction_index, team, created, reduced, after, priority_counter if created else None))
+            events.append(
+                VacancyEvent(
+                    transaction_index,
+                    team,
+                    created,
+                    reduced,
+                    after,
+                    priority_counter if created else None,
+                    VacancyEventOrigin.TRADE,
+                )
+            )
         diagnostics.append(IntermediateCapacity(transaction_index, team, count, capacity))
     return result, tuple(events), tuple(diagnostics), priority_counter
 
@@ -360,14 +376,19 @@ def _completion(
     )
 
     # Reconcile final vacancies with their earliest still-relevant creation.
-    priority: dict[int, tuple[int, int]] = {}
+    priority: dict[int, int] = {}
     outstanding: dict[int, int] = {}
     for event in events:
         prior = outstanding.get(event.team_id, 0)
         now = prior + event.created_places - event.reduced_places
         outstanding[event.team_id] = max(0, now)
         if prior == 0 and now > 0:
-            priority[event.team_id] = (event.transaction_index, event.chronological_priority or 0)
+            if event.chronological_priority is None:
+                _fail(
+                    f"vacancy event for team {event.team_id} creates an outstanding "
+                    "vacancy without chronological priority"
+                )
+            priority[event.team_id] = event.chronological_priority
         if now == 0:
             priority.pop(event.team_id, None)
     vacancies = {
@@ -377,9 +398,12 @@ def _completion(
     }
     if set(vacancies) - set(priority):
         _fail(f"vacancy ledger does not establish priority for teams {sorted(set(vacancies) - set(priority))}")
+    active_priorities = [priority[team_id] for team_id in vacancies]
+    if len(active_priorities) != len(set(active_priorities)):
+        _fail("vacancy ledger has conflicting manager priorities")
     additions = []
     player_ids = {item.player_id for item in snapshot.players}
-    for team_id in sorted(vacancies, key=lambda team: (priority[team], team)):
+    for team_id in sorted(vacancies, key=priority.__getitem__):
         for ordinal in range(1, vacancies[team_id] + 1):
             choice = None
             for player_id in sorted(player_ids - set(ownership)):
@@ -403,6 +427,20 @@ def _completion(
             ownership[player_id] = team_id
             additions.append(ScenarioRosterAction("automatic_vacancy_priority_add", team_id, player_id, original_owners.get(player_id), ordinal, roster_value))
     final_state = _state_with_roster(baseline, snapshot, roster, released_player_ids=dropped, completion_pool=False)
+    has_pre_existing = any(event.origin is VacancyEventOrigin.PRE_EXISTING for event in events)
+    if has_pre_existing:
+        final_state = replace(
+            final_state,
+            assumption_ids=tuple(
+                sorted(
+                    {
+                        *final_state.assumption_ids,
+                        "initial_vacancy_frozen_priority_completion_v1",
+                    }
+                )
+            ),
+        )
+        validate_evolving_state(final_state, snapshot)
     requester = original_owners[trades[0].outgoing_player_ids[0]]
     changes = tuple(
         change
@@ -423,7 +461,21 @@ def _completion(
         f"m5.6-{chain_id[:20]}", _sha(core), snapshot.snapshot_id or "", final_state,
         changes, pins, forced, tuple(additions),
         tuple(sorted({requester, *(trade.counterparty_team_id for trade in trades)})),
-        ("immediate_chain_structural_hypothetical_v1", "all_capacity_drops_before_additions_v1", "vacancy_chronology_manager_first_refill_v1", "espn_intermediate_capacity_execution_unverified"),
+        tuple(
+            sorted(
+                {
+                    "immediate_chain_structural_hypothetical_v1",
+                    "all_capacity_drops_before_additions_v1",
+                    "vacancy_chronology_manager_first_refill_v1",
+                    "espn_intermediate_capacity_execution_unverified",
+                    *(
+                        ("initial_vacancy_frozen_priority_completion_v1",)
+                        if has_pre_existing
+                        else ()
+                    ),
+                }
+            )
+        ),
     )
 
 
@@ -446,6 +498,26 @@ def _attempts(
     original_entries = {item.player_id: item for item in baseline.roster_entries}
     initial = {item.player_id: item.team_id for item in baseline.roster_entries}
     pinned = {(item.team_id, item.player_id) for item in search.pins}
+    capacity = _ordinary_capacity(snapshot)
+    initial_events = []
+    priority_counter = 0
+    for team_id in baseline.initial_window_waiver_priority:
+        vacancy_count = _vacancy_after(
+            _ordinary_count(snapshot, initial, original_entries, team_id), capacity
+        )
+        if vacancy_count:
+            priority_counter += 1
+            initial_events.append(
+                VacancyEvent(
+                    None,
+                    team_id,
+                    vacancy_count,
+                    0,
+                    vacancy_count,
+                    priority_counter,
+                    VacancyEventOrigin.PRE_EXISTING,
+                )
+            )
 
     def visit(
         ownership: dict[int, int], trades: tuple[ChainTrade, ...], events: tuple[VacancyEvent, ...],
@@ -517,7 +589,15 @@ def _attempts(
                         trade = ChainTrade(depth + 1, partner, outgoing, incoming, dependency)
                         yield from visit(next_owners, (*trades, trade), (*events, *new_events), (*diagnostics, *new_diagnostics), frozenset(incoming), partner, next_priority)
 
-    yield from visit(initial, (), (), (), frozenset(), None, 0)
+    yield from visit(
+        initial,
+        (),
+        tuple(initial_events),
+        (),
+        frozenset(),
+        None,
+        priority_counter,
+    )
 
 
 def iter_multi_trade_chains(
