@@ -86,7 +86,12 @@ class ActionOrdering(StrEnum):
 
 
 class UnifiedExecutionStatus(StrEnum):
-    AUTHORIZED = "authorized"
+    TRANSACTION_AUTHORIZED = "transaction_authorized"
+    STRUCTURAL_HYPOTHETICAL = "structural_hypothetical"
+
+
+class UnifiedAcquisitionStatus(StrEnum):
+    IMMEDIATE_FREE_AGENT = "immediate_free_agent"
     CONDITIONAL_WAIVER = "conditional_waiver"
 
 
@@ -133,6 +138,7 @@ class UnifiedActionCandidate:
     ordering: ActionOrdering
     actions: tuple[UnifiedAction, ...]
     execution_status: UnifiedExecutionStatus
+    acquisition_status: UnifiedAcquisitionStatus
     completed_scenario: CompletedManualScenario
     completed_state_sha256: str
     required_assumptions: tuple[str, ...]
@@ -779,7 +785,16 @@ def _candidate(
     return UnifiedActionCandidate(
         identity, snapshot.snapshot_id or "", baseline_sha256, configuration_sha256,
         ordering, actions,
-        UnifiedExecutionStatus.CONDITIONAL_WAIVER if conditional else UnifiedExecutionStatus.AUTHORIZED,
+        (
+            UnifiedExecutionStatus.STRUCTURAL_HYPOTHETICAL
+            if structural_intermediate_only
+            else UnifiedExecutionStatus.TRANSACTION_AUTHORIZED
+        ),
+        (
+            UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
+            if conditional
+            else UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
+        ),
         completed, completed_state_fingerprint(snapshot, completed.state),
         tuple(sorted(assumptions)), tuple(sorted(caveats)),
         structural_intermediate_only,
@@ -898,7 +913,10 @@ def enumerate_unified_action_candidates(snapshot, state, configuration):
         UnifiedCompletedStateGroup(state_id, items[0].completed_scenario.state, tuple(sorted(item.candidate_id for item in items)))
         for state_id, items in sorted(groups.items())
     )
-    conditional = sum(item.execution_status is UnifiedExecutionStatus.CONDITIONAL_WAIVER for item in candidates)
+    conditional = sum(
+        item.acquisition_status is UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
+        for item in candidates
+    )
     coverage = UnifiedActionCoverage(
         generated, len(candidates), screened, len(candidates) - conditional, conditional,
         len(completed_states), len(candidates) - len(completed_states),
