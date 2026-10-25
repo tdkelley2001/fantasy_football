@@ -258,10 +258,14 @@ the accepted M4 estimator. This controls the declared finite comparison family;
 it does not correct outcome-model error or establish power to resolve close
 candidates.
 
-Refinement proceeds in synchronized, disjoint path-index blocks for every
-currently competitive finalist. Competitiveness is recalculated from all
-accumulated valid paths after every block, using the same simultaneous family;
-eliminated states cannot re-enter. One baseline block is shared by the entire search; equivalent M5.3
+Refinement keeps two separate sets: every state still statistically competitive
+for the top rank, and the subset currently eligible for another sample block.
+A competitive state that has met its individual all-team precision target stops
+sampling but remains in every ranking reconsideration until a simultaneous
+paired comparison defensibly excludes it. Competitiveness is recalculated after
+every block over the full competitive set; eliminated states cannot re-enter.
+When states have different accumulated coverage, their direct comparison uses
+only the exact common path-index prefix. One baseline block is shared by the entire search; equivalent M5.3
 states share scenario blocks and their immutable M4 comparison. Accepted batches
 are combined only when their exact path coverage reconciles, so initial paths
 are retained once and never resampled or double counted. A state is labeled
@@ -307,11 +311,12 @@ The synthetic benchmark uses four teams, eight players, four trade shapes, and
 two paths per state. It reports 27 raw/feasible/screen-retained candidates, 25
 unique states, 25 initial and 25 refined states, two shared baseline paths, 50
 scenario paths, two candidate evaluations avoided by deduplication, and zero
-unevaluated states. Under Python allocation tracing the follow-up took 55.389
-seconds and peaked at 3.290 MiB on 24 October 2026; tracing dominates this small synthetic
+unevaluated states. Under Python allocation tracing the final follow-up took
+54.945 seconds and peaked at 3.341 MiB on 24 October 2026; tracing dominates this small synthetic
 measurement, so it is not a live-league throughput claim. The follow-up adds
 adversarial coverage for data-selected leaders, all-pair/all-look multiplicity,
-competitive unresolved rankings despite individual precision, and immutable
-coherent progress snapshots. All **18 focused M5.4 tests** and the complete
-**706-test credential-free suite** pass. Ruff `F,E9`, compilation,
+competitive unresolved rankings despite individual precision, unequal matched
+path coverage, genuine statistical exclusion, and immutable coherent progress
+snapshots. All **20 focused M5.4 tests** and the complete **708-test
+credential-free suite** pass. Ruff `F,E9`, compilation,
 documentation-link, and whitespace checks also pass.
