@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import Counter
 from dataclasses import asdict, dataclass, replace
 from enum import StrEnum
-import hashlib
-import json
 
 from fantasy_football.acquisition_candidates import (
     AcquisitionDisposition,
     ImmediateAcquisitionCandidate,
     ImmediateAcquisitionSearchConfiguration,
-    enumerate_immediate_acquisition_candidates,
+    iter_immediate_acquisition_candidates,
 )
 from fantasy_football.canonical.model import LeagueSnapshot
 from fantasy_football.canonical.validation import validate_snapshot
@@ -35,18 +35,29 @@ from fantasy_football.scenario_evaluator import (
     ExplicitRosterChange,
     ManualScenarioComparison,
     ProtectedPlayerPin,
+    _build_roster,
+    _ordinary_capacity,
+    _ordinary_count,
+    _state_with_roster,
     compare_completed_scenario_batches,
 )
 from fantasy_football.trade_candidates import (
     SingleTradeCandidate,
     SingleTradeSearchConfiguration,
     TradeShape,
-    enumerate_single_trade_candidates,
+    iter_single_trade_candidates,
+    iter_single_trade_transitions,
 )
 from fantasy_football.trade_chains import (
+    IncompleteTradeChain,
     TradeChainCandidate,
     TradeChainSearchConfiguration,
-    enumerate_multi_trade_chains,
+    VacancyEvent,
+    VacancyEventOrigin,
+    complete_trade_path,
+    incomplete_single_trade_path,
+    iter_incomplete_trade_chains,
+    iter_multi_trade_chains,
 )
 from fantasy_football.trade_evaluation import completed_state_fingerprint
 from fantasy_football.trade_screening import TradeScreeningConfiguration
@@ -301,6 +312,10 @@ def _validate_configuration(
         for ordering in orderings
     ):
         _fail("maximum_total_action_count is smaller than a requested ordering")
+    if ActionOrdering.STANDALONE_CHAIN in orderings and configuration.maximum_trade_chain_length > configuration.maximum_total_action_count:
+        _fail("standalone chain maximum exceeds maximum_total_action_count")
+    if ActionOrdering.CHAIN_THEN_ACQUISITION in orderings and configuration.maximum_trade_chain_length + 1 > configuration.maximum_total_action_count:
+        _fail("chain-then-acquisition maximum exceeds maximum_total_action_count")
     baseline = hashlib.sha256(state_to_json(state, snapshot).encode()).hexdigest()
     normalized = {
         "contract": "m5.7-unified-action-search-v1",
@@ -529,10 +544,9 @@ def _combine_scenarios(
 
 
 def _eligible_acquisitions(snapshot, state, configuration, rejections):
-    result = enumerate_immediate_acquisition_candidates(
+    for item in iter_immediate_acquisition_candidates(
         snapshot, state, _acquisition_configuration(configuration, state)
-    )
-    for item in result.candidates:
+    ):
         if item.resulting_state is not None and item.disposition in {
             AcquisitionDisposition.AUTHORIZED_IMMEDIATE,
             AcquisitionDisposition.CONDITIONAL_WAIVER,
@@ -540,6 +554,101 @@ def _eligible_acquisitions(snapshot, state, configuration, rejections):
             yield item
         else:
             rejections[item.disposition.value] += 1
+
+
+def _proxy_state_for_incomplete_path(
+    snapshot: LeagueSnapshot,
+    baseline: EvolvingLeagueState,
+    path: IncompleteTradeChain,
+) -> EvolvingLeagueState | None:
+    """Create a valid authorization proxy without consuming completion pickups."""
+
+    owners = dict(path.resulting_ownership)
+    original = {item.player_id: item for item in baseline.roster_entries}
+    capacity = _ordinary_capacity(snapshot)
+    if _ordinary_count(snapshot, owners, original, path.requesting_team_id) > capacity:
+        return None
+    proxy = dict(owners)
+    temporarily_released: set[int] = set()
+    for team in sorted(snapshot.teams, key=lambda item: item.team_id):
+        excess = _ordinary_count(snapshot, proxy, original, team.team_id) - capacity
+        if excess <= 0:
+            continue
+        removable = sorted(
+            (player for player, owner in proxy.items() if owner == team.team_id),
+            reverse=True,
+        )
+        for player_id in removable[:excess]:
+            proxy.pop(player_id)
+            temporarily_released.add(player_id)
+    roster = _build_roster(snapshot, proxy, original)
+    if roster is None:
+        return None
+    return _state_with_roster(
+        baseline, snapshot, roster, released_player_ids=frozenset(temporarily_released),
+        completion_pool=False,
+    )
+
+
+def _explicit_acquisition_completions(
+    snapshot: LeagueSnapshot,
+    baseline: EvolvingLeagueState,
+    configuration: UnifiedActionSearchConfiguration,
+    path: IncompleteTradeChain,
+    rejections: Counter,
+):
+    proxy = _proxy_state_for_incomplete_path(snapshot, baseline, path)
+    if proxy is None:
+        rejections["incomplete_trade_state_not_authorizable"] += 1
+        return
+    raw_owners = dict(path.resulting_ownership)
+    eligible_players = tuple(
+        player for player in configuration.acquisition_player_ids
+        if player not in raw_owners
+    )
+    if not eligible_players:
+        return
+    local_configuration = replace(configuration, acquisition_player_ids=eligible_players)
+    original = {item.player_id: item for item in baseline.roster_entries}
+    capacity = _ordinary_capacity(snapshot)
+    for acquisition in _eligible_acquisitions(snapshot, proxy, local_configuration, rejections):
+        owners = dict(raw_owners)
+        if acquisition.dropped_player_id is not None:
+            if owners.get(acquisition.dropped_player_id) != configuration.requesting_team_id:
+                continue
+            owners.pop(acquisition.dropped_player_id)
+        owners[acquisition.acquired_player_id] = configuration.requesting_team_id
+        before = max(0, capacity - _ordinary_count(snapshot, raw_owners, original, configuration.requesting_team_id))
+        after = max(0, capacity - _ordinary_count(snapshot, owners, original, configuration.requesting_team_id))
+        events = path.vacancy_events
+        if before != after:
+            events = (*events, VacancyEvent(
+                len(path.trades) + 1, configuration.requesting_team_id,
+                max(0, after - before), max(0, before - after), after,
+                (max((event.chronological_priority or 0 for event in events), default=0) + 1)
+                if after > before else None,
+                VacancyEventOrigin.EXPLICIT_ACQUISITION,
+            ))
+        updated = replace(path, vacancy_events=events, resulting_ownership=tuple(sorted(owners.items())))
+        try:
+            completed = complete_trade_path(
+                snapshot, acquisition.resulting_state, updated,
+                tuple(
+                    ProtectedPlayerPin(raw_owners[player], player)
+                    for player in configuration.protected_player_ids if player in raw_owners
+                ),
+                explicit_releases=(frozenset({acquisition.dropped_player_id}) if acquisition.dropped_player_id is not None else frozenset()),
+            )
+        except ValueError as exc:
+            rejections[str(exc)] += 1
+            continue
+        acquisition_scenario = _acquisition_scenario(snapshot, acquisition)
+        completed = replace(
+            completed,
+            explicit_changes=(*completed.explicit_changes, *acquisition_scenario.explicit_changes),
+            assumptions=tuple(sorted({*completed.assumptions, *acquisition_scenario.assumptions})),
+        )
+        yield acquisition, completed
 
 
 def _candidate(
@@ -591,37 +700,35 @@ def _attempts(snapshot, state, configuration, config_sha, baseline_sha, rejectio
     if ActionOrdering.STANDALONE_TRADE in orderings:
         trade_config = _trade_configuration(configuration, state)
         if trade_config:
-            for trade in enumerate_single_trade_candidates(snapshot, state, trade_config).candidates:
+            for trade in iter_single_trade_candidates(snapshot, state, trade_config):
                 yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.STANDALONE_TRADE, _trade_actions(trade, 1), trade.completed_scenario, configuration.screening)
     if ActionOrdering.STANDALONE_CHAIN in orderings:
         chain_config = _chain_configuration(configuration, state)
         if chain_config:
-            for chain in enumerate_multi_trade_chains(snapshot, state, chain_config).candidates:
+            for chain in iter_multi_trade_chains(snapshot, state, chain_config):
                 yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.STANDALONE_CHAIN, _chain_actions(chain, 1), chain.completed_scenario, configuration.screening)
-    initial_acquisitions = None
-    if any(item in orderings for item in {ActionOrdering.STANDALONE_ACQUISITION, ActionOrdering.ACQUISITION_THEN_TRADE, ActionOrdering.MULTIPLE_ACQUISITIONS}):
-        initial_acquisitions = tuple(_eligible_acquisitions(snapshot, state, configuration, rejections))
     if ActionOrdering.STANDALONE_ACQUISITION in orderings:
-        for acquisition in initial_acquisitions or ():
+        for acquisition in _eligible_acquisitions(snapshot, state, configuration, rejections):
             completed = _acquisition_scenario(snapshot, acquisition)
             yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.STANDALONE_ACQUISITION, _acquisition_actions(acquisition, 1), completed, configuration.screening)
     if ActionOrdering.TRADE_THEN_ACQUISITION in orderings:
         trade_config = _trade_configuration(configuration, state)
         if trade_config:
-            for trade in enumerate_single_trade_candidates(snapshot, state, trade_config).candidates:
-                for acquisition in _eligible_acquisitions(snapshot, trade.completed_scenario.state, configuration, rejections):
-                    completed = _combine_scenarios(
-                        snapshot,
-                        trade.completed_scenario,
-                        _acquisition_scenario(snapshot, acquisition),
-                        f"{trade.candidate_id}:{acquisition.candidate_id}",
-                    )
+            for trade in iter_single_trade_transitions(snapshot, state, trade_config):
+                path = incomplete_single_trade_path(
+                    snapshot, state, trade.requesting_team_id,
+                    trade.counterparty_team_id, trade.outgoing_player_ids,
+                    trade.incoming_player_ids, trade.candidate_id,
+                )
+                for acquisition, completed in _explicit_acquisition_completions(
+                    snapshot, state, configuration, path, rejections
+                ):
                     yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.TRADE_THEN_ACQUISITION, (*_trade_actions(trade, 1), *_acquisition_actions(acquisition, 2)), completed, configuration.screening)
     if ActionOrdering.ACQUISITION_THEN_TRADE in orderings:
-        for acquisition in initial_acquisitions or ():
+        for acquisition in _eligible_acquisitions(snapshot, state, configuration, rejections):
             trade_config = _trade_configuration(configuration, acquisition.resulting_state)
             if trade_config:
-                for trade in enumerate_single_trade_candidates(snapshot, acquisition.resulting_state, trade_config).candidates:
+                for trade in iter_single_trade_candidates(snapshot, acquisition.resulting_state, trade_config):
                     completed = _combine_scenarios(
                         snapshot,
                         _acquisition_scenario(snapshot, acquisition),
@@ -632,16 +739,10 @@ def _attempts(snapshot, state, configuration, config_sha, baseline_sha, rejectio
     if ActionOrdering.CHAIN_THEN_ACQUISITION in orderings:
         chain_config = _chain_configuration(configuration, state)
         if chain_config:
-            for chain in enumerate_multi_trade_chains(snapshot, state, chain_config).candidates:
-                if len(chain.trades) + 1 > configuration.maximum_total_action_count:
-                    continue
-                for acquisition in _eligible_acquisitions(snapshot, chain.completed_scenario.state, configuration, rejections):
-                    completed = _combine_scenarios(
-                        snapshot,
-                        chain.completed_scenario,
-                        _acquisition_scenario(snapshot, acquisition),
-                        f"{chain.chain_id}:{acquisition.candidate_id}",
-                    )
+            for chain in iter_incomplete_trade_chains(snapshot, state, chain_config):
+                for acquisition, completed in _explicit_acquisition_completions(
+                    snapshot, state, configuration, chain, rejections
+                ):
                     yield _candidate(snapshot, state, config_sha, baseline_sha, ActionOrdering.CHAIN_THEN_ACQUISITION, (*_chain_actions(chain, 1), *_acquisition_actions(acquisition, len(chain.trades) + 1)), completed, configuration.screening)
     if ActionOrdering.MULTIPLE_ACQUISITIONS in orderings:
         def extend(current, completed, actions, used):
@@ -660,7 +761,7 @@ def _attempts(snapshot, state, configuration, config_sha, baseline_sha, rejectio
                     f"{current.candidate_id}:{next_item.candidate_id}",
                 )
                 yield from extend(next_item, combined, (*actions, *_acquisition_actions(next_item, len(actions) + 1)), used | {next_item.acquired_player_id})
-        for first in initial_acquisitions or ():
+        for first in _eligible_acquisitions(snapshot, state, configuration, rejections):
             yield from extend(
                 first,
                 _acquisition_scenario(snapshot, first),

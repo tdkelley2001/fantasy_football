@@ -53,11 +53,15 @@ claims likely success or resolves higher-priority manager behavior. Held,
 unresolved, and unauthorized paths are counted as source rejections and never
 materialized as executable candidates.
 
-Trade→acquisition and chain→acquisition operate on the accepted fully completed
-trade state, so the explicit acquisition is never overwritten by later
-completion. Acquisition→trade preserves acquisition counts/availability in the
-trade baseline. This V1 sequencing is structural what-if analysis; it does not
-authorize ESPN submissions.
+Trade→acquisition and chain→acquisition preserve the chronological incomplete
+ownership and vacancy ledger. The explicit acquisition is authorized next,
+before deterministic completion chooses any vacancy pickups, and completion is
+then applied exactly once. Thus a two-for-one trade can be followed by the
+selected add-only pickup without that vacancy first being consumed by an
+automatic addition. Capacity drops required by the complete path still precede
+all automatic additions. Acquisition→trade preserves acquisition counts and
+availability in the trade baseline. This V1 sequencing is structural what-if
+analysis; it does not authorize ESPN submissions.
 
 ## Identity, screening, and evaluation
 
@@ -73,17 +77,21 @@ intermediate action. Counterparty thresholds across multi-party paths are
 currently unsupported and fail configuration validation rather than being
 silently approximated.
 
-`evaluate_unified_action_states` runs one shared baseline batch, invokes the
+`evaluate_unified_action_states` runs one fixed shared baseline batch, invokes the
 accepted M4 paired comparison once per unique completed state, and links every
 path to that result. It introduces
 no estimator, confidence interval, random draw, or ranking rule. Progressive
-sampling and multiplicity-aware finalist decisions remain the accepted M5.4
-layer over these grouped states. Conditional-waiver caveats remain path-level
-metadata and must not be presented as actionable certainty.
+sampling and multiplicity-aware finalist decisions are **not integrated by this
+adapter**. Its immutable state groups are the narrow input boundary for later
+M5.4 orchestration work reserved to M5.8. The fixed-batch result therefore makes
+no ranking-resolution or precision-completeness claim. Conditional-waiver
+caveats remain path-level metadata and must not be presented as actionable
+certainty.
 
 ## Coverage and limitations
 
-The lazy iterator emits retained candidates without materializing the universe.
+The lazy iterator consumes accepted lazy trade, chain, and acquisition sources
+incrementally and can emit a prefix without constructing the remaining source universe.
 The materialized interface reports generated/retained/screened paths,
 authorized versus conditional paths, source rejection categories, unique final
 states, reuse, and explicit truncation. A configured cap is rejected by the
@@ -93,14 +101,14 @@ Candidate completeness and Monte Carlo precision are separate claims.
 V1 does not support trade→acquisition→trade interleaving, acquisition insertion
 inside a dependency chain, standalone drops without an addition, competing
 manager claim simulation, waiver success probabilities, future-week streaming,
-M5.8 scheduling, or GUI/background jobs. The unified adapter currently calls
-accepted trade/chain completion at its action-family boundary; it does not
-reinterpret automatic completion pickups as voluntary acquisitions.
+M5.8 scheduling/progressive orchestration, or GUI/background jobs. A requested
+standalone chain or chain→acquisition length that exceeds the unified total
+action limit is rejected explicitly rather than silently omitted.
 
 ## Synthetic benchmark
 
 On 25 October 2026 under Python 3.12 on the development Windows host, the
 sanitized four-team mixed trade→add, add→trade, and chain→add universe produced
 20 retained paths and 20 final states, while recording 25 structurally
-infeasible acquisition leaves, in 2.920 seconds with 0.66 MiB traced peak.
+infeasible acquisition leaves, in 2.182 seconds with 0.661 MiB traced peak.
 This is a small synthetic generation benchmark and includes no Monte Carlo.
