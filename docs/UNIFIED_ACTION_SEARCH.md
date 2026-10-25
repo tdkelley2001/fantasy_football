@@ -47,9 +47,14 @@ all-drops-before-additions completion, and manager-first vacancy priority.
 M5.5 retains authority for free-agent versus waiver/held/unresolved/rostered
 status and typed legality failures.
 
-Free-agent results are `authorized`. A modeled waiver-boundary result is
-`conditional_waiver`; it records successful-claim priority movement but never
-claims likely success or resolves higher-priority manager behavior. Held,
+Execution is represented by two independent stable fields. `execution_status`
+is `transaction_authorized` or `structural_hypothetical`; `acquisition_status`
+is `immediate_free_agent` or `conditional_waiver`. Therefore an over-capacity
+intermediate sequence can never present an unqualified authorized status, and
+both immediate and conditional acquisitions remain distinguishable within
+either sequence class. A modeled conditional waiver records successful-claim
+priority movement but never claims likely success or resolves higher-priority
+manager behavior. Held,
 unresolved, and unauthorized paths are counted as source rejections and never
 materialized as executable candidates.
 
@@ -77,7 +82,8 @@ intermediate team over capacity, the candidate is marked
 `intermediate_capacity_is_structural_what_if_not_transaction_authorization`.
 That label never claims the combined sequence is immediately ESPN-executable.
 Free-agent authorization and conditional-waiver status describe only the
-explicit acquisition boundary.
+explicit acquisition boundary; neither upgrades a structural hypothetical
+sequence to transaction-authorized.
 
 ## Identity, screening, and evaluation
 

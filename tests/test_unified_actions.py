@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -30,6 +30,7 @@ from fantasy_football.trade_evaluation import completed_state_fingerprint
 from fantasy_football.unified_actions import (
     ActionFamily,
     ActionOrdering,
+    UnifiedAcquisitionStatus,
     UnifiedActionError,
     UnifiedActionSearchConfiguration,
     UnifiedExecutionStatus,
@@ -126,6 +127,11 @@ def test_standalone_acquisition_matches_m55_executable_states() -> None:
         and item.disposition is AcquisitionDisposition.AUTHORIZED_IMMEDIATE
     }
     assert {item.completed_state_sha256 for item in unified.candidates} == expected
+    assert all(
+        item.execution_status is UnifiedExecutionStatus.TRANSACTION_AUTHORIZED
+        and item.acquisition_status is UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
+        for item in unified.candidates
+    )
 
 
 def test_standalone_chain_matches_m56_paths() -> None:
@@ -247,7 +253,14 @@ def test_overfull_requester_authorization_is_capacity_neutral() -> None:
     add_only = [item for item in result.candidates if item.actions[-1].dropped_player_id is None]
     drop_add = [item for item in result.candidates if item.actions[-1].dropped_player_id == 10]
     assert add_only and drop_add
+    assert len(result.candidates) == 3
+    assert len(result.completed_states) == 2
     assert all(item.structural_intermediate_only for item in (*add_only, *drop_add))
+    assert all(
+        item.execution_status is UnifiedExecutionStatus.STRUCTURAL_HYPOTHETICAL
+        and item.acquisition_status is UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
+        for item in (*add_only, *drop_add)
+    )
     assert all(
         "intermediate_capacity_is_structural_what_if_not_transaction_authorization"
         in item.execution_caveats
@@ -258,6 +271,14 @@ def test_overfull_requester_authorization_is_capacity_neutral() -> None:
         for item in (*add_only, *drop_add)
     )
     assert all(item.completed_scenario.forced_drops for item in add_only)
+    serialized = asdict(result.candidates[0])
+    assert serialized["execution_status"] == "structural_hypothetical"
+    assert serialized["acquisition_status"] == "immediate_free_agent"
+    assert all(
+        completed_state_fingerprint(snapshot, item.completed_scenario.state)
+        == item.completed_state_sha256
+        for item in result.candidates
+    )
 
 
 def test_incomplete_path_explicit_drop_still_honors_protection() -> None:
@@ -310,7 +331,11 @@ def test_conditional_waiver_is_preserved_on_incomplete_trade_path() -> None:
     )
     assert result.candidates
     assert all(
-        item.execution_status is UnifiedExecutionStatus.CONDITIONAL_WAIVER
+        item.acquisition_status is UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
+        for item in result.candidates
+    )
+    assert all(
+        item.execution_status is UnifiedExecutionStatus.STRUCTURAL_HYPOTHETICAL
         for item in result.candidates
     )
     assert all(
@@ -411,7 +436,7 @@ def test_multiple_acquisitions_are_distinct_and_limits_persist() -> None:
         for item in result.candidates
     )
     assert any(
-        item.execution_status is UnifiedExecutionStatus.CONDITIONAL_WAIVER
+        item.acquisition_status is UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
         for item in result.candidates
     )
 
@@ -443,7 +468,11 @@ def test_conditional_waiver_preserves_priority_and_uncertainty_labels() -> None:
         waiver_boundary=WaiverBoundaryPolicy.MODELED_WEEKLY_V1,
     )
     result = enumerate_unified_action_candidates(snapshot, _state(snapshot), config)
-    claim = next(item for item in result.candidates if item.execution_status is UnifiedExecutionStatus.CONDITIONAL_WAIVER)
+    claim = next(
+        item for item in result.candidates
+        if item.acquisition_status is UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
+    )
+    assert claim.execution_status is UnifiedExecutionStatus.TRANSACTION_AUTHORIZED
     assert claim.completed_scenario.state.current_waiver_priority == (2, 3, 4, 1)
     assert "conditional_waiver_success_not_actionable_guarantee" in claim.execution_caveats
 
