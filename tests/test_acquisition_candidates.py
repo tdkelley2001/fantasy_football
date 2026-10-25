@@ -15,6 +15,9 @@ from fantasy_football.evolving_state import (
     AcquisitionAvailability,
     IRPolicy,
     PlayerAvailability,
+    TransactionErrorCode,
+    TransactionStateError,
+    drop_player,
     initialize_evolving_state,
     state_to_json,
 )
@@ -300,6 +303,168 @@ def test_reordered_inputs_have_stable_identity_and_results() -> None:
     assert first.search_configuration_sha256 == second.search_configuration_sha256
     assert first.candidates == second.candidates
     assert first.coverage == second.coverage
+
+
+def test_mixed_universe_excludes_player_without_ordinary_destination() -> None:
+    snapshot = canonical_snapshot()
+    snapshot = replace(
+        snapshot,
+        players=tuple(
+            replace(item, eligible_lineup_slot_ids=(21,))
+            if item.player_id == 4
+            else item
+            for item in snapshot.players
+        ),
+    )
+    state = _state(snapshot)
+    first = enumerate_immediate_acquisition_candidates(
+        snapshot,
+        state,
+        _configuration(acquisition_player_ids=(4, 3)),
+    )
+    second = enumerate_immediate_acquisition_candidates(
+        snapshot,
+        state,
+        _configuration(acquisition_player_ids=(3, 4)),
+    )
+    assert first == second
+    assert first.coverage.declared_acquisition_player_count == 2
+    assert first.coverage.eligible_acquisition_player_count == 2
+    assert first.coverage.excluded_player_count == 1
+    assert first.coverage.player_exclusions[0].player_id == 4
+    assert (
+        first.coverage.player_exclusions[0].rejection_code
+        == "no_supported_ordinary_destination"
+    )
+    assert {item.acquired_player_id for item in first.candidates} == {3}
+    assert first.coverage.raw_combination_count == len(first.candidates) == 6
+    assert sum(count for _, count in first.coverage.disposition_counts) == 6
+
+
+def test_stable_rejection_codes_cover_transaction_failure_classes() -> None:
+    snapshot = canonical_snapshot()
+    state = _state(snapshot)
+    basic = enumerate_immediate_acquisition_candidates(
+        snapshot, state, _configuration()
+    )
+    by_plan = {
+        (item.dropped_player_id, item.destination_slot_id): item
+        for item in basic.candidates
+    }
+    assert by_plan[(None, 0)].rejection_code == "slot_capacity"
+    assert by_plan[(1, 20)].rejection_code == "undroppable_protected"
+
+    reentry_state = replace(
+        state,
+        availability=tuple(
+            replace(item, prohibited_cycle_id=state.cycle_id)
+            if item.player_id == 3
+            else item
+            for item in state.availability
+        ),
+    )
+    reentry = enumerate_immediate_acquisition_candidates(
+        snapshot,
+        reentry_state,
+        _configuration(eligible_drop_player_ids=(), include_drop_and_add=False),
+    )
+    assert next(
+        item for item in reentry.candidates if item.destination_slot_id == 20
+    ).rejection_code == "prohibited_reentry"
+
+    limited_snapshot = replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            acquisition=replace(snapshot.rules.acquisition, season_limit=0),
+        ),
+    )
+    counts = {team.team_id: 0 for team in snapshot.teams}
+    limited_state = initialize_evolving_state(
+        limited_snapshot,
+        scoring_week=15,
+        ir_policy=IRPolicy.PROJECTION_BASED,
+        season_acquisition_counts=counts,
+    )
+    limited = enumerate_immediate_acquisition_candidates(
+        limited_snapshot,
+        limited_state,
+        _configuration(eligible_drop_player_ids=(), include_drop_and_add=False),
+    )
+    assert next(
+        item for item in limited.candidates if item.destination_slot_id == 20
+    ).rejection_code == "acquisition_limit"
+
+
+def test_position_and_ir_evidence_failures_have_stable_codes() -> None:
+    snapshot = canonical_snapshot()
+    position_snapshot = replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            position_limits=tuple(
+                replace(item, maximum=1) if item.position_id == 1 else item
+                for item in snapshot.rules.position_limits
+            ),
+        ),
+    )
+    position_result = enumerate_immediate_acquisition_candidates(
+        position_snapshot,
+        _state(position_snapshot),
+        _configuration(eligible_drop_player_ids=(), include_drop_and_add=False),
+    )
+    assert next(
+        item for item in position_result.candidates if item.destination_slot_id == 20
+    ).rejection_code == "position_limit"
+
+    strict = initialize_evolving_state(
+        snapshot, scoring_week=15, ir_policy=IRPolicy.STRICT
+    )
+    strict = replace(
+        strict,
+        roster_entries=tuple(
+            replace(item, lineup_slot_id=21) if item.player_id == 1 else item
+            for item in strict.roster_entries
+        ),
+    )
+    ir_result = enumerate_immediate_acquisition_candidates(
+        snapshot,
+        strict,
+        _configuration(eligible_drop_player_ids=(), include_drop_and_add=False),
+    )
+    assert next(
+        item for item in ir_result.candidates if item.destination_slot_id == 20
+    ).rejection_code == "ir_evidence_unresolved"
+
+
+def test_transaction_error_codes_do_not_depend_on_human_message(monkeypatch) -> None:
+    def changed_message(*_args, **_kwargs):
+        raise TransactionStateError(
+            "this wording is intentionally unrelated",
+            TransactionErrorCode.SLOT_CAPACITY,
+        )
+
+    monkeypatch.setattr(
+        "fantasy_football.acquisition_candidates.add_player", changed_message
+    )
+    result = enumerate_immediate_acquisition_candidates(
+        canonical_snapshot(),
+        _state(),
+        _configuration(eligible_drop_player_ids=(), include_drop_and_add=False),
+    )
+    assert all(
+        item.disposition is AcquisitionDisposition.STRUCTURALLY_INFEASIBLE
+        for item in result.candidates
+    )
+    assert {item.rejection_code for item in result.candidates} == {"slot_capacity"}
+
+
+def test_transaction_boundary_ownership_code_is_explicit() -> None:
+    snapshot = canonical_snapshot()
+    state = _state(snapshot)
+    with pytest.raises(TransactionStateError) as captured:
+        drop_player(state, snapshot, team_id=1, player_id=2)
+    assert captured.value.code is TransactionErrorCode.OWNERSHIP
 
 
 def test_inputs_remain_immutable_and_execution_is_offline(monkeypatch) -> None:

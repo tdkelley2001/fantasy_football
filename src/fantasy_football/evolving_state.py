@@ -19,8 +19,32 @@ from fantasy_football.canonical.model import (
 from fantasy_football.canonical.validation import validate_snapshot
 
 
+class TransactionErrorCode(StrEnum):
+    OTHER = "other"
+    UNKNOWN_REFERENCE = "unknown_reference"
+    OWNERSHIP = "ownership"
+    SLOT_CAPACITY = "slot_capacity"
+    POSITION_LIMIT = "position_limit"
+    SLOT_ELIGIBILITY = "slot_eligibility"
+    UNDROPPABLE_PROTECTED = "undroppable_protected"
+    AUTHORIZATION_UNRESOLVED = "authorization_unresolved"
+    ACQUISITION_LIMIT = "acquisition_limit"
+    AVAILABILITY_MISMATCH = "availability_mismatch"
+    PROHIBITED_REENTRY = "prohibited_reentry"
+    IR_EVIDENCE_UNRESOLVED = "ir_evidence_unresolved"
+    IR_CORRECTION_REQUIRED = "ir_correction_required"
+
+
 class TransactionStateError(ValueError):
     """Raised when modeled state or a proposed transaction is illegal."""
+
+    def __init__(
+        self,
+        message: str,
+        code: TransactionErrorCode = TransactionErrorCode.OTHER,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class AcquisitionAvailability(StrEnum):
@@ -182,8 +206,11 @@ def state_to_json(state: EvolvingLeagueState, snapshot: LeagueSnapshot) -> str:
     return json.dumps(asdict(state), indent=2, sort_keys=True, allow_nan=False) + "\n"
 
 
-def _fail(message: str) -> None:
-    raise TransactionStateError(message)
+def _fail(
+    message: str,
+    code: TransactionErrorCode = TransactionErrorCode.OTHER,
+) -> None:
+    raise TransactionStateError(message, code)
 
 
 def _slot_map(snapshot: LeagueSnapshot):
@@ -375,7 +402,10 @@ def validate_evolving_state(state: EvolvingLeagueState, snapshot: LeagueSnapshot
         if slot is None or slot.capacity <= 0:
             _fail(f"player {entry.player_id} occupies unconfigured or zero-capacity slot {entry.lineup_slot_id}")
         if entry.lineup_slot_id not in players[entry.player_id].eligible_lineup_slot_ids:
-            _fail(f"player {entry.player_id} is ineligible for occupied slot {entry.lineup_slot_id}")
+            _fail(
+                f"player {entry.player_id} is ineligible for occupied slot {entry.lineup_slot_id}",
+                TransactionErrorCode.SLOT_ELIGIBILITY,
+            )
         owners[entry.player_id] = entry.team_id
         key = (entry.team_id, entry.lineup_slot_id)
         occupancy[key] = occupancy.get(key, 0) + 1
@@ -383,12 +413,18 @@ def validate_evolving_state(state: EvolvingLeagueState, snapshot: LeagueSnapshot
         position_counts[position_key] = position_counts.get(position_key, 0) + 1
     for (team_id, slot_id), count in occupancy.items():
         if count > slots[slot_id].capacity:
-            _fail(f"team {team_id} slot {slot_id} occupancy {count} exceeds capacity {slots[slot_id].capacity}")
+            _fail(
+                f"team {team_id} slot {slot_id} occupancy {count} exceeds capacity {slots[slot_id].capacity}",
+                TransactionErrorCode.SLOT_CAPACITY,
+            )
     limits = {item.position_id: item.maximum for item in snapshot.rules.position_limits}
     for (team_id, position_id), count in position_counts.items():
         maximum = limits.get(position_id)
         if maximum is not None and count > maximum:
-            _fail(f"team {team_id} position {position_id} count {count} exceeds limit {maximum}")
+            _fail(
+                f"team {team_id} position {position_id} count {count} exceeds limit {maximum}",
+                TransactionErrorCode.POSITION_LIMIT,
+            )
     availability = _availability_map(state)
     if len(availability) != len(state.availability) or set(availability) != set(players):
         _fail("availability must contain exactly one record for every canonical player")
@@ -544,10 +580,16 @@ def _replace_availability(
 
 def _validate_drop_permission(snapshot: LeagueSnapshot, player_id: int) -> str | None:
     if snapshot.schema_version < 3:
-        _fail("schema-v2 snapshot lacks player-level undroppable evidence")
+        _fail(
+            "schema-v2 snapshot lacks player-level undroppable evidence",
+            TransactionErrorCode.AUTHORIZATION_UNRESOLVED,
+        )
     enabled = snapshot.rules.undroppable_list_enabled
     if enabled is None:
-        _fail("undroppable-list enablement is unknown")
+        _fail(
+            "undroppable-list enablement is unknown",
+            TransactionErrorCode.AUTHORIZATION_UNRESOLVED,
+        )
     if enabled is False:
         return snapshot.rules.undroppable_list_source_id
     interpretation = next(
@@ -555,12 +597,21 @@ def _validate_drop_permission(snapshot: LeagueSnapshot, player_id: int) -> str |
         None,
     )
     if interpretation is None or interpretation.status is not InterpretationStatus.UNDERSTOOD:
-        _fail("player.droppable polarity is not verified for automatic drop authorization")
+        _fail(
+            "player.droppable polarity is not verified for automatic drop authorization",
+            TransactionErrorCode.AUTHORIZATION_UNRESOLVED,
+        )
     player = _player_map(snapshot)[player_id]
     if player.is_undroppable is None:
-        _fail(f"player {player_id} undroppable status is unknown")
+        _fail(
+            f"player {player_id} undroppable status is unknown",
+            TransactionErrorCode.AUTHORIZATION_UNRESOLVED,
+        )
     if player.is_undroppable:
-        _fail(f"player {player_id} is protected by the enabled ESPN undroppable list")
+        _fail(
+            f"player {player_id} is protected by the enabled ESPN undroppable list",
+            TransactionErrorCode.UNDROPPABLE_PROTECTED,
+        )
     return player.undroppable_source_id
 
 
@@ -575,7 +626,10 @@ def drop_player(
     validate_evolving_state(state, snapshot)
     entry = next((item for item in state.roster_entries if item.player_id == player_id), None)
     if entry is None or entry.team_id != team_id:
-        _fail(f"team {team_id} does not own player {player_id}")
+        _fail(
+            f"team {team_id} does not own player {player_id}",
+            TransactionErrorCode.OWNERSHIP,
+        )
     evidence = _validate_drop_permission(snapshot, player_id)
     prior = _availability_map(state)[player_id]
     held = PlayerAvailability(
@@ -605,9 +659,15 @@ def _check_acquisition_count(state: EvolvingLeagueState, snapshot: LeagueSnapsho
             continue
         count = counts[team_id]
         if count is None:
-            _fail(f"team {team_id} {label} acquisition count is unknown; finite limit {limit} cannot be authorized")
+            _fail(
+                f"team {team_id} {label} acquisition count is unknown; finite limit {limit} cannot be authorized",
+                TransactionErrorCode.AUTHORIZATION_UNRESOLVED,
+            )
         if count >= limit:
-            _fail(f"team {team_id} has reached {label} acquisition limit {limit}")
+            _fail(
+                f"team {team_id} has reached {label} acquisition limit {limit}",
+                TransactionErrorCode.ACQUISITION_LIMIT,
+            )
 
 
 def _strict_ir_evidence_map(state: EvolvingLeagueState) -> dict[int, IREligibilityEvidence]:
@@ -659,18 +719,33 @@ def add_player(
     validate_evolving_state(state, snapshot)
     players = _player_map(snapshot)
     if team_id not in state.current_waiver_priority or player_id not in players:
-        _fail(f"unknown team {team_id} or player {player_id}")
+        _fail(
+            f"unknown team {team_id} or player {player_id}",
+            TransactionErrorCode.UNKNOWN_REFERENCE,
+        )
     available = _availability_map(state)[player_id]
     required = AcquisitionAvailability.WAIVERS if phase is TransactionPhase.WAIVER else AcquisitionAvailability.FREE_AGENT
     if available.status is not required:
-        _fail(f"player {player_id} is {available.status.value}, not {required.value}")
+        _fail(
+            f"player {player_id} is {available.status.value}, not {required.value}",
+            TransactionErrorCode.AVAILABILITY_MISMATCH,
+        )
     if available.prohibited_cycle_id == state.cycle_id:
-        _fail(f"player {player_id} is prohibited from reentry in cycle {state.cycle_id}")
+        _fail(
+            f"player {player_id} is prohibited from reentry in cycle {state.cycle_id}",
+            TransactionErrorCode.PROHIBITED_REENTRY,
+        )
     slot = _slot_map(snapshot).get(lineup_slot_id)
     if slot is None or slot.capacity <= 0 or slot.kind is SlotKind.RESERVE:
-        _fail(f"lineup slot {lineup_slot_id} is not an ordinary configured destination")
+        _fail(
+            f"lineup slot {lineup_slot_id} is not an ordinary configured destination",
+            TransactionErrorCode.SLOT_ELIGIBILITY,
+        )
     if lineup_slot_id not in players[player_id].eligible_lineup_slot_ids:
-        _fail(f"player {player_id} is ineligible for slot {lineup_slot_id}")
+        _fail(
+            f"player {player_id} is ineligible for slot {lineup_slot_id}",
+            TransactionErrorCode.SLOT_ELIGIBILITY,
+        )
     _check_acquisition_count(state, snapshot, team_id)
     if state.ir_policy is IRPolicy.STRICT:
         reserve_ids = {
@@ -687,7 +762,8 @@ def add_player(
         if unresolved:
             _fail(
                 f"team {team_id} strict IR acquisition legality is unresolved for reserve occupant(s) {unresolved}; "
-                "separately verified evidence is required"
+                "separately verified evidence is required",
+                TransactionErrorCode.IR_EVIDENCE_UNRESOLVED,
             )
         ineligible = tuple(
             player_id for player_id in reserve_players
@@ -696,7 +772,8 @@ def add_player(
         if ineligible:
             _fail(
                 f"team {team_id} has IR-ineligible reserve occupant(s) {ineligible}; "
-                "explicit roster correction is required before acquisition"
+                "explicit roster correction is required before acquisition",
+                TransactionErrorCode.IR_CORRECTION_REQUIRED,
             )
     owners = {item.player_id: item.team_id for item in state.roster_entries}
     blockers = tuple(
@@ -706,7 +783,8 @@ def add_player(
     if blockers:
         _fail(
             f"team {team_id} has projection-based recovered reserve occupant(s) {blockers}; "
-            "explicit roster correction is required before acquisition"
+            "explicit roster correction is required before acquisition",
+            TransactionErrorCode.IR_CORRECTION_REQUIRED,
         )
     entry = RosterEntry(player_id, team_id, lineup_slot_id, team_id)
     rostered = PlayerAvailability(player_id, AcquisitionAvailability.ROSTERED, None, None, None, available.source_id)

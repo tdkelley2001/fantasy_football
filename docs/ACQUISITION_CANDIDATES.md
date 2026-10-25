@@ -52,11 +52,24 @@ identity separately binds snapshot/schema, baseline-state hash, normalized
 search configuration, requester, player, selected drop, and destination. A
 hypothetical conditional waiver state is not proof of real-world authorization.
 
+Transaction rejection classification uses `TransactionErrorCode`, carried by
+the accepted `TransactionStateError` boundary independently of its display
+message. Capacity, position-limit, slot eligibility, ownership, protection,
+acquisition-limit, prohibited-reentry, IR-evidence, and IR-correction failures
+therefore map to stable structural/prohibited/unresolved dispositions without
+re-parsing exception prose. Untagged legacy failures conservatively remain
+unresolved. Candidate records expose the stable code alongside the unchanged
+human-readable reason.
+
 ## Coverage and limitations
 
 Coverage reports declared and status-eligible acquisition counts, declared
 drops, raw leaves, structural feasibility, each exclusive disposition, and
-rejection reasons. Disposition counts reconcile exactly to raw leaves. Synthetic
+stable rejection-code and display-reason counts. A player with no eligible
+configured ordinary destination contributes no fabricated leaf; coverage
+records a `no_supported_ordinary_destination` player exclusion while continuing
+all other players. Raw combinations and dispositions reconcile over the actual
+finite destination leaves, separately from these player exclusions. Synthetic
 tests establish code behavior only; ESPN waiver clearance timing and competing
 claim behavior remain unsupported. FAAB and other waiver policies cannot use
 the modeled traditional-waiver boundary.
@@ -66,15 +79,17 @@ statistical ranking, job orchestration, and UI remain deferred.
 
 ## Verification evidence
 
-The focused suite has 18 tests covering the hand-counted exhaustive oracle,
+The focused suite has 23 tests covering the hand-counted exhaustive oracle,
 add-only and replacement capacity, protected drops, free-agent and waiver
 semantics, holds and unresolved status, existing ownership, priority,
 traditional-waiver gating, omitted versus empty filters, reordered input,
-immutability, and offline execution. The complete credential-free repository
-suite has 727 passing tests.
+immutability, stable coded capacity/position/protection/limit/ownership/IR/reentry
+failures, message-independent classification, mixed destination-less universes,
+and offline execution. The complete credential-free repository suite has 732
+passing tests.
 
 The sanitized three-player/two-drop/two-destination benchmark enumerated all 18
-leaves in 0.117 seconds with 0.047 MiB traced peak memory on 24 October 2026.
+leaves in 0.116 seconds with 0.044 MiB traced peak memory on 24 October 2026.
 It found four structurally executable leaves: two authorized free-agent actions
 and two conditional waiver scenarios. This is a small synthetic reference
 measurement, not a live ESPN or full-league throughput claim.

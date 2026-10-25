@@ -15,6 +15,7 @@ from fantasy_football.evolving_state import (
     AcquisitionAvailability,
     EvolvingLeagueState,
     TransactionPhase,
+    TransactionErrorCode,
     TransactionStateError,
     add_player,
     apply_successful_waiver_priority,
@@ -88,8 +89,16 @@ class ImmediateAcquisitionCandidate:
     required_assumptions: tuple[str, ...]
     unresolved_evidence: tuple[str, ...]
     execution_caveats: tuple[str, ...]
+    rejection_code: str | None
     rejection_reason: str | None
     resulting_state: EvolvingLeagueState | None
+
+
+@dataclass(frozen=True, slots=True)
+class AcquisitionPlayerExclusion:
+    player_id: int
+    rejection_code: str
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +106,8 @@ class ImmediateAcquisitionCoverage:
     declared_acquisition_player_count: int
     eligible_acquisition_player_count: int
     declared_drop_player_count: int
+    excluded_player_count: int
+    player_exclusions: tuple[AcquisitionPlayerExclusion, ...]
     raw_combination_count: int
     structurally_feasible_count: int
     structurally_infeasible_count: int
@@ -105,6 +116,7 @@ class ImmediateAcquisitionCoverage:
     unresolved_count: int
     prohibited_count: int
     disposition_counts: tuple[tuple[str, int], ...]
+    rejection_code_counts: tuple[tuple[str, int], ...]
     rejection_reason_counts: tuple[tuple[str, int], ...]
     complete: bool
 
@@ -126,6 +138,7 @@ class _ValidatedSearch:
     acquisition_ids: tuple[int, ...]
     drop_ids: tuple[int, ...]
     destinations: tuple[tuple[int, tuple[int, ...]], ...]
+    exclusions: tuple[AcquisitionPlayerExclusion, ...]
     include_add_only: bool
     include_drop_and_add: bool
     waiver_boundary: WaiverBoundaryPolicy
@@ -245,9 +258,15 @@ def _validate_search(
         )
         for player_id in acquisitions
     )
-    if any(not slots for _, slots in destinations):
-        missing = [player_id for player_id, slots in destinations if not slots]
-        _fail(f"acquisition players have no configured ordinary destination: {missing}")
+    exclusions = tuple(
+        AcquisitionPlayerExclusion(
+            player_id,
+            "no_supported_ordinary_destination",
+            "player has no eligible configured ordinary destination",
+        )
+        for player_id, slots in destinations
+        if not slots
+    )
 
     normalized = {
         "contract": "m5.5-immediate-acquisition-search-v1",
@@ -273,6 +292,7 @@ def _validate_search(
         acquisitions,
         drops,
         destinations,
+        exclusions,
         configuration.include_add_only,
         configuration.include_drop_and_add,
         configuration.waiver_boundary,
@@ -306,12 +326,23 @@ def _candidate_id(snapshot: LeagueSnapshot, search: _ValidatedSearch, player_id:
     ).hexdigest()
 
 
-def _classify_failure(message: str) -> AcquisitionDisposition:
-    if any(token in message for token in ("unknown", "unresolved", "evidence", "polarity")):
-        return AcquisitionDisposition.UNRESOLVED
-    if any(token in message for token in ("protected", "limit", "prohibited", "does not own")):
+def _classify_failure(code: TransactionErrorCode) -> AcquisitionDisposition:
+    if code in {
+        TransactionErrorCode.SLOT_CAPACITY,
+        TransactionErrorCode.POSITION_LIMIT,
+        TransactionErrorCode.SLOT_ELIGIBILITY,
+    }:
+        return AcquisitionDisposition.STRUCTURALLY_INFEASIBLE
+    if code in {
+        TransactionErrorCode.OWNERSHIP,
+        TransactionErrorCode.UNDROPPABLE_PROTECTED,
+        TransactionErrorCode.ACQUISITION_LIMIT,
+        TransactionErrorCode.AVAILABILITY_MISMATCH,
+        TransactionErrorCode.PROHIBITED_REENTRY,
+        TransactionErrorCode.IR_CORRECTION_REQUIRED,
+    }:
         return AcquisitionDisposition.PROHIBITED
-    return AcquisitionDisposition.STRUCTURALLY_INFEASIBLE
+    return AcquisitionDisposition.UNRESOLVED
 
 
 def _attempt(
@@ -337,14 +368,17 @@ def _attempt(
     unresolved: tuple[str, ...] = ()
     caveats = ("espn_transaction_not_executed",)
     reason = None
+    rejection_code = None
     resulting = None
     structural = False
 
     if availability.status is AcquisitionAvailability.ROSTERED:
         disposition = AcquisitionDisposition.PROHIBITED
+        rejection_code = "player_already_rostered"
         reason = "player is already rostered and is not a standalone acquisition"
     elif availability.status in {AcquisitionAvailability.HOLD, AcquisitionAvailability.UNRESOLVED}:
         disposition = AcquisitionDisposition.UNRESOLVED
+        rejection_code = "player_availability_unresolved"
         reason = f"player acquisition availability is {availability.status.value}"
         unresolved = ("player_specific_acquisition_availability",)
     else:
@@ -398,12 +432,14 @@ def _attempt(
                 )
             else:
                 disposition = AcquisitionDisposition.UNRESOLVED
+                rejection_code = "waiver_processing_boundary_unresolved"
                 unresolved = ("waiver_processing_boundary",)
                 reason = "waiver processing boundary is unresolved"
                 caveats += ("conditional_claim_not_materialized",)
         except TransactionStateError as exc:
             reason = str(exc)
-            disposition = _classify_failure(reason)
+            rejection_code = exc.code.value
+            disposition = _classify_failure(exc.code)
             unresolved = (
                 ("transaction_authorization",)
                 if disposition is AcquisitionDisposition.UNRESOLVED
@@ -428,6 +464,7 @@ def _attempt(
         assumptions,
         unresolved,
         tuple(sorted(caveats)),
+        rejection_code,
         reason,
         resulting,
     )
@@ -471,6 +508,11 @@ def enumerate_immediate_acquisition_candidates(
     reasons = Counter(
         item.rejection_reason for item in candidates if item.rejection_reason is not None
     )
+    rejection_codes = Counter(
+        item.rejection_code
+        for item in candidates
+        if item.rejection_code is not None
+    )
     structural_count = sum(item.structurally_feasible for item in candidates)
     raw_count = len(candidates)
     if raw_count != sum(dispositions.values()):
@@ -479,6 +521,8 @@ def enumerate_immediate_acquisition_candidates(
         len(search.declared_acquisition_ids),
         len(search.acquisition_ids),
         len(search.drop_ids),
+        len(search.exclusions),
+        search.exclusions,
         raw_count,
         structural_count,
         raw_count - structural_count,
@@ -490,6 +534,7 @@ def enumerate_immediate_acquisition_candidates(
             (item.value, dispositions[item.value])
             for item in AcquisitionDisposition
         ),
+        tuple(sorted(rejection_codes.items())),
         tuple(sorted(reasons.items())),
         True,
     )
