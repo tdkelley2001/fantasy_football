@@ -1,6 +1,7 @@
 # Immediate multi-trade chains (M5.6)
 
-Status: **IMPLEMENTED — REVIEW PENDING**.
+Status: **COMPLETE AND ACCEPTED**. M5.7 composes this contract without changing
+its dependency or completion semantics.
 
 `fantasy_football.trade_chains` is the deterministic reference for immediate
 multi-trade what-if paths. It implements the policies approved in

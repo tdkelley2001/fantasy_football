@@ -1,0 +1,106 @@
+# Unified immediate action search (M5.7)
+
+Status: **IMPLEMENTED — REVIEW PENDING**.
+
+`fantasy_football.unified_actions` composes the accepted M5.1, M5.5, and M5.6
+references. It does not reimplement trade legality, acquisition authorization,
+roster valuation, final-state identity, or Monte Carlo statistics.
+
+## Supported finite grammar
+
+The caller independently selects action families and exact orderings. V1
+supports:
+
+- standalone trade;
+- standalone multi-trade chain;
+- standalone immediate acquisition or drop-and-add;
+- trade then acquisition;
+- acquisition then trade;
+- chain then acquisition; and
+- two or more acquisitions up to the configured total-action limit.
+
+An acquisition between dependent trade steps is intentionally unsupported.
+It neither satisfies nor resets M5.6's rule that trade `n` must spend a player
+acquired in trade `n - 1`. Future grammar extensions must preserve that fact
+explicitly rather than inferring dependency from general ownership history.
+
+Configuration separately specifies requester, allowed families/orderings,
+counterparties, tradeable players, acquisition players, drop universe, trade
+shapes, chain lengths, total actions, availability filter, waiver boundary,
+protected players, optional requester-only V(R) screening, and an optional
+materialization limit. Omitted drop/status filters retain M5.5 semantics;
+explicitly empty tuples mean no selected drops/statuses. Configuration identity
+normalizes all unordered inputs.
+
+## Chronology and authorization
+
+Each source action is generated against the preceding action's resulting
+immutable state. Ownership, availability, acquisition counts, holds,
+same-cycle restrictions, waiver priority, IR restrictions, and protection are
+therefore revalidated at every acquisition or trade boundary. A player cannot
+be reused by a former owner or acquired twice. Protected players are excluded
+from explicit trade and drop choices.
+
+M5.6 retains authority for trade-chain dependency, partner chronology,
+pre-existing/trade-created vacancy events, temporary imbalance diagnostics,
+all-drops-before-additions completion, and manager-first vacancy priority.
+M5.5 retains authority for free-agent versus waiver/held/unresolved/rostered
+status and typed legality failures.
+
+Free-agent results are `authorized`. A modeled waiver-boundary result is
+`conditional_waiver`; it records successful-claim priority movement but never
+claims likely success or resolves higher-priority manager behavior. Held,
+unresolved, and unauthorized paths are counted as source rejections and never
+materialized as executable candidates.
+
+Trade→acquisition and chain→acquisition operate on the accepted fully completed
+trade state, so the explicit acquisition is never overwritten by later
+completion. Acquisition→trade preserves acquisition counts/availability in the
+trade baseline. This V1 sequencing is structural what-if analysis; it does not
+authorize ESPN submissions.
+
+## Identity, screening, and evaluation
+
+Every candidate ID includes snapshot, complete baseline-state identity,
+normalized unified configuration, ordering, and exact source action IDs and
+players. Every final state uses the accepted M5.3
+`completed_state_fingerprint`. Distinct paths remain separate; exact equivalent
+states are grouped many-to-one and expose avoided-evaluation counts.
+
+Optional combined screening compares the requester's complete final state with
+the baseline using unified V(R). It is disableable and never screens an
+intermediate action. Counterparty thresholds across multi-party paths are
+currently unsupported and fail configuration validation rather than being
+silently approximated.
+
+`evaluate_unified_action_states` runs one shared baseline batch, invokes the
+accepted M4 paired comparison once per unique completed state, and links every
+path to that result. It introduces
+no estimator, confidence interval, random draw, or ranking rule. Progressive
+sampling and multiplicity-aware finalist decisions remain the accepted M5.4
+layer over these grouped states. Conditional-waiver caveats remain path-level
+metadata and must not be presented as actionable certainty.
+
+## Coverage and limitations
+
+The lazy iterator emits retained candidates without materializing the universe.
+The materialized interface reports generated/retained/screened paths,
+authorized versus conditional paths, source rejection categories, unique final
+states, reuse, and explicit truncation. A configured cap is rejected by the
+iterator because only the materialized result can report incomplete coverage.
+Candidate completeness and Monte Carlo precision are separate claims.
+
+V1 does not support trade→acquisition→trade interleaving, acquisition insertion
+inside a dependency chain, standalone drops without an addition, competing
+manager claim simulation, waiver success probabilities, future-week streaming,
+M5.8 scheduling, or GUI/background jobs. The unified adapter currently calls
+accepted trade/chain completion at its action-family boundary; it does not
+reinterpret automatic completion pickups as voluntary acquisitions.
+
+## Synthetic benchmark
+
+On 25 October 2026 under Python 3.12 on the development Windows host, the
+sanitized four-team mixed trade→add, add→trade, and chain→add universe produced
+20 retained paths and 20 final states, while recording 25 structurally
+infeasible acquisition leaves, in 2.920 seconds with 0.66 MiB traced peak.
+This is a small synthetic generation benchmark and includes no Monte Carlo.
