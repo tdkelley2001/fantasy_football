@@ -100,10 +100,12 @@ contract tests**, and the complete **658-test credential-free suite** pass.
 Python compilation, 28 documentation-link tests, Ruff `F,E9`, and Git whitespace
 checks also pass.
 
-## Deferred work
+## Adjacent work
 
-M5.3 adds completed-state equivalence identity. Monte Carlo evaluation, waivers,
-trade chains, persistence, and CLI integration remain later milestones.
+M5.3 provides completed-state equivalence identity, M5.4 provides progressive
+Monte Carlo trade evaluation, and M5.5 separately analyzes standalone immediate
+acquisitions. Trade/acquisition chains and integrated CLI search remain later
+milestones.
 
 ## Optional V(R) screening (M5.2)
 
@@ -303,9 +305,9 @@ or frontend.
 The current implementation is a simple exact sequential orchestrator with the
 accepted optional bounded process executor at each path block. It has no wall-
 clock cutoff, persistent job, resume store, cloud queue, or UI. Candidate budget
-and statistical precision remain independent. M5.5+ ranking extensions, waiver
-searches, chains, combined searches, and M5.8 machine-specific preflight and
-streaming work remain deferred.
+and statistical precision remain independent. Standalone acquisition analysis
+is documented in `ACQUISITION_CANDIDATES.md`; chains, combined searches, and
+M5.8 machine-specific preflight and streaming work remain deferred.
 
 The synthetic benchmark uses four teams, eight players, four trade shapes, and
 two paths per state. It reports 27 raw/feasible/screen-retained candidates, 25

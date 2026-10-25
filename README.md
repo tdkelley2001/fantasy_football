@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M4 and M5.1–M5.3 are **COMPLETE AND ACCEPTED**. M5.4's bounded progressive Monte Carlo trade search is **IMPLEMENTED — REVIEW PENDING**; M5.5 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution, recovery, and paired manual what-if comparison are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+M0–M4 and M5.1–M5.4 are **COMPLETE AND ACCEPTED**. M5.5's standalone immediate acquisition analyzer is **IMPLEMENTED — REVIEW PENDING**; M5.6 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution, recovery, and paired manual what-if comparison are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
 
 ## Authoritative documentation
 
@@ -238,6 +238,21 @@ Available primitives cover explicit add, drop, compound replacement, IR placemen
 ## Remaining-season roster valuation
 
 `fantasy_football.roster_value.value_roster()` computes the implemented M2.3c V(R): the equal-weight sum of projected weekly lineups after exact conservative allocation of the current shared unrostered pool against demonstrated mandatory opponent vacancies. It returns structured weekly owned/replacement contributions, competing demand, access rank, vacancies, exclusions, and assumptions without modifying ownership or the transaction ledger. `value_hypothetical_roster()` accepts a complete structurally legal hypothetical state but does not claim its transaction history is ESPN-authorized; `compare_roster_values()` reports unified delta V(R) separately from current-week vacancy improvement. See [the valuation contract](docs/ROSTER_VALUATION.md).
+
+## Immediate acquisition candidate analysis
+
+M5.5 exposes `enumerate_immediate_acquisition_candidates()` and a bounded-memory
+iterator in `fantasy_football.acquisition_candidates`. The caller explicitly
+selects the requesting team, finite player universe, optional drops, action
+forms, availability filter, and waiver-boundary policy. The analyzer exhausts
+each player/drop/destination plan and returns immutable authorization,
+availability, priority, coverage, rejection, and resulting-state diagnostics.
+
+Free-agent results use the accepted transaction-legality primitives. Waiver
+results remain conditional and require the approved modeled processing boundary;
+held, unresolved, and already-rostered players never become silent successful
+adds. The engine makes no network request or ESPN transaction and does not rank
+players. See [the M5.5 contract](docs/ACQUISITION_CANDIDATES.md).
 
 ## Historical projection research dataset
 
