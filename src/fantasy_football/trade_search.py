@@ -7,6 +7,7 @@ from enum import StrEnum
 import hashlib
 import json
 import math
+from typing import Callable
 
 from fantasy_football.canonical.model import LeagueSnapshot
 from fantasy_football.evolving_state import EvolvingLeagueState, validate_evolving_state
@@ -68,6 +69,13 @@ class SearchStopReason(StrEnum):
     NO_ELIGIBLE_CANDIDATES = "no_eligible_candidates"
 
 
+class SearchProgressStage(StrEnum):
+    CANDIDATES_READY = "candidates_ready"
+    INITIAL_EVALUATION = "initial_evaluation"
+    REFINEMENT = "refinement"
+    FINAL = "final"
+
+
 @dataclass(frozen=True, slots=True)
 class ProgressiveSamplingConfiguration:
     confidence_level: float
@@ -95,6 +103,7 @@ class StateSearchEvaluation:
     selected_for_refinement: bool
     completed_paths: int
     precision_reached_all_teams: bool
+    statistically_competitive: bool
     comparison: ManualScenarioComparison | None
 
 
@@ -109,6 +118,7 @@ class CandidateSearchResult:
     statistical_status: CandidateStatisticalStatus
     rank: int | None
     requester_championship_difference: float | None
+    statistically_competitive: bool
     state_evaluation_sha256: str | None
     screening_outcome: TradeScreeningOutcome
 
@@ -128,6 +138,29 @@ class ProgressiveSearchCoverage:
     candidate_evaluations_avoided_by_state_deduplication: int
     candidate_coverage_complete: bool
     statistical_precision_complete: bool
+    ranking_resolved: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressStateEstimate:
+    completed_state_sha256: str
+    completed_paths: int
+    requester_championship_difference: float
+    precision_reached_all_teams: bool
+    statistically_competitive: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TradeSearchProgressSnapshot:
+    stage: SearchProgressStage
+    eligible_unique_states: int
+    initially_evaluated_states: int
+    refinement_round: int
+    estimates: tuple[ProgressStateEstimate, ...]
+    candidate_coverage_complete: bool
+    statistical_precision_complete: bool
+    ranking_resolved: bool
+    stop_reason: SearchStopReason | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,8 +171,10 @@ class ProgressiveTradeSearchResult:
     state_evaluations: tuple[StateSearchEvaluation, ...]
     candidates: tuple[CandidateSearchResult, ...]
     finalist_state_ids: tuple[str, ...]
+    competitive_state_ids: tuple[str, ...]
     coverage: ProgressiveSearchCoverage
     stop_reason: SearchStopReason
+    progress_snapshots: tuple[TradeSearchProgressSnapshot, ...]
     assumptions: tuple[str, ...]
 
 
@@ -273,6 +308,7 @@ def run_progressive_trade_search(
     model: PlayerOutcomeModel,
     *,
     parallel_execution: ParallelExecutionConfiguration | None = None,
+    progress_observer: Callable[[TradeSearchProgressSnapshot], None] | None = None,
 ) -> ProgressiveTradeSearchResult:
     """Run exhaustive generation, optional screens, and fair staged evaluation."""
 
@@ -301,12 +337,64 @@ def run_progressive_trade_search(
         item.completed_state_sha256: [] for item in selected_groups
     }
     comparisons: dict[str, ManualScenarioComparison] = {}
+    progress_snapshots: list[TradeSearchProgressSnapshot] = []
     completed_scenarios = {
         item.completed_state_sha256: _canonical_completed(
             snapshot, item.completed_state_sha256, item.state
         )
         for item in selected_groups
     }
+
+    coverage_complete = len(selected_groups) == len(state_groups)
+
+    def emit_progress(
+        stage: SearchProgressStage,
+        *,
+        refinement_round: int,
+        competitive: set[str],
+        stop_reason: SearchStopReason | None = None,
+    ) -> None:
+        estimates = tuple(
+            ProgressStateEstimate(
+                state_id,
+                comparison.matched_path_count,
+                _requester_difference(
+                    comparison, configuration.candidate_search.requesting_team_id
+                ),
+                _all_team_precision(
+                    comparison, sampling.target_paired_half_width
+                ),
+                state_id in competitive,
+            )
+            for state_id, comparison in sorted(comparisons.items())
+        )
+        initial_coverage_complete = (
+            coverage_complete and len(estimates) == len(state_groups)
+        )
+        precision_complete = initial_coverage_complete and all(
+            item.precision_reached_all_teams for item in estimates
+        )
+        ranking_resolved = initial_coverage_complete and len(competitive) == 1
+        snapshot_progress = TradeSearchProgressSnapshot(
+            stage,
+            len(state_groups),
+            len(comparisons),
+            refinement_round,
+            estimates,
+            initial_coverage_complete,
+            precision_complete,
+            ranking_resolved,
+            stop_reason,
+        )
+        progress_snapshots.append(snapshot_progress)
+        if progress_observer is not None:
+            progress_observer(snapshot_progress)
+
+    emit_progress(
+        SearchProgressStage.CANDIDATES_READY,
+        refinement_round=0,
+        competitive=set(),
+    )
 
     def batch_config(state, start: int, count: int) -> MonteCarloConfig:
         return replace(
@@ -353,46 +441,74 @@ def run_progressive_trade_search(
                 combined(group.state, scenario_batches[group.completed_state_sha256], initial),
                 precision,
             )
+            emit_progress(
+                SearchProgressStage.INITIAL_EVALUATION,
+                refinement_round=0,
+                competitive=set(comparisons),
+            )
         current_paths = initial
 
     requester = configuration.candidate_search.requesting_team_id
-    initial_order = tuple(
-        sorted(
-            selected_groups,
-            key=lambda item: (
-                -_requester_difference(comparisons[item.completed_state_sha256], requester),
-                item.completed_state_sha256,
-            ),
-        )
+    group_by_id = {item.completed_state_sha256: item for item in state_groups}
+    planned_looks = 1 + math.ceil(
+        (sampling.maximum_paths_per_state - sampling.initial_paths)
+        / sampling.refinement_batch_paths
     )
-    finalist_ids: set[str] = {
-        item.completed_state_sha256
-        for item in initial_order[: min(sampling.minimum_finalist_states, len(initial_order))]
-    }
-    if initial_order:
-        leader = initial_order[0]
-        leader_batch = combined(
-            leader.state, scenario_batches[leader.completed_state_sha256], current_paths
-        )
-        for group in initial_order[1:]:
-            candidate_batch = combined(
-                group.state, scenario_batches[group.completed_state_sha256], current_paths
+    possible_pair_count = len(selected_groups) * (len(selected_groups) - 1) // 2
+    simultaneous_pair_looks = max(1, possible_pair_count * planned_looks)
+
+    def select_competitive(pool: set[str], path_count: int) -> set[str]:
+        ordered = tuple(
+            sorted(
+                pool,
+                key=lambda state_id: (
+                    -_requester_difference(comparisons[state_id], requester),
+                    state_id,
+                ),
             )
-            competitive = paired_championship_difference(
+        )
+        if not ordered:
+            return set()
+        retained = set(ordered[: min(sampling.minimum_finalist_states, len(ordered))])
+        leader_id = ordered[0]
+        leader_group = group_by_id[leader_id]
+        leader_batch = combined(
+            leader_group.state, scenario_batches[leader_id], path_count
+        )
+        for state_id in ordered[1:]:
+            group = group_by_id[state_id]
+            candidate_batch = combined(group.state, scenario_batches[state_id], path_count)
+            candidate_vs_leader = paired_championship_difference(
                 leader_batch,
                 candidate_batch,
                 team_id=requester,
                 confidence_level=sampling.confidence_level,
-                simultaneous_comparison_count=max(1, len(initial_order) - 1),
+                simultaneous_comparison_count=simultaneous_pair_looks,
             )
-            if competitive.interval.upper >= 0.0:
-                finalist_ids.add(group.completed_state_sha256)
+            if candidate_vs_leader.interval.upper >= 0.0:
+                retained.add(state_id)
+        return retained
 
+    competitive_ids = select_competitive(
+        {item.completed_state_sha256 for item in selected_groups}, current_paths
+    )
+    finalist_ids = set(competitive_ids)
+    refinement_round = 0
+    emit_progress(
+        SearchProgressStage.REFINEMENT,
+        refinement_round=refinement_round,
+        competitive=competitive_ids,
+    )
     active = {
         state_id
-        for state_id in finalist_ids
-        if not _all_team_precision(comparisons[state_id], sampling.target_paired_half_width)
-        and current_paths < sampling.maximum_paths_per_state
+        for state_id in competitive_ids
+        if current_paths < sampling.maximum_paths_per_state
+        and (
+            len(competitive_ids) > 1
+            or not _all_team_precision(
+                comparisons[state_id], sampling.target_paired_half_width
+            )
+        )
     }
     while active:
         count = min(
@@ -432,14 +548,26 @@ def run_progressive_trade_search(
                 precision,
             )
         current_paths = next_paths
+        refinement_round += 1
+        competitive_ids = select_competitive(set(active), current_paths)
+        finalist_ids.update(competitive_ids)
+        emit_progress(
+            SearchProgressStage.REFINEMENT,
+            refinement_round=refinement_round,
+            competitive=competitive_ids,
+        )
         active = {
             state_id
-            for state_id in active
-            if not _all_team_precision(comparisons[state_id], sampling.target_paired_half_width)
-            and current_paths < sampling.maximum_paths_per_state
+            for state_id in competitive_ids
+            if current_paths < sampling.maximum_paths_per_state
+            and (
+                len(competitive_ids) > 1
+                or not _all_team_precision(
+                    comparisons[state_id], sampling.target_paired_half_width
+                )
+            )
         }
 
-    group_by_id = {item.completed_state_sha256: item for item in state_groups}
     state_results = []
     for state_id in sorted(group_by_id):
         group = group_by_id[state_id]
@@ -477,6 +605,7 @@ def run_progressive_trade_search(
                 state_id in finalist_ids,
                 path_count,
                 converged,
+                state_id in competitive_ids,
                 comparison,
             )
         )
@@ -507,6 +636,7 @@ def run_progressive_trade_search(
             state_result.status,
             rank,
             value,
+            state_result.statistically_competitive,
             state_result.evaluation_sha256,
             path.screening_outcome,
         )
@@ -524,6 +654,7 @@ def run_progressive_trade_search(
             state_result.status,
             None,
             None,
+            False,
             None,
             path.screening_outcome,
         )
@@ -534,15 +665,18 @@ def run_progressive_trade_search(
     convergence_complete = coverage_complete and all(
         item.precision_reached_all_teams for item in state_results
     )
+    ranking_resolved = coverage_complete and len(competitive_ids) == 1
     if not state_groups:
         stop = SearchStopReason.NO_ELIGIBLE_CANDIDATES
     elif not coverage_complete:
         stop = SearchStopReason.INITIAL_STATE_BUDGET_REACHED
-    elif convergence_complete:
+    elif ranking_resolved and state_result_map[
+        next(iter(competitive_ids))
+    ].precision_reached_all_teams:
         stop = SearchStopReason.PRECISION_REACHED
-    elif finalist_ids and all(
+    elif competitive_ids and all(
         state_result_map[state_id].precision_reached_all_teams
-        for state_id in finalist_ids
+        for state_id in competitive_ids
     ):
         stop = SearchStopReason.FINALIST_REFINEMENT_COMPLETE
     else:
@@ -569,6 +703,13 @@ def run_progressive_trade_search(
         len(registry.paths) - len(state_groups),
         coverage_complete,
         convergence_complete,
+        ranking_resolved,
+    )
+    emit_progress(
+        SearchProgressStage.FINAL,
+        refinement_round=refinement_round,
+        competitive=competitive_ids,
+        stop_reason=stop,
     )
     return ProgressiveTradeSearchResult(
         _search_identity(
@@ -585,11 +726,13 @@ def run_progressive_trade_search(
         tuple(state_results),
         candidate_results,
         tuple(sorted(finalist_ids)),
+        tuple(sorted(competitive_ids)),
         coverage,
         stop,
+        tuple(progress_snapshots),
         (
             "requester_championship_probability_difference_primary_v1",
-            "direct_matched_candidate_vs_leader_bonferroni_selection_v1",
+            "all_unordered_candidate_pairs_all_planned_looks_bonferroni_selection_v1",
             "adaptive_selection_does_not_remove_outcome_model_uncertainty_v1",
             "canonical_state_id_initial_budget_order_v1",
         ),

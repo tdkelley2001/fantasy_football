@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
@@ -12,6 +12,7 @@ from fantasy_football.trade_search import (
     ProgressiveSamplingConfiguration,
     ProgressiveTradeSearchConfiguration,
     ProgressiveTradeSearchError,
+    SearchProgressStage,
     SearchStopReason,
     run_progressive_trade_search,
 )
@@ -124,6 +125,66 @@ def test_uncertainty_keeps_weak_initial_candidates_plausibly_competitive() -> No
     assert min(initial_values) < max(initial_values)
     assert len(result.finalist_state_ids) == result.coverage.eligible_unique_states
     assert all(item.selected_for_refinement for item in result.state_evaluations)
+
+
+def test_data_selected_leader_uses_all_pair_all_look_multiplicity(monkeypatch) -> None:
+    observed_counts = []
+    real = search_module.paired_championship_difference
+
+    def observed(*args, **kwargs):
+        observed_counts.append(kwargs["simultaneous_comparison_count"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(search_module, "paired_championship_difference", observed)
+    result = _run(_search(initial=1, batch=1, maximum=3, finalists=1))
+
+    # Four possible states give six unordered pairs. Three planned looks protect
+    # the family containing every pair at every possible selection/refinement look.
+    assert observed_counts
+    assert set(observed_counts) == {18}
+    assert len(result.competitive_state_ids) > 1
+
+
+def test_ranking_resolution_is_separate_from_all_team_precision(monkeypatch) -> None:
+    monkeypatch.setattr(search_module, "_all_team_precision", lambda *_args: True)
+    result = _run(_search(initial=1, batch=1, maximum=1, finalists=1))
+
+    assert result.coverage.statistical_precision_complete
+    assert not result.coverage.ranking_resolved
+    assert len(result.competitive_state_ids) > 1
+    assert result.stop_reason is SearchStopReason.FINALIST_REFINEMENT_COMPLETE
+
+
+def test_progress_snapshots_are_immutable_coherent_and_provisional() -> None:
+    observed = []
+    snapshot = _snapshot()
+    state = _state(snapshot)
+    configuration = _search(initial=1, batch=1, maximum=2, finalists=1)
+    result = run_progressive_trade_search(
+        snapshot,
+        state,
+        configuration,
+        _simulation(2),
+        PrescribedModel(),
+        progress_observer=observed.append,
+    )
+
+    assert tuple(observed) == result.progress_snapshots
+    assert observed[0].stage is SearchProgressStage.CANDIDATES_READY
+    assert observed[0].initially_evaluated_states == 0
+    assert not observed[0].candidate_coverage_complete
+    initial = [item for item in observed if item.stage is SearchProgressStage.INITIAL_EVALUATION]
+    assert [item.initially_evaluated_states for item in initial] == [1, 2, 3, 4]
+    assert all(not item.ranking_resolved for item in initial[:-1])
+    assert any(item.stage is SearchProgressStage.REFINEMENT for item in observed)
+    assert observed[-1].stage is SearchProgressStage.FINAL
+    assert observed[-1].stop_reason is result.stop_reason
+    assert observed[-1].ranking_resolved is result.coverage.ranking_resolved
+    assert all(
+        len(item.estimates) == item.initially_evaluated_states for item in observed
+    )
+    with pytest.raises(FrozenInstanceError):
+        observed[-1].ranking_resolved = True
 
 
 def test_equivalent_paths_share_initial_and_refined_evaluations(monkeypatch) -> None:
