@@ -53,6 +53,16 @@ vacancy are recorded with transaction index, creation/reduction count,
 outstanding count, and chronological creation priority. Completion replays the
 ledger and reconciles it to the actual final imbalance.
 
+Vacancies already present in the supplied evolving state are recorded before
+trade 1 with origin `pre_existing` and no transaction index. They precede all
+trade-created events. If several managers begin with vacancies, their relative
+priority follows `initial_window_waiver_priority` under the named
+`initial_vacancy_frozen_priority_completion_v1` hypothetical policy. This is a
+deterministic structural-completion convention, not a verified ESPN pickup
+rule. It also ensures an uninvolved manager is not omitted. Partial reductions
+retain the original priority; a full reduction removes it, and any later new
+vacancy receives a new chronological priority.
+
 Completion occurs once and in this order:
 
 1. enumerate and choose every required capacity drop using the accepted exact
@@ -88,3 +98,8 @@ explored transitions in 0.733 seconds with 0.45 MiB peak traced memory. Its
 three-step variant produced all 32 paths from 200 transitions in 1.353 seconds
 with 0.50 MiB peak traced memory. These are synthetic reference-search figures,
 not a live-league throughput claim; exact branching is combinatorial.
+
+The follow-up pre-existing-vacancy fixture produced all eight supported
+two-step paths from 20 transitions in 1.490 seconds with 0.38 MiB peak traced
+memory. The added cost reflects exact completion and V(R) selection for the
+outstanding initial vacancy.
