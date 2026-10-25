@@ -249,14 +249,19 @@ configured number of highest requester championship-difference states. It also
 retains every state whose direct matched-path championship difference relative
 to the current leader has a Bonferroni-adjusted upper confidence bound of at
 least zero. This compares paired candidate outcomes directly; it does not infer
-competitiveness from overlap of independent marginal intervals. The adjustment
-covers all candidate-versus-leader comparisons in the selection stage. It is a
-conservative V1 safeguard against noisy early ordering, not a correction for
-outcome-model error and not a claim that adaptive winner selection is free of
-all selection bias.
+competitiveness from overlap of independent marginal intervals. Because the
+leader is selected from these same observations, the conservative V1 family is
+all possible unordered eligible-state pairs across every planned initial and
+refinement look, rather than only the comparisons made with the observed
+leader. The underlying two-direction paired interval allocation remains part of
+the accepted M4 estimator. This controls the declared finite comparison family;
+it does not correct outcome-model error or establish power to resolve close
+candidates.
 
-Refinement proceeds in synchronized, disjoint path-index blocks for every active
-finalist. One baseline block is shared by the entire search; equivalent M5.3
+Refinement proceeds in synchronized, disjoint path-index blocks for every
+currently competitive finalist. Competitiveness is recalculated from all
+accumulated valid paths after every block, using the same simultaneous family;
+eliminated states cannot re-enter. One baseline block is shared by the entire search; equivalent M5.3
 states share scenario blocks and their immutable M4 comparison. Accepted batches
 are combined only when their exact path coverage reconciles, so initial paths
 are retained once and never resampled or double counted. A state is labeled
@@ -270,11 +275,26 @@ Candidate output is ranked by the requesting team's estimated championship-
 probability difference, with stable candidate ID tie-breaking. Each row retains
 partner, trade shape, M5.1 transaction metadata, M4 completion diagnostics,
 M5.2 screening diagnostics, M5.3 state/evaluation identity, full all-team
-statistics, and execution caveats. Sorting or filtering this immutable dataset
+statistics, and execution caveats. A state can satisfy all-team paired-
+difference precision while remaining statistically competitive. A ranking is
+resolved only when complete initial candidate coverage exists and exactly one
+competitive state remains. Hitting a path or candidate budget with multiple
+competitive states reports an unresolved ranking and never a confirmed global
+best. Sorting or filtering this immutable dataset
 does not trigger new sampling. Coverage independently reports raw combinations,
 structural feasibility, screened paths, unique states, initial exposure,
 refinement, convergence, baseline/scenario paths actually computed, deduplication
-savings, and incomplete states.
+savings, incomplete states, the current competitive set, and ranking resolution.
+
+An optional observer receives immutable `TradeSearchProgressSnapshot` values at
+candidate-registry completion, during equal initial exposure, after finalist
+selection and each refinement round, and at the final stop. A snapshot contains
+only stable identifiers and current estimates; it never exposes mutable engine
+inputs. Candidate coverage, all-team precision, and ranking resolution are
+separate fields, and an intermediate snapshot is always provisional. The final
+snapshot carries the same explicit stop reason as the returned result. This is
+an in-process inspection interface, not a job store, queue, recovery mechanism,
+or frontend.
 
 The current implementation is a simple exact sequential orchestrator with the
 accepted optional bounded process executor at each path block. It has no wall-
@@ -287,9 +307,11 @@ The synthetic benchmark uses four teams, eight players, four trade shapes, and
 two paths per state. It reports 27 raw/feasible/screen-retained candidates, 25
 unique states, 25 initial and 25 refined states, two shared baseline paths, 50
 scenario paths, two candidate evaluations avoided by deduplication, and zero
-unevaluated states. Under Python allocation tracing it took 59.621 seconds and
-peaked at 3.213 MiB on 24 October 2026; tracing dominates this small synthetic
-measurement, so it is not a live-league throughput claim. All **15 focused
-M5.4 tests**, **130 focused M3/M4/M5 integration tests**, and the complete
-**703-test credential-free suite** pass. Ruff `F,E9`, compilation,
+unevaluated states. Under Python allocation tracing the follow-up took 55.389
+seconds and peaked at 3.290 MiB on 24 October 2026; tracing dominates this small synthetic
+measurement, so it is not a live-league throughput claim. The follow-up adds
+adversarial coverage for data-selected leaders, all-pair/all-look multiplicity,
+competitive unresolved rankings despite individual precision, and immutable
+coherent progress snapshots. All **18 focused M5.4 tests** and the complete
+**706-test credential-free suite** pass. Ruff `F,E9`, compilation,
 documentation-link, and whitespace checks also pass.
