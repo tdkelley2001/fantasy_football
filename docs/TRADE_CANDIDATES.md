@@ -223,3 +223,73 @@ This fixture demonstrates exact reuse, not realistic live-league throughput.
 All **13 focused M5.3 tests**, **129 focused M3/M4/M5 integration tests**, and
 the complete **688-test credential-free suite** pass; Ruff `F,E9`, compilation,
 documentation-link, and whitespace checks also pass.
+
+## Progressive paired trade search (M5.4)
+
+`run_progressive_trade_search()` is the integrated, immutable orchestration
+boundary. `ProgressiveTradeSearchConfiguration` keeps the accepted M5.1 finite
+candidate universe, optional M5.2 screen, and M5.4 sampling policy separate.
+The sampling policy validates confidence and paired half-width targets, equal
+initial paths, refinement block size, maximum paths per state, minimum finalist
+state count, and an optional unique-state initial-evaluation budget. The supplied
+`MonteCarloConfig` continues to own seed, first path, league policies, outcome
+model inputs, and exact numerical semantics.
+
+The executor first exhausts and screens the full finite universe, then builds
+the complete M5.3 registry before sampling. Canonical completed-state IDs—not
+candidate arrival order—select states when an explicit budget is smaller than
+the eligible universe. Every selected state receives the same initial path
+indices. The result records unevaluated states and candidate paths with no
+fabricated estimate or rank, sets candidate coverage incomplete, and uses the
+`initial_state_budget_reached` stop reason. Such output is a valid partial
+observation, not an exhaustive best-trade claim.
+
+After the comparable initial stage, finalist selection retains at least the
+configured number of highest requester championship-difference states. It also
+retains every state whose direct matched-path championship difference relative
+to the current leader has a Bonferroni-adjusted upper confidence bound of at
+least zero. This compares paired candidate outcomes directly; it does not infer
+competitiveness from overlap of independent marginal intervals. The adjustment
+covers all candidate-versus-leader comparisons in the selection stage. It is a
+conservative V1 safeguard against noisy early ordering, not a correction for
+outcome-model error and not a claim that adaptive winner selection is free of
+all selection bias.
+
+Refinement proceeds in synchronized, disjoint path-index blocks for every active
+finalist. One baseline block is shared by the entire search; equivalent M5.3
+states share scenario blocks and their immutable M4 comparison. Accepted batches
+are combined only when their exact path coverage reconciles, so initial paths
+are retained once and never resampled or double counted. A state is labeled
+`precision_converged` only when every configured team's paired championship-
+probability difference interval meets the requested half-width. Otherwise its
+status distinguishes initial-only, selected, maximum-path, and not-evaluated
+states. Full playoff and placement comparisons remain attached through the
+accepted `ManualScenarioComparison` contract.
+
+Candidate output is ranked by the requesting team's estimated championship-
+probability difference, with stable candidate ID tie-breaking. Each row retains
+partner, trade shape, M5.1 transaction metadata, M4 completion diagnostics,
+M5.2 screening diagnostics, M5.3 state/evaluation identity, full all-team
+statistics, and execution caveats. Sorting or filtering this immutable dataset
+does not trigger new sampling. Coverage independently reports raw combinations,
+structural feasibility, screened paths, unique states, initial exposure,
+refinement, convergence, baseline/scenario paths actually computed, deduplication
+savings, and incomplete states.
+
+The current implementation is a simple exact sequential orchestrator with the
+accepted optional bounded process executor at each path block. It has no wall-
+clock cutoff, persistent job, resume store, cloud queue, or UI. Candidate budget
+and statistical precision remain independent. M5.5+ ranking extensions, waiver
+searches, chains, combined searches, and M5.8 machine-specific preflight and
+streaming work remain deferred.
+
+The synthetic benchmark uses four teams, eight players, four trade shapes, and
+two paths per state. It reports 27 raw/feasible/screen-retained candidates, 25
+unique states, 25 initial and 25 refined states, two shared baseline paths, 50
+scenario paths, two candidate evaluations avoided by deduplication, and zero
+unevaluated states. Under Python allocation tracing it took 59.621 seconds and
+peaked at 3.213 MiB on 24 October 2026; tracing dominates this small synthetic
+measurement, so it is not a live-league throughput claim. All **15 focused
+M5.4 tests**, **130 focused M3/M4/M5 integration tests**, and the complete
+**703-test credential-free suite** pass. Ruff `F,E9`, compilation,
+documentation-link, and whitespace checks also pass.
