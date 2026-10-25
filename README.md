@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M4 and M5.1–M5.2 are **COMPLETE AND ACCEPTED**. M5.3's canonical completed-state identity and run-local shared paired evaluation are **IMPLEMENTED — REVIEW PENDING**; M5.4 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution, recovery, and paired manual what-if comparison are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+M0–M4 and M5.1–M5.3 are **COMPLETE AND ACCEPTED**. M5.4's bounded progressive Monte Carlo trade search is **IMPLEMENTED — REVIEW PENDING**; M5.5 and later work are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution, recovery, and paired manual what-if comparison are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
 
 ## Authoritative documentation
 
@@ -31,7 +31,7 @@ M0–M4 and M5.1–M5.2 are **COMPLETE AND ACCEPTED**. M5.3's canonical complete
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
 - [Pre-M4 integration audit](docs/PRE_M4_INTEGRATION_AUDIT.md) — end-to-end identity, configuration, storage, performance, and consolidation findings.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
-- [Trade candidates](docs/TRADE_CANDIDATES.md) — M5.1 exhaustive generation, M5.2 V(R) screening, and M5.3 completed-state evaluation reuse.
+- [Trade candidates](docs/TRADE_CANDIDATES.md) — M5.1–M5.4 exhaustive generation, screening, state reuse, and progressive paired evaluation.
 - [Historical research dataset](docs/HISTORICAL_RESEARCH_DATASET.md) — M3.1 immutable projection/actual evidence contract, leakage safeguards, coverage, and limitations.
 - [Outcome-distribution research](docs/OUTCOME_DISTRIBUTION_RESEARCH.md) — accepted M3.2 temporal holdout, candidate comparison, calibration diagnostics, and unverified-evidence limitations.
 - [Agent instructions](AGENTS.md) — standing implementation and verification rules for future Codex work.

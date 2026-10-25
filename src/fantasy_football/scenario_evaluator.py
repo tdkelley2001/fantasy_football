@@ -703,6 +703,45 @@ def _paired_metric(
     )
 
 
+def paired_championship_difference(
+    left: MonteCarloBatchResult,
+    right: MonteCarloBatchResult,
+    *,
+    team_id: int,
+    confidence_level: float,
+    simultaneous_comparison_count: int,
+) -> PairedMetricDifference:
+    """Compare two candidate championship indicators on identical path draws."""
+
+    if left.path_indices != right.path_indices:
+        _fail("candidate comparison path coverage differs")
+    left_paths = {item.path_index: item for item in left.paths}
+    right_paths = {item.path_index: item for item in right.paths}
+    for path_index in left.path_indices:
+        if left_paths[path_index].scenario_sha256 != right_paths[path_index].scenario_sha256:
+            _fail("candidate comparison does not use matched player-week outcomes")
+    try:
+        left_values = tuple(
+            int(next(item for item in left_paths[path].teams if item.team_id == team_id).final_placement == 1)
+            for path in left.path_indices
+        )
+        right_values = tuple(
+            int(next(item for item in right_paths[path].teams if item.team_id == team_id).final_placement == 1)
+            for path in right.path_indices
+        )
+    except StopIteration as exc:
+        _fail(f"candidate comparison is missing team {team_id}")
+        raise AssertionError from exc
+    return _paired_metric(
+        left_values,
+        right_values,
+        metric=ProbabilityMetric.CHAMPIONSHIP,
+        placement=None,
+        confidence_level=confidence_level,
+        comparison_count=simultaneous_comparison_count,
+    )
+
+
 def _lineup_explanations(
     snapshot: LeagueSnapshot,
     baseline_state: EvolvingLeagueState,
@@ -836,6 +875,33 @@ def evaluate_completed_manual_scenario(
     scenario_config = replace(simulation, initial_evolving_state=completed.state)
     baseline_batch = _run_batch(snapshot, baseline_config, model, parallel_execution)
     scenario_batch = _run_batch(snapshot, scenario_config, model, parallel_execution)
+    return compare_completed_scenario_batches(
+        snapshot,
+        baseline_state,
+        completed,
+        baseline_batch,
+        scenario_batch,
+        precision,
+    )
+
+
+def compare_completed_scenario_batches(
+    snapshot: LeagueSnapshot,
+    baseline_state: EvolvingLeagueState,
+    completed: CompletedManualScenario,
+    baseline_batch: MonteCarloBatchResult,
+    scenario_batch: MonteCarloBatchResult,
+    precision: PrecisionConfiguration,
+) -> ManualScenarioComparison:
+    """Build the accepted M4 paired result from matched accumulated batches."""
+
+    validate_snapshot(snapshot)
+    validate_evolving_state(baseline_state, snapshot)
+    if not isinstance(completed, CompletedManualScenario):
+        _fail("completed scenario must be CompletedManualScenario")
+    if completed.snapshot_id != snapshot.snapshot_id:
+        _fail("completed scenario snapshot identity differs from canonical snapshot")
+    validate_evolving_state(completed.state, snapshot)
     if not baseline_batch.reconciliation_complete or not scenario_batch.reconciliation_complete:
         _fail("paired scenario comparison requires complete reconciled paths")
     if baseline_batch.path_indices != scenario_batch.path_indices:
@@ -906,7 +972,7 @@ def evaluate_completed_manual_scenario(
         tuple(comparisons),
         lineup_explanations,
         comparison_sha256,
-        simulation.path_count,
+        len(baseline_batch.path_indices),
         precision.confidence_level,
         (
             "common_player_week_random_numbers_v1",
