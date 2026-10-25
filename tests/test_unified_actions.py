@@ -14,6 +14,7 @@ from fantasy_football.evolving_state import (
     initialize_evolving_state,
     validate_evolving_state,
 )
+from fantasy_football.monte_carlo_precision import PrecisionConfiguration
 from fantasy_football.trade_candidates import (
     SingleTradeSearchConfiguration,
     TradeShape,
@@ -24,7 +25,6 @@ from fantasy_football.trade_chains import (
     enumerate_multi_trade_chains,
 )
 from fantasy_football.trade_evaluation import completed_state_fingerprint
-from fantasy_football.monte_carlo_precision import PrecisionConfiguration
 from fantasy_football.unified_actions import (
     ActionFamily,
     ActionOrdering,
@@ -37,8 +37,8 @@ from fantasy_football.unified_actions import (
 )
 from fantasy_football.weekly_transactions import WaiverBoundaryPolicy
 from tests.canonical_fixtures import canonical_snapshot
-from tests.test_scenario_evaluator import _scenario_snapshot_with_bench
-from tests.test_scenario_evaluator import PrescribedModel, _config as _monte_carlo_config
+from tests.test_scenario_evaluator import PrescribedModel, _scenario_snapshot_with_bench
+from tests.test_scenario_evaluator import _config as _monte_carlo_config
 
 
 def _state(snapshot):
@@ -172,6 +172,89 @@ def test_supported_mixed_orderings_are_chronological_and_immutable() -> None:
         assert len(owners) == len(set(owners))
         validate_evolving_state(candidate.completed_scenario.state, snapshot)
     assert state == before
+
+
+def test_two_for_one_trade_preserves_explicit_add_before_completion() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _state(snapshot)
+    result = enumerate_unified_action_candidates(
+        snapshot,
+        state,
+        replace(
+            _mixed_config(),
+            action_orderings=(ActionOrdering.TRADE_THEN_ACQUISITION,),
+            counterparty_team_ids=(2,),
+            tradeable_player_ids=(1, 2, 10, 11),
+            trade_shapes=(TradeShape(2, 1),),
+            maximum_total_action_count=2,
+        ),
+    )
+    assert len(result.candidates) == 1
+    candidate = result.candidates[0]
+    assert candidate.actions[0].outgoing_player_ids == (1, 10)
+    assert candidate.actions[1].acquired_player_id == -101
+    owners = {item.player_id: item.team_id for item in candidate.completed_scenario.state.roster_entries}
+    assert owners[-101] == 1
+    assert -101 not in {item.player_id for item in candidate.completed_scenario.automatic_additions}
+    assert candidate.completed_scenario.forced_drops
+    validate_evolving_state(candidate.completed_scenario.state, snapshot)
+
+
+def test_chain_created_vacancy_preserves_explicit_pickup() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    result = enumerate_unified_action_candidates(
+        snapshot,
+        _state(snapshot),
+        replace(
+            _mixed_config(),
+            action_orderings=(ActionOrdering.CHAIN_THEN_ACQUISITION,),
+            trade_shapes=(TradeShape(1, 2), TradeShape(3, 1)),
+            maximum_total_action_count=3,
+        ),
+    )
+    assert result.candidates
+    assert all(len(candidate.actions) == 3 for candidate in result.candidates)
+    for candidate in result.candidates:
+        assert candidate.actions[-1].acquired_player_id == -101
+        owners = {
+            item.player_id: item.team_id
+            for item in candidate.completed_scenario.state.roster_entries
+        }
+        assert owners[-101] == 1
+        assert -101 not in {
+            item.player_id for item in candidate.completed_scenario.automatic_additions
+        }
+
+
+def test_unified_stream_does_not_exhaust_lazy_trade_source(monkeypatch) -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _state(snapshot)
+    import fantasy_football.unified_actions as module
+
+    accepted = module.iter_single_trade_candidates
+
+    def guarded(*args, **kwargs):
+        source = accepted(*args, **kwargs)
+        yield next(source)
+        raise AssertionError("source was eagerly exhausted")
+
+    monkeypatch.setattr(module, "iter_single_trade_candidates", guarded)
+    first = next(iter_unified_action_candidates(snapshot, state, _trade_config()))
+    assert first.ordering is ActionOrdering.STANDALONE_TRADE
+
+
+def test_chain_action_limit_is_explicit_not_silent() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    config = replace(
+        _trade_config(),
+        action_families=(ActionFamily.TRADE_CHAIN,),
+        action_orderings=(ActionOrdering.STANDALONE_CHAIN,),
+        counterparty_team_ids=(2, 3),
+        maximum_trade_chain_length=3,
+        maximum_total_action_count=2,
+    )
+    with pytest.raises(UnifiedActionError, match="standalone chain maximum"):
+        enumerate_unified_action_candidates(snapshot, _state(snapshot), config)
 
 
 def test_acquisition_before_trade_may_trade_newly_acquired_player() -> None:

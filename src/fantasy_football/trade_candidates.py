@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from dataclasses import asdict, dataclass
-from enum import StrEnum
 import hashlib
 import itertools
 import json
 import math
-from typing import Iterator
+from collections import Counter
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass
+from enum import StrEnum
 
 from fantasy_football.canonical.model import LeagueSnapshot
 from fantasy_football.canonical.validation import validate_snapshot
@@ -70,6 +70,20 @@ class SingleTradeCandidate:
     execution_status: TradeExecutionStatus
     execution_caveats: tuple[str, ...]
     completed_scenario: CompletedManualScenario
+
+
+@dataclass(frozen=True, slots=True)
+class SingleTradeTransition:
+    """One chronological ownership transition before roster completion."""
+
+    candidate_id: str
+    requesting_team_id: int
+    counterparty_team_id: int
+    shape: TradeShape
+    outgoing_player_ids: tuple[int, ...]
+    incoming_player_ids: tuple[int, ...]
+    explicit_changes: tuple[ExplicitRosterChange, ...]
+    resulting_ownership: tuple[tuple[int, int], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -473,3 +487,53 @@ def iter_single_trade_candidates(
     for item in _candidate_attempts(snapshot, state, search):
         if isinstance(item, SingleTradeCandidate):
             yield item
+
+
+def iter_single_trade_transitions(
+    snapshot: LeagueSnapshot,
+    state: EvolvingLeagueState,
+    configuration: SingleTradeSearchConfiguration,
+) -> Iterator[SingleTradeTransition]:
+    """Yield raw legal ownership exchanges without automatic completion.
+
+    This narrow M5.7 boundary preserves M5.1's normalized finite universe and
+    candidate identity while allowing a later explicit action to resolve a
+    temporary capacity imbalance before completion.
+    """
+
+    search = _validate_search(snapshot, state, configuration)
+    incoming_by_counterparty = dict(search.incoming_by_counterparty)
+    initial = {item.player_id: item.team_id for item in state.roster_entries}
+    for counterparty in search.counterparties:
+        for shape in search.shapes:
+            for outgoing in itertools.combinations(search.outgoing, shape.outgoing_count):
+                for incoming in itertools.combinations(
+                    incoming_by_counterparty[counterparty], shape.incoming_count
+                ):
+                    candidate_id = _candidate_identity(
+                        snapshot, search, counterparty, shape, outgoing, incoming
+                    )
+                    changes = tuple(
+                        sorted(
+                            (
+                                *(ExplicitRosterChange(player, search.requester, counterparty) for player in outgoing),
+                                *(ExplicitRosterChange(player, counterparty, search.requester) for player in incoming),
+                            ),
+                            key=lambda item: item.player_id,
+                        )
+                    )
+                    ownership = dict(initial)
+                    for player_id in outgoing:
+                        ownership[player_id] = counterparty
+                    for player_id in incoming:
+                        ownership[player_id] = search.requester
+                    yield SingleTradeTransition(
+                        candidate_id,
+                        search.requester,
+                        counterparty,
+                        shape,
+                        outgoing,
+                        incoming,
+                        changes,
+                        tuple(sorted(ownership.items())),
+                    )

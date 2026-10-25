@@ -6,17 +6,21 @@ trade, while roster capacity is repaired once, after the explicit chain.
 
 from __future__ import annotations
 
-from collections import Counter
-from dataclasses import asdict, dataclass, replace
-from enum import StrEnum
 import hashlib
 import itertools
 import json
-from typing import Iterator
+from collections import Counter
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass, replace
+from enum import StrEnum
 
 from fantasy_football.canonical.model import LeagueSnapshot, RosterEntry, SlotKind
 from fantasy_football.canonical.validation import validate_snapshot
-from fantasy_football.evolving_state import EvolvingLeagueState, state_to_json, validate_evolving_state
+from fantasy_football.evolving_state import (
+    EvolvingLeagueState,
+    state_to_json,
+    validate_evolving_state,
+)
 from fantasy_football.roster_value import value_roster
 from fantasy_football.scenario_evaluator import (
     CompletedManualScenario,
@@ -47,6 +51,7 @@ class TradeChainRejectionCode(StrEnum):
 class VacancyEventOrigin(StrEnum):
     PRE_EXISTING = "pre_existing"
     TRADE = "trade"
+    EXPLICIT_ACQUISITION = "explicit_acquisition"
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +110,18 @@ class TradeChainCandidate:
     completed_scenario: CompletedManualScenario
     completed_state_sha256: str
     execution_caveats: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class IncompleteTradeChain:
+    """Chronological trade path before deterministic roster completion."""
+
+    chain_id: str
+    requesting_team_id: int
+    trades: tuple[ChainTrade, ...]
+    vacancy_events: tuple[VacancyEvent, ...]
+    intermediate_capacity: tuple[IntermediateCapacity, ...]
+    resulting_ownership: tuple[tuple[int, int], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +343,7 @@ def _completion(
     events: tuple[VacancyEvent, ...],
     pins: tuple[ProtectedPlayerPin, ...],
     chain_id: str,
+    explicit_releases: frozenset[int] = frozenset(),
 ) -> CompletedManualScenario:
     original_entries = {item.player_id: item for item in baseline.roster_entries}
     original_owners = {item.player_id: item.team_id for item in baseline.roster_entries}
@@ -358,7 +376,7 @@ def _completion(
         if roster is None:
             continue
         try:
-            candidate_state = _state_with_roster(baseline, snapshot, roster, released_player_ids=dropped, completion_pool=True)
+            candidate_state = _state_with_roster(baseline, snapshot, roster, released_player_ids=dropped | explicit_releases, completion_pool=True)
             values = tuple(value_roster(snapshot, candidate_state, team) for team in overfull)
         except ValueError:
             continue
@@ -412,7 +430,7 @@ def _completion(
                 if proposed_roster is None:
                     continue
                 try:
-                    proposed_state = _state_with_roster(baseline, snapshot, proposed_roster, released_player_ids=dropped, completion_pool=True)
+                    proposed_state = _state_with_roster(baseline, snapshot, proposed_roster, released_player_ids=dropped | explicit_releases, completion_pool=True)
                     value = value_roster(snapshot, proposed_state, team_id)
                 except ValueError:
                     continue
@@ -426,7 +444,7 @@ def _completion(
             _, player_id, roster, roster_value = choice
             ownership[player_id] = team_id
             additions.append(ScenarioRosterAction("automatic_vacancy_priority_add", team_id, player_id, original_owners.get(player_id), ordinal, roster_value))
-    final_state = _state_with_roster(baseline, snapshot, roster, released_player_ids=dropped, completion_pool=False)
+    final_state = _state_with_roster(baseline, snapshot, roster, released_player_ids=dropped | explicit_releases, completion_pool=False)
     has_pre_existing = any(event.origin is VacancyEventOrigin.PRE_EXISTING for event in events)
     if has_pre_existing:
         final_state = replace(
@@ -597,6 +615,152 @@ def _attempts(
         frozenset(),
         None,
         priority_counter,
+    )
+
+
+def _incomplete_attempts(
+    snapshot: LeagueSnapshot,
+    baseline: EvolvingLeagueState,
+    search: _Validated,
+) -> Iterator[IncompleteTradeChain]:
+    """Enumerate chronological ownership paths without invoking completion."""
+
+    original_entries = {item.player_id: item for item in baseline.roster_entries}
+    initial = {item.player_id: item.team_id for item in baseline.roster_entries}
+    pinned = {(item.team_id, item.player_id) for item in search.pins}
+    capacity = _ordinary_capacity(snapshot)
+    initial_events: list[VacancyEvent] = []
+    priority_counter = 0
+    for team_id in baseline.initial_window_waiver_priority:
+        vacancy_count = _vacancy_after(
+            _ordinary_count(snapshot, initial, original_entries, team_id), capacity
+        )
+        if vacancy_count:
+            priority_counter += 1
+            initial_events.append(
+                VacancyEvent(
+                    None, team_id, vacancy_count, 0, vacancy_count,
+                    priority_counter, VacancyEventOrigin.PRE_EXISTING,
+                )
+            )
+
+    def visit(
+        ownership: dict[int, int],
+        trades: tuple[ChainTrade, ...],
+        events: tuple[VacancyEvent, ...],
+        diagnostics: tuple[IntermediateCapacity, ...],
+        previous_received: frozenset[int],
+        last_partner: int | None,
+        next_priority: int,
+    ) -> Iterator[IncompleteTradeChain]:
+        depth = len(trades)
+        if depth >= search.minimum:
+            yield IncompleteTradeChain(
+                _chain_id(snapshot, search, trades), search.requester, trades,
+                events, diagnostics, tuple(sorted(ownership.items())),
+            )
+        if depth == search.maximum:
+            return
+        requester_players = tuple(sorted(
+            player for player in search.universe
+            if ownership.get(player) == search.requester
+            and (search.outgoing_filter is None or player in search.outgoing_filter)
+            and (search.requester, player) not in pinned
+        ))
+        for partner in search.counterparties:
+            partner_players = tuple(sorted(
+                player for player in search.universe
+                if ownership.get(player) == partner
+                and (search.incoming_filter is None or player in search.incoming_filter)
+                and (partner, player) not in pinned
+            ))
+            for shape in search.shapes:
+                if shape.outgoing_count > len(requester_players) or shape.incoming_count > len(partner_players):
+                    continue
+                for outgoing in itertools.combinations(requester_players, shape.outgoing_count):
+                    for incoming in itertools.combinations(partner_players, shape.incoming_count):
+                        if partner == last_partner:
+                            continue
+                        dependency = tuple(sorted(set(outgoing) & previous_received))
+                        if depth and not dependency:
+                            continue
+                        try:
+                            owners, new_events, new_diagnostics, priority = _apply_trade(
+                                snapshot, original_entries, ownership, search.requester,
+                                partner, outgoing, incoming, depth + 1, next_priority,
+                            )
+                        except TradeChainError:
+                            continue
+                        trade = ChainTrade(depth + 1, partner, outgoing, incoming, dependency)
+                        yield from visit(
+                            owners, (*trades, trade), (*events, *new_events),
+                            (*diagnostics, *new_diagnostics), frozenset(incoming),
+                            partner, priority,
+                        )
+
+    yield from visit(initial, (), tuple(initial_events), (), frozenset(), None, priority_counter)
+
+
+def iter_incomplete_trade_chains(
+    snapshot: LeagueSnapshot,
+    state: EvolvingLeagueState,
+    configuration: TradeChainSearchConfiguration,
+) -> Iterator[IncompleteTradeChain]:
+    """Lazily yield every supported trade path before roster completion."""
+
+    search = _validate(snapshot, state, configuration)
+    if search.limit is not None:
+        _fail("maximum_completed_paths is unavailable for incomplete path iteration")
+    yield from _incomplete_attempts(snapshot, state, search)
+
+
+def incomplete_single_trade_path(
+    snapshot: LeagueSnapshot,
+    baseline: EvolvingLeagueState,
+    requesting_team_id: int,
+    counterparty_team_id: int,
+    outgoing_player_ids: tuple[int, ...],
+    incoming_player_ids: tuple[int, ...],
+    path_id: str,
+) -> IncompleteTradeChain:
+    """Represent one accepted M5.1 exchange in the M5.6 vacancy ledger."""
+
+    original_entries = {item.player_id: item for item in baseline.roster_entries}
+    ownership = {item.player_id: item.team_id for item in baseline.roster_entries}
+    capacity = _ordinary_capacity(snapshot)
+    events: list[VacancyEvent] = []
+    priority = 0
+    for team_id in baseline.initial_window_waiver_priority:
+        vacancy = _vacancy_after(
+            _ordinary_count(snapshot, ownership, original_entries, team_id), capacity
+        )
+        if vacancy:
+            priority += 1
+            events.append(VacancyEvent(None, team_id, vacancy, 0, vacancy, priority, VacancyEventOrigin.PRE_EXISTING))
+    owners, new_events, diagnostics, _ = _apply_trade(
+        snapshot, original_entries, ownership, requesting_team_id,
+        counterparty_team_id, outgoing_player_ids, incoming_player_ids, 1, priority,
+    )
+    trade = ChainTrade(1, counterparty_team_id, outgoing_player_ids, incoming_player_ids, ())
+    return IncompleteTradeChain(
+        path_id, requesting_team_id, (trade,), (*events, *new_events),
+        diagnostics, tuple(sorted(owners.items())),
+    )
+
+
+def complete_trade_path(
+    snapshot: LeagueSnapshot,
+    baseline: EvolvingLeagueState,
+    path: IncompleteTradeChain,
+    protected_pins: tuple[ProtectedPlayerPin, ...] = (),
+    *,
+    explicit_releases: frozenset[int] = frozenset(),
+) -> CompletedManualScenario:
+    """Apply the accepted single deterministic completion to an incomplete path."""
+
+    return _completion(
+        snapshot, baseline, dict(path.resulting_ownership), path.trades,
+        path.vacancy_events, protected_pins, path.chain_id, explicit_releases,
     )
 
 
