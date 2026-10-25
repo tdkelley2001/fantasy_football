@@ -405,11 +405,17 @@ def run_progressive_trade_search(
         )
 
     def combined(state, batches, count):
+        prefix_batches = tuple(
+            batch
+            for batch in batches
+            if batch.path_indices
+            and batch.path_indices[-1] < simulation.first_path_index + count
+        )
         return combine_monte_carlo_batches(
             snapshot,
             batch_config(state, 0, count),
             model,
-            tuple(batches),
+            prefix_batches,
         )
 
     current_paths = 0
@@ -457,7 +463,7 @@ def run_progressive_trade_search(
     possible_pair_count = len(selected_groups) * (len(selected_groups) - 1) // 2
     simultaneous_pair_looks = max(1, possible_pair_count * planned_looks)
 
-    def select_competitive(pool: set[str], path_count: int) -> set[str]:
+    def select_competitive(pool: set[str]) -> set[str]:
         ordered = tuple(
             sorted(
                 pool,
@@ -472,12 +478,22 @@ def run_progressive_trade_search(
         retained = set(ordered[: min(sampling.minimum_finalist_states, len(ordered))])
         leader_id = ordered[0]
         leader_group = group_by_id[leader_id]
-        leader_batch = combined(
-            leader_group.state, scenario_batches[leader_id], path_count
-        )
+        leader_paths = comparisons[leader_id].matched_path_count
         for state_id in ordered[1:]:
             group = group_by_id[state_id]
-            candidate_batch = combined(group.state, scenario_batches[state_id], path_count)
+            overlapping_paths = min(
+                leader_paths, comparisons[state_id].matched_path_count
+            )
+            leader_batch = combined(
+                leader_group.state,
+                scenario_batches[leader_id],
+                overlapping_paths,
+            )
+            candidate_batch = combined(
+                group.state,
+                scenario_batches[state_id],
+                overlapping_paths,
+            )
             candidate_vs_leader = paired_championship_difference(
                 leader_batch,
                 candidate_batch,
@@ -490,7 +506,7 @@ def run_progressive_trade_search(
         return retained
 
     competitive_ids = select_competitive(
-        {item.completed_state_sha256 for item in selected_groups}, current_paths
+        {item.completed_state_sha256 for item in selected_groups}
     )
     finalist_ids = set(competitive_ids)
     refinement_round = 0
@@ -503,11 +519,8 @@ def run_progressive_trade_search(
         state_id
         for state_id in competitive_ids
         if current_paths < sampling.maximum_paths_per_state
-        and (
-            len(competitive_ids) > 1
-            or not _all_team_precision(
-                comparisons[state_id], sampling.target_paired_half_width
-            )
+        and not _all_team_precision(
+            comparisons[state_id], sampling.target_paired_half_width
         )
     }
     while active:
@@ -549,7 +562,7 @@ def run_progressive_trade_search(
             )
         current_paths = next_paths
         refinement_round += 1
-        competitive_ids = select_competitive(set(active), current_paths)
+        competitive_ids = select_competitive(competitive_ids)
         finalist_ids.update(competitive_ids)
         emit_progress(
             SearchProgressStage.REFINEMENT,
@@ -560,11 +573,8 @@ def run_progressive_trade_search(
             state_id
             for state_id in competitive_ids
             if current_paths < sampling.maximum_paths_per_state
-            and (
-                len(competitive_ids) > 1
-                or not _all_team_precision(
-                    comparisons[state_id], sampling.target_paired_half_width
-                )
+            and not _all_team_precision(
+                comparisons[state_id], sampling.target_paired_half_width
             )
         }
 

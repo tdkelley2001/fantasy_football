@@ -155,6 +155,82 @@ def test_ranking_resolution_is_separate_from_all_team_precision(monkeypatch) -> 
     assert result.stop_reason is SearchStopReason.FINALIST_REFINEMENT_COMPLETE
 
 
+def test_precision_complete_candidate_remains_competitive_with_unequal_coverage(
+    monkeypatch,
+) -> None:
+    precise_scenario = None
+    compared_path_counts = []
+    real_difference = search_module.paired_championship_difference
+
+    def selective_precision(comparison, _target):
+        nonlocal precise_scenario
+        scenario_id = comparison.hypothetical.batch.simulation_config_sha256
+        if precise_scenario is None:
+            precise_scenario = scenario_id
+        return scenario_id == precise_scenario
+
+    def observe_overlap(left, right, **kwargs):
+        assert left.path_indices == right.path_indices
+        compared_path_counts.append(
+            (
+                left.simulation_config_sha256,
+                right.simulation_config_sha256,
+                len(left.path_indices),
+            )
+        )
+        return real_difference(left, right, **kwargs)
+
+    monkeypatch.setattr(search_module, "_all_team_precision", selective_precision)
+    monkeypatch.setattr(
+        search_module, "paired_championship_difference", observe_overlap
+    )
+    result = _run(_search(initial=1, batch=1, maximum=3, finalists=1))
+
+    precise = [
+        item
+        for item in result.state_evaluations
+        if item.comparison is not None
+        and item.comparison.hypothetical.batch.simulation_config_sha256
+        == precise_scenario
+    ]
+    assert len(precise) == 1
+    assert precise[0].completed_paths == 1
+    assert precise[0].statistically_competitive
+    assert any(item.completed_paths == 3 for item in result.state_evaluations)
+    precise_comparisons = [
+        count
+        for left_id, right_id, count in compared_path_counts
+        if precise_scenario in (left_id, right_id)
+    ]
+    assert precise_comparisons
+    assert set(precise_comparisons) == {1}
+    assert len(result.competitive_state_ids) > 1
+    assert not result.coverage.ranking_resolved
+
+
+def test_ranking_resolves_only_after_all_competitors_are_excluded(monkeypatch) -> None:
+    real_difference = search_module.paired_championship_difference
+
+    def exclude_nonleaders(*args, **kwargs):
+        result = real_difference(*args, **kwargs)
+        return replace(
+            result,
+            interval=replace(result.interval, upper=-0.01),
+        )
+
+    monkeypatch.setattr(
+        search_module, "paired_championship_difference", exclude_nonleaders
+    )
+    monkeypatch.setattr(search_module, "_all_team_precision", lambda *_args: True)
+    result = _run(_search(initial=1, batch=1, maximum=2, finalists=1))
+
+    assert result.coverage.candidate_coverage_complete
+    assert result.coverage.ranking_resolved
+    assert len(result.competitive_state_ids) == 1
+    assert sum(item.statistically_competitive for item in result.state_evaluations) == 1
+    assert result.stop_reason is SearchStopReason.PRECISION_REACHED
+
+
 def test_progress_snapshots_are_immutable_coherent_and_provisional() -> None:
     observed = []
     snapshot = _snapshot()
