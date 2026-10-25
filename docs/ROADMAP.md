@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0–M4 and M5.1–M5.4 are **COMPLETE AND ACCEPTED**. M5.5 is **IMPLEMENTED — REVIEW PENDING**; M5.6–M6 remain planned and not started, and M7 is deferred. No legacy implementation is credited toward these statuses.
+M0–M4 and M5.1–M5.5 are **COMPLETE AND ACCEPTED**. M5.6 is **IMPLEMENTED — REVIEW PENDING**; M5.7–M6 remain planned and not started, and M7 is deferred. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M7 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -126,7 +126,7 @@ M5.4 [COMPLETE AND ACCEPTED, 24 October 2026] Run the exhaustive M5.1 universe t
 
 M5.5 [IMPLEMENTED — REVIEW PENDING, 24 October 2026] Exhaustively enumerate the configured `(acquisition, optional explicit drop, ordinary destination)` universe without projection/value pruning. Accepted M2.3b primitives authorize free-agent outcomes and validate selected replacements. Waiver players remain distinct: only the approved modeled weekly boundary in a supported traditional non-budget league creates a clearly conditional successful-claim state and priority-to-last consequence; unresolved boundaries, holds, unknown availability, already-owned players, unsupported waiver policies, and competing-manager behavior fail closed or remain explicit. Transaction errors expose stable semantic codes, so candidate disposition never depends on display-message text. Players lacking a supported ordinary destination receive explicit coverage exclusions without aborting valid peers or fabricating leaves. Stable identities bind snapshot, baseline, configuration, player, drop, and destination; immutable resulting states are M5.3-compatible. Coverage reconciles every actual leaf across structural feasibility and exclusive authorization dispositions, separately from zero-destination exclusions. See `ACQUISITION_CANDIDATES.md`.
 
-M5.6 Add immediate multi-trade chain enumerator with partner/dependency rules, order-sensitive ownership, vacancy-event ledger, all drops before additions and non-round-robin priority by vacancy chronology. GATE: permutation adversarial tests, no artificial tiebreakers, identical paths preserved where relevant.
+M5.6 [IMPLEMENTED — REVIEW PENDING, 25 October 2026] Add immediate multi-trade chain enumerator with partner/dependency rules, order-sensitive ownership, vacancy-event ledger, all drops before additions and non-round-robin priority by vacancy chronology. The public lazy iterator and bounded materializer normalize configuration identity, preserve every ordered path, require immediate-predecessor acquisition dependency, update both owners after each trade, allow partner return only after an intervening manager, and disclose temporary-capacity execution caveats. Completion performs exact capacity-drop selection league-wide before manager-first pickups ordered by each manager's earliest outstanding vacancy, then uses the accepted M5.3 state fingerprint without collapsing path records. Explicit caps report incomplete coverage. Focused exact-oracle, three-step dependency, imbalance, chronology, identity, permutation, determinism, truncation, and immutability tests pass. Synthetic traced benchmarks: 16 two-step paths/72 transitions in 0.733 seconds and 0.45 MiB peak; 32 three-step paths/200 transitions in 1.353 seconds and 0.50 MiB peak. GATE: independent review pending; M5.7 not started. See `docs/MULTI_TRADE_CHAINS.md`.
 
 M5.7 Add streaming options and combined trade/waiver sequences using the same universe/screen/evaluate interfaces, while explicitly scoping speculative in-season behavior out of V1. GATE: cross-action feasibility and end-to-end comparison fixtures.
 
@@ -152,7 +152,7 @@ M7.3 Add what-if editing, run configuration, progress and exports while keeping 
 
 M7.4 Usability, responsive rendering and performance tests for data-heavy searches. GATE: representative large-result collection remains usable without inaccurate or incomplete visual claims.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M4 and M5.1–M5.4 are complete and accepted; M5.5 is implemented for review, and M5.6 remains not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M4 and M5.1–M5.5 are complete and accepted; M5.6 is implemented for review, and M5.7 remains not started.
 
 ### 12.2 Practical development method
 
