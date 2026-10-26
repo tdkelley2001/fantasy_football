@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass
 import multiprocessing
 import pickle
@@ -32,6 +32,7 @@ class ParallelExecutionConfiguration:
     worker_count: int
     paths_per_task: int
     start_method: str = "spawn"
+    max_in_flight_tasks: int | None = None
 
     def __post_init__(self) -> None:
         for name in ("worker_count", "paths_per_task"):
@@ -41,6 +42,14 @@ class ParallelExecutionConfiguration:
         if self.start_method not in multiprocessing.get_all_start_methods():
             raise ParallelExecutionError(
                 f"unsupported multiprocessing start_method={self.start_method!r}"
+            )
+        if self.max_in_flight_tasks is not None and (
+            isinstance(self.max_in_flight_tasks, bool)
+            or not isinstance(self.max_in_flight_tasks, int)
+            or self.max_in_flight_tasks < 1
+        ):
+            raise ParallelExecutionError(
+                "max_in_flight_tasks must be a positive integer or None"
             )
 
 
@@ -189,12 +198,20 @@ class ParallelMonteCarloExecutor:
             if self._pool is None:
                 raise ParallelExecutionError("parallel executor is not active")
             completed: list[MonteCarloPathSummary] = []
-            futures = tuple(
-                self._pool.submit(_run_worker_chunk, path_chunk)
-                for path_chunk in path_chunks
-            )
-            for future in as_completed(futures):
-                completed.extend(future.result())
+            maximum = self._execution.max_in_flight_tasks or len(path_chunks)
+            chunks = iter(path_chunks)
+            pending = set()
+            for _ in range(min(maximum, len(path_chunks))):
+                pending.add(self._pool.submit(_run_worker_chunk, next(chunks)))
+            while pending:
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                for future in done:
+                    completed.extend(future.result())
+                    try:
+                        path_chunk = next(chunks)
+                    except StopIteration:
+                        continue
+                    pending.add(self._pool.submit(_run_worker_chunk, path_chunk))
             batch = aggregate_monte_carlo_paths(
                 self._snapshot, config, self._model, tuple(completed)
             )
