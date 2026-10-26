@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import gc
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +17,7 @@ from fantasy_football.search_orchestration import (
     SearchOrchestrationError,
     SearchPreflightConfiguration,
     SearchResourceConfiguration,
+    SearchResultIndex,
     execute_search_orchestration,
 )
 from fantasy_football.trade_candidates import TradeShape
@@ -79,18 +82,24 @@ def _run(configuration):
     )
 
 
+def _candidates(result):
+    return tuple(result.iter_candidates())
+
+
 def test_reference_and_bounded_modes_have_exact_candidate_and_state_parity() -> None:
     reference = _run(_configuration())
     bounded = _run(_configuration(SearchExecutionMode.BOUNDED_OVERLAP))
-    assert tuple(item.candidate_id for item in reference.candidates) == tuple(
-        item.candidate_id for item in bounded.candidates
+    assert tuple(item.candidate_id for item in _candidates(reference)) == tuple(
+        item.candidate_id for item in _candidates(bounded)
     )
-    assert tuple(item.completed_state_sha256 for item in reference.candidates) == tuple(
-        item.completed_state_sha256 for item in bounded.candidates
+    assert tuple(item.completed_state_sha256 for item in _candidates(reference)) == tuple(
+        item.completed_state_sha256 for item in _candidates(bounded)
     )
     assert reference.progressive_evaluation == bounded.progressive_evaluation
+    assert reference.run_sha256 == bounded.run_sha256
     assert reference.candidate_coverage_complete
     assert bounded.candidate_coverage_complete
+    bounded.close()
 
 
 def test_multiple_numerical_workers_preserve_path_indexed_results() -> None:
@@ -124,9 +133,9 @@ def test_candidate_and_evaluation_limits_are_disclosed() -> None:
     bounded_limited = _run(_configuration(
         SearchExecutionMode.BOUNDED_OVERLAP, candidate_limit=2
     ))
-    assert len(candidate_limited.candidates) == 2
-    assert tuple(item.candidate_id for item in candidate_limited.candidates) == tuple(
-        item.candidate_id for item in bounded_limited.candidates
+    assert len(_candidates(candidate_limited)) == 2
+    assert tuple(item.candidate_id for item in _candidates(candidate_limited)) == tuple(
+        item.candidate_id for item in _candidates(bounded_limited)
     )
     assert not candidate_limited.candidate_coverage_complete
     assert candidate_limited.stop_reason is OrchestrationStopReason.CANDIDATE_LIMIT
@@ -150,21 +159,21 @@ def test_progress_is_immutable_coherent_and_does_not_claim_percentages() -> None
     )
     assert tuple(observed) == result.progress
     assert result.progress[-1].stop_reason is result.stop_reason
-    assert result.progress[-1].candidates_retained == len(result.candidates)
+    assert result.progress[-1].candidates_retained == len(_candidates(result))
     with pytest.raises(Exception):
         result.progress[-1].candidates_retained = 0
 
 
 def test_json_and_csv_exports_include_all_and_filtered_scopes(tmp_path) -> None:
     all_result = _run(replace(
-        _configuration(),
+        _configuration(SearchExecutionMode.BOUNDED_OVERLAP),
         export=SearchExportConfiguration(str(tmp_path), True, True),
     ))
     assert len(all_result.export_paths) == 2
     payload = json.loads((tmp_path / "m5_8_search_results.json").read_text())
     assert payload["schema_version"] == 1
     assert payload["scope"] == "all"
-    assert len(payload["candidates"]) == len(all_result.candidates)
+    assert len(payload["candidates"]) == len(_candidates(all_result))
     assert payload["state_evaluations"]
     assert {
         team["team_id"]
@@ -172,9 +181,9 @@ def test_json_and_csv_exports_include_all_and_filtered_scopes(tmp_path) -> None:
         for team in evaluation["teams"]
     } == {1, 2, 3, 4}
 
-    selected = all_result.candidates[0].candidate_id
+    selected = _candidates(all_result)[0].candidate_id
     filtered = _run(replace(
-        _configuration(),
+        _configuration(SearchExecutionMode.BOUNDED_OVERLAP),
         export=SearchExportConfiguration(str(tmp_path), True, False, (selected,)),
     ))
     filtered_payload = json.loads((tmp_path / "m5_8_search_results.json").read_text())
@@ -183,8 +192,25 @@ def test_json_and_csv_exports_include_all_and_filtered_scopes(tmp_path) -> None:
     assert {
         item["completed_state_sha256"]
         for item in filtered_payload["state_evaluations"]
-    } == {filtered.candidates[0].completed_state_sha256}
+    } == {_candidates(filtered)[0].completed_state_sha256}
     assert filtered.run_sha256 == all_result.run_sha256
+
+
+def test_reference_and_indexed_exports_are_byte_equivalent(tmp_path) -> None:
+    reference_root = tmp_path / "reference"
+    indexed_root = tmp_path / "indexed"
+    reference = _run(replace(
+        _configuration(),
+        export=SearchExportConfiguration(str(reference_root), True, True),
+    ))
+    indexed = _run(replace(
+        _configuration(SearchExecutionMode.BOUNDED_OVERLAP),
+        export=SearchExportConfiguration(str(indexed_root), True, True),
+    ))
+    assert reference.run_sha256 == indexed.run_sha256
+    for name in ("m5_8_search_results.json", "m5_8_search_results.csv"):
+        assert (reference_root / name).read_bytes() == (indexed_root / name).read_bytes()
+    indexed.close()
 
 
 def test_optional_preflight_reports_measured_not_invented_values() -> None:
@@ -200,9 +226,13 @@ def test_optional_preflight_reports_measured_not_invented_values() -> None:
     assert with_preflight.preflight.peak_traced_bytes > 0
 
 
-def test_fixed_mode_remains_available_without_progressive_ranking_claim() -> None:
+@pytest.mark.parametrize(
+    "mode",
+    (SearchExecutionMode.SEQUENTIAL_REFERENCE, SearchExecutionMode.BOUNDED_OVERLAP),
+)
+def test_fixed_mode_remains_available_without_progressive_ranking_claim(mode) -> None:
     configuration = replace(
-        _configuration(),
+        _configuration(mode),
         evaluation_mode=SearchEvaluationMode.FIXED,
         sampling=ProgressiveSamplingConfiguration(0.95, 0.99, 1, 1, 2, 1),
     )
@@ -210,7 +240,8 @@ def test_fixed_mode_remains_available_without_progressive_ranking_claim() -> Non
     assert result.fixed_evaluation is not None
     assert result.progressive_evaluation is None
     assert not result.ranking_resolved
-    assert all(item.evaluated_paths == 2 for item in result.candidates)
+    assert all(item.evaluated_paths == 2 for item in _candidates(result))
+    result.close()
 
 
 @pytest.mark.parametrize(
@@ -234,7 +265,7 @@ def test_reordered_candidate_inputs_preserve_statistical_results() -> None:
         tradeable_player_ids=tuple(reversed(_candidate_search().tradeable_player_ids)),
     )
     reordered = _run(replace(_configuration(), candidate_search=search))
-    assert original.candidates == reordered.candidates
+    assert _candidates(original) == _candidates(reordered)
     assert original.progressive_evaluation == reordered.progressive_evaluation
     assert original.run_sha256 == reordered.run_sha256
 
@@ -244,6 +275,135 @@ def test_progress_reports_initial_and_refinement_evaluation_stages() -> None:
     stages = tuple(item.stage for item in result.progress)
     assert OrchestrationStage.INITIAL_EVALUATION in stages
     assert OrchestrationStage.PROGRESSIVE_REFINEMENT in stages
+
+
+def test_bounded_mode_uses_paged_index_and_preserves_shared_state_links(tmp_path) -> None:
+    reference = _run(_configuration())
+    bounded = _run(_configuration(
+        SearchExecutionMode.BOUNDED_OVERLAP,
+        index_directory=str(tmp_path),
+        index_page_size=2,
+    ))
+    assert bounded.candidates == ()
+    assert bounded.result_index is not None
+    assert bounded.result_index.counts() == (
+        len(_candidates(reference)),
+        reference.enumeration.coverage.unique_completed_state_count,
+    )
+    for state_id in bounded.result_index.state_ids():
+        group = bounded.result_index.get_state_group(state_id)
+        assert group.candidate_ids == tuple(sorted(group.candidate_ids))
+        assert all(
+            item.completed_state_sha256 == state_id
+            for item in bounded.result_index.iter_candidates()
+            if item.candidate_id in group.candidate_ids
+        )
+    path = Path(bounded.result_index.path)
+    assert path.exists()
+    bounded.close()
+    assert not path.exists()
+
+
+def test_index_growth_does_not_accumulate_candidate_objects_in_result(tmp_path) -> None:
+    source = _run(_configuration())
+    candidate = source.enumeration.candidates[0]
+    index = SearchResultIndex.create(str(tmp_path), 7)
+    try:
+        for value in range(250):
+            index.add_candidate(replace(candidate, candidate_id=f"candidate-{value:04d}"))
+        assert index.counts() == (250, 1)
+        first_ten = []
+        for item in index.iter_candidates():
+            first_ten.append(item.candidate_id)
+            if len(first_ten) == 10:
+                break
+        assert first_ten == [f"candidate-{value:04d}" for value in range(10)]
+    finally:
+        path = Path(index.path)
+        index.close()
+    assert not path.exists()
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (SearchExecutionMode.SEQUENTIAL_REFERENCE, SearchExecutionMode.BOUNDED_OVERLAP),
+)
+def test_deterministic_stop_during_generation_marks_coverage_incomplete(mode) -> None:
+    result = execute_search_orchestration(
+        _scenario_snapshot_with_bench(),
+        _state(_scenario_snapshot_with_bench()),
+        _configuration(mode, candidate_limit=2),
+        simulation_config(2),
+        PrescribedModel(),
+        stop_requested=lambda: True,
+    )
+    assert result.stop_reason is OrchestrationStopReason.WALL_CLOCK_LIMIT
+    assert not result.candidate_coverage_complete
+    assert not result.evaluation_coverage_complete
+    assert not result.statistical_precision_complete
+    assert not result.ranking_resolved
+    result.close()
+
+
+def test_deadline_after_active_batch_preserves_completed_result(monkeypatch) -> None:
+    import fantasy_football.trade_search as trade_search
+
+    calls = 0
+    now = 0.0
+    original = trade_search._run_batch
+
+    def counted(*args, **kwargs):
+        nonlocal calls, now
+        result = original(*args, **kwargs)
+        calls += 1
+        if calls == 2:
+            now = 2.0
+        return result
+
+    monkeypatch.setattr(trade_search, "_run_batch", counted)
+    result = execute_search_orchestration(
+        _scenario_snapshot_with_bench(),
+        _state(_scenario_snapshot_with_bench()),
+        _configuration(wall_clock_seconds=1.0),
+        simulation_config(2),
+        PrescribedModel(),
+        monotonic_clock=lambda: now,
+    )
+    assert calls == 2
+    assert result.stop_reason is OrchestrationStopReason.WALL_CLOCK_LIMIT
+    assert result.progressive_evaluation is not None
+    assert result.progressive_evaluation.initially_evaluated_states == 1
+    assert sum(item.evaluated_paths > 0 for item in _candidates(result)) >= 1
+    assert not result.evaluation_coverage_complete
+    assert not result.statistical_precision_complete
+    assert result.wall_clock_overrun_seconds == 1.0
+
+
+def test_bounded_index_is_cleaned_after_generation_failure(monkeypatch, tmp_path) -> None:
+    import fantasy_football.search_orchestration as orchestration
+
+    paths = []
+    original_create = orchestration.SearchResultIndex.create
+
+    def create(directory, page_size):
+        value = original_create(directory, page_size)
+        paths.append(Path(value.path))
+        return value
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("injected candidate worker failure")
+        yield
+
+    monkeypatch.setattr(orchestration.SearchResultIndex, "create", create)
+    monkeypatch.setattr(orchestration, "_attempts", fail)
+    configuration = _configuration(
+        SearchExecutionMode.BOUNDED_OVERLAP,
+        index_directory=str(tmp_path),
+    )
+    with pytest.raises(RuntimeError, match="injected candidate worker failure"):
+        _run(configuration)
+    gc.collect()
+    assert paths and all(not path.exists() for path in paths)
 
 
 def test_generic_progressive_state_evaluation_matches_accepted_m54_trade_policy() -> None:

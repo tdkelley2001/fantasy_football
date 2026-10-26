@@ -7,7 +7,7 @@ from enum import StrEnum
 import hashlib
 import json
 import math
-from typing import Callable
+from typing import Callable, Protocol
 
 from fantasy_football.canonical.model import LeagueSnapshot
 from fantasy_football.evolving_state import EvolvingLeagueState, validate_evolving_state
@@ -200,6 +200,14 @@ class ProgressiveStateEvaluationResult:
     progress_snapshots: tuple[TradeSearchProgressSnapshot, ...]
 
 
+class ProgressiveStateGroupSource(Protocol):
+    """Ordered random-access source used by bounded M5.8 evaluation."""
+
+    def state_ids(self) -> tuple[str, ...]: ...
+
+    def get_state_group(self, completed_state_sha256: str) -> ProgressiveStateGroupInput: ...
+
+
 def _fail(message: str) -> None:
     raise ProgressiveTradeSearchError(message)
 
@@ -325,7 +333,7 @@ def _search_identity(
 def evaluate_progressive_state_groups(
     snapshot: LeagueSnapshot,
     baseline_state: EvolvingLeagueState,
-    state_groups: tuple[ProgressiveStateGroupInput, ...],
+    state_groups: tuple[ProgressiveStateGroupInput, ...] | ProgressiveStateGroupSource,
     requesting_team_id: int,
     sampling: ProgressiveSamplingConfiguration,
     simulation: MonteCarloConfig,
@@ -333,6 +341,7 @@ def evaluate_progressive_state_groups(
     *,
     parallel_execution: ParallelExecutionConfiguration | None = None,
     progress_observer: Callable[[TradeSearchProgressSnapshot], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> ProgressiveStateEvaluationResult:
     """Apply the accepted M5.4 policy to action-family-neutral state groups."""
 
@@ -345,10 +354,20 @@ def evaluate_progressive_state_groups(
     team_ids = {item.team_id for item in snapshot.teams}
     if requesting_team_id not in team_ids:
         _fail("requesting_team_id is unknown")
-    ordered_groups = tuple(sorted(state_groups, key=lambda item: item.completed_state_sha256))
-    if len({item.completed_state_sha256 for item in ordered_groups}) != len(ordered_groups):
+    if hasattr(state_groups, "state_ids") and hasattr(state_groups, "get_state_group"):
+        ordered_ids = state_groups.state_ids()
+        get_group = state_groups.get_state_group
+    else:
+        materialized = tuple(sorted(state_groups, key=lambda item: item.completed_state_sha256))
+        ordered_ids = tuple(item.completed_state_sha256 for item in materialized)
+        by_id = {item.completed_state_sha256: item for item in materialized}
+        get_group = by_id.__getitem__
+    if len(set(ordered_ids)) != len(ordered_ids):
         _fail("state_groups contain duplicate completed-state identities")
-    for group in ordered_groups:
+    if ordered_ids != tuple(sorted(ordered_ids)):
+        _fail("state_groups must provide deterministic completed-state order")
+    for state_id in ordered_ids:
+        group = get_group(state_id)
         validate_evolving_state(group.state, snapshot)
         if completed_state_fingerprint(snapshot, group.state) != group.completed_state_sha256:
             _fail(f"state group {group.completed_state_sha256} fingerprint is inconsistent")
@@ -356,21 +375,15 @@ def evaluate_progressive_state_groups(
             _fail(f"state group {group.completed_state_sha256} candidate links are invalid")
 
     limit = sampling.unique_state_evaluation_budget
-    selected = ordered_groups if limit is None else ordered_groups[:limit]
-    coverage_complete = len(selected) == len(ordered_groups)
+    selected_ids = ordered_ids if limit is None else ordered_ids[:limit]
+    coverage_complete = len(selected_ids) == len(ordered_ids)
     precision = _precision_configuration(sampling)
     baseline_batches: list[MonteCarloBatchResult] = []
     scenario_batches: dict[str, list[MonteCarloBatchResult]] = {
-        item.completed_state_sha256: [] for item in selected
+        state_id: [] for state_id in selected_ids
     }
     comparisons: dict[str, ManualScenarioComparison] = {}
     snapshots: list[TradeSearchProgressSnapshot] = []
-    completed = {
-        item.completed_state_sha256: _canonical_completed(
-            snapshot, item.completed_state_sha256, item.state
-        ) for item in selected
-    }
-    group_by_id = {item.completed_state_sha256: item for item in ordered_groups}
 
     def emit(stage, round_index, competitive, stop=None):
         estimates = tuple(
@@ -382,9 +395,9 @@ def evaluate_progressive_state_groups(
                 state_id in competitive,
             ) for state_id, comparison in sorted(comparisons.items())
         )
-        full = coverage_complete and len(estimates) == len(ordered_groups)
+        full = coverage_complete and len(estimates) == len(ordered_ids)
         item = TradeSearchProgressSnapshot(
-            stage, len(ordered_groups), len(comparisons), round_index, estimates,
+            stage, len(ordered_ids), len(comparisons), round_index, estimates,
             full,
             full and all(value.precision_reached_all_teams for value in estimates),
             full and len(competitive) == 1,
@@ -412,15 +425,18 @@ def evaluate_progressive_state_groups(
         )
 
     current_paths = 0
-    if selected:
+    if selected_ids and not (should_stop is not None and should_stop()):
         count = sampling.initial_paths
         baseline_batches.append(_run_batch(snapshot, config(baseline_state, 0, count), model, parallel_execution))
         baseline = combined(baseline_state, baseline_batches, count)
-        for group in selected:
-            state_id = group.completed_state_sha256
+        for state_id in selected_ids:
+            if should_stop is not None and should_stop():
+                break
+            group = get_group(state_id)
             scenario_batches[state_id].append(_run_batch(snapshot, config(group.state, 0, count), model, parallel_execution))
             comparisons[state_id] = compare_completed_scenario_batches(
-                snapshot, baseline_state, completed[state_id], baseline,
+                snapshot, baseline_state,
+                _canonical_completed(snapshot, state_id, group.state), baseline,
                 combined(group.state, scenario_batches[state_id], count), precision,
             )
             emit(SearchProgressStage.INITIAL_EVALUATION, 0, set(comparisons))
@@ -430,7 +446,7 @@ def evaluate_progressive_state_groups(
         (sampling.maximum_paths_per_state - sampling.initial_paths)
         / sampling.refinement_batch_paths
     )
-    pair_looks = max(1, len(selected) * (len(selected) - 1) // 2 * planned_looks)
+    pair_looks = max(1, len(selected_ids) * (len(selected_ids) - 1) // 2 * planned_looks)
 
     def competitive(pool: set[str]) -> set[str]:
         ordered = tuple(sorted(pool, key=lambda state_id: (-_requester_difference(comparisons[state_id], requesting_team_id), state_id)))
@@ -441,8 +457,8 @@ def evaluate_progressive_state_groups(
         for state_id in ordered[1:]:
             overlap = min(comparisons[leader].matched_path_count, comparisons[state_id].matched_path_count)
             difference = paired_championship_difference(
-                combined(group_by_id[leader].state, scenario_batches[leader], overlap),
-                combined(group_by_id[state_id].state, scenario_batches[state_id], overlap),
+                combined(get_group(leader).state, scenario_batches[leader], overlap),
+                combined(get_group(state_id).state, scenario_batches[state_id], overlap),
                 team_id=requesting_team_id,
                 confidence_level=sampling.confidence_level,
                 simultaneous_comparison_count=pair_looks,
@@ -451,7 +467,7 @@ def evaluate_progressive_state_groups(
                 retained.add(state_id)
         return retained
 
-    competitive_ids = competitive(set(scenario_batches))
+    competitive_ids = competitive(set(comparisons))
     finalist_ids = set(competitive_ids)
     round_index = 0
     emit(SearchProgressStage.REFINEMENT, round_index, competitive_ids)
@@ -461,6 +477,8 @@ def evaluate_progressive_state_groups(
         and not _all_team_precision(comparisons[state_id], sampling.target_paired_half_width)
     }
     while active:
+        if should_stop is not None and should_stop():
+            break
         count = min(sampling.refinement_batch_paths, sampling.maximum_paths_per_state - current_paths)
         if count <= 0:
             break
@@ -468,10 +486,13 @@ def evaluate_progressive_state_groups(
         next_paths = current_paths + count
         baseline = combined(baseline_state, baseline_batches, next_paths)
         for state_id in sorted(active):
-            group = group_by_id[state_id]
+            if should_stop is not None and should_stop():
+                break
+            group = get_group(state_id)
             scenario_batches[state_id].append(_run_batch(snapshot, config(group.state, current_paths, count), model, parallel_execution))
             comparisons[state_id] = compare_completed_scenario_batches(
-                snapshot, baseline_state, completed[state_id], baseline,
+                snapshot, baseline_state,
+                _canonical_completed(snapshot, state_id, group.state), baseline,
                 combined(group.state, scenario_batches[state_id], next_paths), precision,
             )
         current_paths = next_paths
@@ -486,8 +507,8 @@ def evaluate_progressive_state_groups(
         }
 
     evaluations = []
-    for group in ordered_groups:
-        state_id = group.completed_state_sha256
+    for state_id in ordered_ids:
+        group = get_group(state_id)
         comparison = comparisons.get(state_id)
         if comparison is None:
             status, paths, converged, evaluation_id = CandidateStatisticalStatus.NOT_EVALUATED, 0, False, None
@@ -511,9 +532,10 @@ def evaluate_progressive_state_groups(
             state_id in finalist_ids, paths, converged,
             state_id in competitive_ids, comparison,
         ))
-    precision_complete = coverage_complete and all(item.precision_reached_all_teams for item in evaluations)
-    ranking_resolved = coverage_complete and len(competitive_ids) == 1
-    if not ordered_groups:
+    evaluation_complete = coverage_complete and len(comparisons) == len(ordered_ids)
+    precision_complete = evaluation_complete and all(item.precision_reached_all_teams for item in evaluations)
+    ranking_resolved = evaluation_complete and len(competitive_ids) == 1
+    if not ordered_ids:
         stop = SearchStopReason.NO_ELIGIBLE_CANDIDATES
     elif not coverage_complete:
         stop = SearchStopReason.INITIAL_STATE_BUDGET_REACHED
@@ -526,9 +548,9 @@ def evaluate_progressive_state_groups(
     emit(SearchProgressStage.FINAL, round_index, competitive_ids, stop)
     return ProgressiveStateEvaluationResult(
         tuple(evaluations), tuple(sorted(finalist_ids)), tuple(sorted(competitive_ids)),
-        len(selected), sum(item.requested_paths for item in baseline_batches),
+        len(comparisons), sum(item.requested_paths for item in baseline_batches),
         sum(batch.requested_paths for batches in scenario_batches.values() for batch in batches),
-        coverage_complete, precision_complete, ranking_resolved, stop, tuple(snapshots),
+        evaluation_complete, precision_complete, ranking_resolved, stop, tuple(snapshots),
     )
 
 

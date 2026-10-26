@@ -25,10 +25,21 @@ retained in every result.
 
 Sequential reference mode uses the accepted materialized M5.7 reference.
 Bounded mode consumes the same lazy action stream through a producer/consumer
-queue with configured backpressure. Candidate and wall-clock generation limits
-stop at an explicit boundary and mark coverage incomplete; queue capacity never
-discards a candidate. Stable candidate IDs and M5.3 state fingerprints make
-queue scheduling invisible.
+queue with configured backpressure and writes accepted paths directly to a
+temporary SQLite index in `index_page_size` batches. The index stores every
+full candidate once, one canonical state payload per M5.3 fingerprint, and the
+many-candidate-to-one-state links. `SearchResultIndex.iter_candidates()`,
+`iter_candidate_results()`, `state_ids()`, and `get_state_group()` provide
+deterministic paged access. Bounded `SearchOrchestrationResult.candidates` is
+empty by design; `result.iter_candidates()` is the mode-neutral interface.
+`result.close()` removes the database and sidecars. Context-manager use is also
+supported, failed construction cleans up, and garbage collection is only a
+final safety net. Temporary pickle payloads are process-created implementation
+data, never a durable or caller-supplied interchange format.
+
+Candidate and wall-clock generation limits stop at an explicit boundary and
+mark coverage incomplete; queue capacity never discards a candidate. Stable
+candidate IDs and M5.3 state fingerprints make queue scheduling invisible.
 
 Progressive evaluation begins only after the eligible unique-state universe is
 known. This preserves M5.4 equal initial exposure, the complete unordered-pair
@@ -45,7 +56,9 @@ all-planned-look Bonferroni protection, minimum finalists, unequal-coverage
 overlap comparisons, and separate precision, competitiveness, and ranking
 resolution. Equivalent paths share one state evaluation and do not inflate the
 multiplicity family. Fixed evaluation remains available through the accepted M4
-comparison and makes no progressive ranking claim.
+comparison and makes no progressive ranking claim. Both fixed and progressive
+bounded evaluation load unique states from the index on demand; they do not
+rebuild the full candidate tuple.
 
 ## Preflight, progress, and budgets
 
@@ -56,8 +69,16 @@ make extrapolation uncertain. No estimate exists when preflight is disabled.
 
 Immutable progress snapshots distinguish validation, preflight, generation,
 grouping, evaluation, refinement, and final aggregation. Candidate coverage,
-statistical precision, ranking resolution, workers, elapsed time, and stop
-reasons remain separate. The contract never fabricates a completion percentage.
+evaluation coverage, statistical precision, ranking resolution, workers,
+elapsed time, and stop reasons remain separate. One deadline applies to
+preflight, sequential or bounded generation, fixed evaluation, and progressive
+refinement. It is checked before requesting another candidate or Monte Carlo
+batch. An active batch finishes safely; `wall_clock_overrun_seconds` reports the
+nominal-budget overrun. Completed comparisons are retained, while skipped
+states remain unevaluated and can never be labeled precise or ranking resolving.
+An injectable stop signal provides deterministic validation with the same safe
+boundaries. Unrelated exceptions still propagate. The contract never fabricates
+a completion percentage.
 
 ## Results and exports
 
@@ -66,18 +87,19 @@ statuses, action count, evaluation paths, requester championship delta,
 competitiveness, precision, and caveats. Versioned JSON provides complete or
 explicitly filtered current summaries plus compact all-team championship,
 playoff, and placement probability changes for evaluated states; CSV provides
-the candidate table.
+the candidate table. Candidate rows are streamed from the index rather than
+materialized for export.
 Filters never rerun simulation, invent unsimulated values, or alter analytical
 run identity. Exports are explicit and are not a historical run archive.
 
 ## Known limits
 
-- Current active results remain in memory. Disk-backed identity/result indexing
-  is required before claiming bounded memory for arbitrarily large universes.
+- Compact per-state statistical comparisons remain in memory during M5.4
+  finalist selection; full candidate paths and state payloads are disk-backed.
 - Progressive generation/evaluation overlap is intentionally disallowed because
   accepted M5.4 selection requires the complete eligible universe.
-- Wall-clock enforcement stops generation safely; an active Monte Carlo batch
-  is allowed to finish.
+- An active Monte Carlo batch cannot be preempted and can overrun the nominal
+  wall-clock budget; the measured overrun is explicit.
 - M3.6 simulation checkpoints are not duplicated. Search-level durable recovery
   and long-lived run management remain outside this implementation.
 - `transaction_authorized` is modeled, not guaranteed ESPN execution or
@@ -95,3 +117,12 @@ traced peak and 4.516 seconds through the bounded queue with 0.964 MiB traced
 peak. The bounded mode was slightly slower at this size, as expected from queue
 overhead. This synthetic benchmark is not a live ESPN league forecast and does
 not measure child-process RSS.
+
+The corrected index-growth benchmark used one sanitized candidate/state payload
+with 100, 500, and 1,000 distinct path identities. SQLite files grew from
+454,656 to 2,142,208 and 4,268,032 bytes, while traced Python peak allocation was
+434,756, 711,243, and 697,851 bytes respectively. Runtime was 0.382, 2.034, and
+3.966 seconds using deliberately conservative one-row commits; production uses
+bounded batch commits. This demonstrates disk growth with path count without
+linear retention of full Python candidate objects. It is synthetic, not a live
+league workload, and excludes OS page cache and SQLite native allocation.
