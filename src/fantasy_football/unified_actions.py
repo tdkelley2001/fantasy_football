@@ -897,7 +897,9 @@ def iter_unified_action_candidates(snapshot, state, configuration):
             yield item
 
 
-def enumerate_unified_action_candidates(snapshot, state, configuration):
+def enumerate_unified_action_candidates(
+    snapshot, state, configuration, *, should_stop=None,
+):
     """Materialize the supported finite grammar with explicit coverage."""
     config_sha, baseline_sha = _validate_configuration(snapshot, state, configuration)
     rejections = Counter()
@@ -905,7 +907,16 @@ def enumerate_unified_action_candidates(snapshot, state, configuration):
     generated = 0
     screened = 0
     truncated = False
-    for item in _attempts(snapshot, state, configuration, config_sha, baseline_sha, rejections):
+    stopped = False
+    attempts = iter(_attempts(snapshot, state, configuration, config_sha, baseline_sha, rejections))
+    while True:
+        if should_stop is not None and should_stop():
+            stopped = True
+            break
+        try:
+            item = next(attempts)
+        except StopIteration:
+            break
         generated += 1
         if not item.screening_passed:
             screened += 1
@@ -937,9 +948,9 @@ def enumerate_unified_action_candidates(snapshot, state, configuration):
     coverage = UnifiedActionCoverage(
         generated, len(candidates), screened, no_acquisition, immediate, conditional,
         len(completed_states), len(candidates) - len(completed_states),
-        tuple(sorted(rejections.items())), not truncated,
-        "completed_path_materialization" if truncated else None,
-        "configured maximum_completed_paths reached" if truncated else None,
+        tuple(sorted(rejections.items())), not truncated and not stopped,
+        "candidate_generation" if stopped else "completed_path_materialization" if truncated else None,
+        "wall-clock deadline reached" if stopped else "configured maximum_completed_paths reached" if truncated else None,
     )
     return UnifiedActionEnumeration(config_sha, baseline_sha, tuple(candidates), completed_states, coverage)
 
@@ -953,6 +964,7 @@ def evaluate_unified_action_states(
     precision: PrecisionConfiguration,
     *,
     parallel_execution: ParallelExecutionConfiguration | None = None,
+    should_stop=None,
 ) -> UnifiedActionEvaluationResult:
     """Evaluate each exact final state once through the accepted M4 estimator.
 
@@ -980,6 +992,8 @@ def evaluate_unified_action_states(
     )
     evaluations = []
     for group in enumeration.completed_states:
+        if should_stop is not None and should_stop():
+            break
         if completed_state_fingerprint(snapshot, group.state) != group.completed_state_sha256:
             _fail(f"completed-state group {group.completed_state_sha256} is inconsistent")
         source = by_id[group.candidate_ids[0]].completed_scenario
@@ -1013,8 +1027,10 @@ def evaluate_unified_action_states(
                 comparison,
             )
         )
+    evaluated_state_ids = {item.completed_state_sha256 for item in evaluations}
     links = tuple(
         UnifiedEvaluationLink(item.candidate_id, item.completed_state_sha256)
         for item in enumeration.candidates
+        if item.completed_state_sha256 in evaluated_state_ids
     )
     return UnifiedActionEvaluationResult(enumeration, tuple(evaluations), links)
