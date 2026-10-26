@@ -91,6 +91,7 @@ class UnifiedExecutionStatus(StrEnum):
 
 
 class UnifiedAcquisitionStatus(StrEnum):
+    NOT_APPLICABLE = "not_applicable"
     IMMEDIATE_FREE_AGENT = "immediate_free_agent"
     CONDITIONAL_WAIVER = "conditional_waiver"
 
@@ -160,6 +161,7 @@ class UnifiedActionCoverage:
     generated_path_count: int
     retained_path_count: int
     screened_out_count: int
+    no_acquisition_count: int
     authorized_immediate_count: int
     conditional_waiver_count: int
     unique_completed_state_count: int
@@ -755,7 +757,10 @@ def _candidate(
     *,
     structural_intermediate_only: bool = False,
 ) -> UnifiedActionCandidate:
-    conditional = any(action.conditional for action in actions)
+    acquisition_actions = tuple(
+        action for action in actions if action.acquired_player_id is not None
+    )
+    conditional = any(action.conditional for action in acquisition_actions)
     identity = _hash({
         "contract": "m5.7-unified-action-path-v1",
         "snapshot_id": snapshot.snapshot_id,
@@ -793,7 +798,11 @@ def _candidate(
         (
             UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
             if conditional
-            else UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
+            else (
+                UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
+                if acquisition_actions
+                else UnifiedAcquisitionStatus.NOT_APPLICABLE
+            )
         ),
         completed, completed_state_fingerprint(snapshot, completed.state),
         tuple(sorted(assumptions)), tuple(sorted(caveats)),
@@ -917,8 +926,16 @@ def enumerate_unified_action_candidates(snapshot, state, configuration):
         item.acquisition_status is UnifiedAcquisitionStatus.CONDITIONAL_WAIVER
         for item in candidates
     )
+    no_acquisition = sum(
+        item.acquisition_status is UnifiedAcquisitionStatus.NOT_APPLICABLE
+        for item in candidates
+    )
+    immediate = sum(
+        item.acquisition_status is UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
+        for item in candidates
+    )
     coverage = UnifiedActionCoverage(
-        generated, len(candidates), screened, len(candidates) - conditional, conditional,
+        generated, len(candidates), screened, no_acquisition, immediate, conditional,
         len(completed_states), len(candidates) - len(completed_states),
         tuple(sorted(rejections.items())), not truncated,
         "completed_path_materialization" if truncated else None,

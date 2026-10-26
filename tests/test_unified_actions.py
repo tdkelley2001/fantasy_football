@@ -102,6 +102,12 @@ def test_standalone_trade_matches_m51_final_states() -> None:
         completed_state_fingerprint(snapshot, item.completed_scenario.state)
         for item in accepted.candidates
     }
+    assert all(
+        item.acquisition_status is UnifiedAcquisitionStatus.NOT_APPLICABLE
+        for item in unified.candidates
+    )
+    assert unified.coverage.no_acquisition_count == len(unified.candidates)
+    assert unified.coverage.authorized_immediate_count == 0
 
 
 def test_standalone_acquisition_matches_m55_executable_states() -> None:
@@ -132,6 +138,8 @@ def test_standalone_acquisition_matches_m55_executable_states() -> None:
         and item.acquisition_status is UnifiedAcquisitionStatus.IMMEDIATE_FREE_AGENT
         for item in unified.candidates
     )
+    assert unified.coverage.no_acquisition_count == 0
+    assert unified.coverage.authorized_immediate_count == len(unified.candidates)
 
 
 def test_standalone_chain_matches_m56_paths() -> None:
@@ -159,6 +167,11 @@ def test_standalone_chain_matches_m56_paths() -> None:
     assert {item.completed_state_sha256 for item in unified.candidates} == {
         item.completed_state_sha256 for item in accepted.candidates
     }
+    assert all(
+        item.acquisition_status is UnifiedAcquisitionStatus.NOT_APPLICABLE
+        for item in unified.candidates
+    )
+    assert unified.coverage.no_acquisition_count == len(unified.candidates)
 
 
 def test_supported_mixed_orderings_are_chronological_and_immutable() -> None:
