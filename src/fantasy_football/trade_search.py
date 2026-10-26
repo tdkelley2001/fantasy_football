@@ -178,6 +178,28 @@ class ProgressiveTradeSearchResult:
     assumptions: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ProgressiveStateGroupInput:
+    completed_state_sha256: str
+    state: EvolvingLeagueState
+    candidate_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressiveStateEvaluationResult:
+    state_evaluations: tuple[StateSearchEvaluation, ...]
+    finalist_state_ids: tuple[str, ...]
+    competitive_state_ids: tuple[str, ...]
+    initially_evaluated_states: int
+    baseline_paths_computed: int
+    scenario_paths_computed: int
+    candidate_coverage_complete: bool
+    statistical_precision_complete: bool
+    ranking_resolved: bool
+    stop_reason: SearchStopReason
+    progress_snapshots: tuple[TradeSearchProgressSnapshot, ...]
+
+
 def _fail(message: str) -> None:
     raise ProgressiveTradeSearchError(message)
 
@@ -298,6 +320,216 @@ def _search_identity(
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
     ).hexdigest()
+
+
+def evaluate_progressive_state_groups(
+    snapshot: LeagueSnapshot,
+    baseline_state: EvolvingLeagueState,
+    state_groups: tuple[ProgressiveStateGroupInput, ...],
+    requesting_team_id: int,
+    sampling: ProgressiveSamplingConfiguration,
+    simulation: MonteCarloConfig,
+    model: PlayerOutcomeModel,
+    *,
+    parallel_execution: ParallelExecutionConfiguration | None = None,
+    progress_observer: Callable[[TradeSearchProgressSnapshot], None] | None = None,
+) -> ProgressiveStateEvaluationResult:
+    """Apply the accepted M5.4 policy to action-family-neutral state groups."""
+
+    validate_evolving_state(baseline_state, snapshot)
+    _validate_sampling(sampling)
+    if simulation.path_count != sampling.maximum_paths_per_state:
+        _fail("simulation path_count must equal maximum_paths_per_state")
+    if simulation.ir_policy is not baseline_state.ir_policy:
+        _fail("simulation and baseline state IR policies differ")
+    team_ids = {item.team_id for item in snapshot.teams}
+    if requesting_team_id not in team_ids:
+        _fail("requesting_team_id is unknown")
+    ordered_groups = tuple(sorted(state_groups, key=lambda item: item.completed_state_sha256))
+    if len({item.completed_state_sha256 for item in ordered_groups}) != len(ordered_groups):
+        _fail("state_groups contain duplicate completed-state identities")
+    for group in ordered_groups:
+        validate_evolving_state(group.state, snapshot)
+        if completed_state_fingerprint(snapshot, group.state) != group.completed_state_sha256:
+            _fail(f"state group {group.completed_state_sha256} fingerprint is inconsistent")
+        if not group.candidate_ids or len(group.candidate_ids) != len(set(group.candidate_ids)):
+            _fail(f"state group {group.completed_state_sha256} candidate links are invalid")
+
+    limit = sampling.unique_state_evaluation_budget
+    selected = ordered_groups if limit is None else ordered_groups[:limit]
+    coverage_complete = len(selected) == len(ordered_groups)
+    precision = _precision_configuration(sampling)
+    baseline_batches: list[MonteCarloBatchResult] = []
+    scenario_batches: dict[str, list[MonteCarloBatchResult]] = {
+        item.completed_state_sha256: [] for item in selected
+    }
+    comparisons: dict[str, ManualScenarioComparison] = {}
+    snapshots: list[TradeSearchProgressSnapshot] = []
+    completed = {
+        item.completed_state_sha256: _canonical_completed(
+            snapshot, item.completed_state_sha256, item.state
+        ) for item in selected
+    }
+    group_by_id = {item.completed_state_sha256: item for item in ordered_groups}
+
+    def emit(stage, round_index, competitive, stop=None):
+        estimates = tuple(
+            ProgressStateEstimate(
+                state_id,
+                comparison.matched_path_count,
+                _requester_difference(comparison, requesting_team_id),
+                _all_team_precision(comparison, sampling.target_paired_half_width),
+                state_id in competitive,
+            ) for state_id, comparison in sorted(comparisons.items())
+        )
+        full = coverage_complete and len(estimates) == len(ordered_groups)
+        item = TradeSearchProgressSnapshot(
+            stage, len(ordered_groups), len(comparisons), round_index, estimates,
+            full,
+            full and all(value.precision_reached_all_teams for value in estimates),
+            full and len(competitive) == 1,
+            stop,
+        )
+        snapshots.append(item)
+        if progress_observer is not None:
+            progress_observer(item)
+
+    emit(SearchProgressStage.CANDIDATES_READY, 0, set())
+
+    def config(state, start, count):
+        return replace(
+            simulation,
+            first_path_index=simulation.first_path_index + start,
+            path_count=count,
+            initial_evolving_state=state,
+        )
+
+    def combined(state, batches, count):
+        end = simulation.first_path_index + count
+        return combine_monte_carlo_batches(
+            snapshot, config(state, 0, count), model,
+            tuple(batch for batch in batches if batch.path_indices and batch.path_indices[-1] < end),
+        )
+
+    current_paths = 0
+    if selected:
+        count = sampling.initial_paths
+        baseline_batches.append(_run_batch(snapshot, config(baseline_state, 0, count), model, parallel_execution))
+        baseline = combined(baseline_state, baseline_batches, count)
+        for group in selected:
+            state_id = group.completed_state_sha256
+            scenario_batches[state_id].append(_run_batch(snapshot, config(group.state, 0, count), model, parallel_execution))
+            comparisons[state_id] = compare_completed_scenario_batches(
+                snapshot, baseline_state, completed[state_id], baseline,
+                combined(group.state, scenario_batches[state_id], count), precision,
+            )
+            emit(SearchProgressStage.INITIAL_EVALUATION, 0, set(comparisons))
+        current_paths = count
+
+    planned_looks = 1 + math.ceil(
+        (sampling.maximum_paths_per_state - sampling.initial_paths)
+        / sampling.refinement_batch_paths
+    )
+    pair_looks = max(1, len(selected) * (len(selected) - 1) // 2 * planned_looks)
+
+    def competitive(pool: set[str]) -> set[str]:
+        ordered = tuple(sorted(pool, key=lambda state_id: (-_requester_difference(comparisons[state_id], requesting_team_id), state_id)))
+        if not ordered:
+            return set()
+        retained = set(ordered[: min(sampling.minimum_finalist_states, len(ordered))])
+        leader = ordered[0]
+        for state_id in ordered[1:]:
+            overlap = min(comparisons[leader].matched_path_count, comparisons[state_id].matched_path_count)
+            difference = paired_championship_difference(
+                combined(group_by_id[leader].state, scenario_batches[leader], overlap),
+                combined(group_by_id[state_id].state, scenario_batches[state_id], overlap),
+                team_id=requesting_team_id,
+                confidence_level=sampling.confidence_level,
+                simultaneous_comparison_count=pair_looks,
+            )
+            if difference.interval.upper >= 0.0:
+                retained.add(state_id)
+        return retained
+
+    competitive_ids = competitive(set(scenario_batches))
+    finalist_ids = set(competitive_ids)
+    round_index = 0
+    emit(SearchProgressStage.REFINEMENT, round_index, competitive_ids)
+    active = {
+        state_id for state_id in competitive_ids
+        if current_paths < sampling.maximum_paths_per_state
+        and not _all_team_precision(comparisons[state_id], sampling.target_paired_half_width)
+    }
+    while active:
+        count = min(sampling.refinement_batch_paths, sampling.maximum_paths_per_state - current_paths)
+        if count <= 0:
+            break
+        baseline_batches.append(_run_batch(snapshot, config(baseline_state, current_paths, count), model, parallel_execution))
+        next_paths = current_paths + count
+        baseline = combined(baseline_state, baseline_batches, next_paths)
+        for state_id in sorted(active):
+            group = group_by_id[state_id]
+            scenario_batches[state_id].append(_run_batch(snapshot, config(group.state, current_paths, count), model, parallel_execution))
+            comparisons[state_id] = compare_completed_scenario_batches(
+                snapshot, baseline_state, completed[state_id], baseline,
+                combined(group.state, scenario_batches[state_id], next_paths), precision,
+            )
+        current_paths = next_paths
+        round_index += 1
+        competitive_ids = competitive(competitive_ids)
+        finalist_ids.update(competitive_ids)
+        emit(SearchProgressStage.REFINEMENT, round_index, competitive_ids)
+        active = {
+            state_id for state_id in competitive_ids
+            if current_paths < sampling.maximum_paths_per_state
+            and not _all_team_precision(comparisons[state_id], sampling.target_paired_half_width)
+        }
+
+    evaluations = []
+    for group in ordered_groups:
+        state_id = group.completed_state_sha256
+        comparison = comparisons.get(state_id)
+        if comparison is None:
+            status, paths, converged, evaluation_id = CandidateStatisticalStatus.NOT_EVALUATED, 0, False, None
+        else:
+            paths = comparison.matched_path_count
+            converged = _all_team_precision(comparison, sampling.target_paired_half_width)
+            if converged:
+                status = CandidateStatisticalStatus.PRECISION_CONVERGED
+            elif state_id in finalist_ids and paths >= sampling.maximum_paths_per_state:
+                status = CandidateStatisticalStatus.MAXIMUM_PATHS_REACHED
+            elif state_id in finalist_ids:
+                status = CandidateStatisticalStatus.SELECTED_FOR_REFINEMENT
+            else:
+                status = CandidateStatisticalStatus.INITIAL
+            evaluation_id = evaluation_fingerprint(
+                snapshot, baseline_state, group.state,
+                replace(simulation, path_count=paths), model, precision,
+            )
+        evaluations.append(StateSearchEvaluation(
+            state_id, evaluation_id, group.candidate_ids, status,
+            state_id in finalist_ids, paths, converged,
+            state_id in competitive_ids, comparison,
+        ))
+    precision_complete = coverage_complete and all(item.precision_reached_all_teams for item in evaluations)
+    ranking_resolved = coverage_complete and len(competitive_ids) == 1
+    if not ordered_groups:
+        stop = SearchStopReason.NO_ELIGIBLE_CANDIDATES
+    elif not coverage_complete:
+        stop = SearchStopReason.INITIAL_STATE_BUDGET_REACHED
+    elif ranking_resolved and next(item for item in evaluations if item.completed_state_sha256 in competitive_ids).precision_reached_all_teams:
+        stop = SearchStopReason.PRECISION_REACHED
+    elif competitive_ids and all(next(item for item in evaluations if item.completed_state_sha256 == state_id).precision_reached_all_teams for state_id in competitive_ids):
+        stop = SearchStopReason.FINALIST_REFINEMENT_COMPLETE
+    else:
+        stop = SearchStopReason.MAXIMUM_PATHS_REACHED
+    emit(SearchProgressStage.FINAL, round_index, competitive_ids, stop)
+    return ProgressiveStateEvaluationResult(
+        tuple(evaluations), tuple(sorted(finalist_ids)), tuple(sorted(competitive_ids)),
+        len(selected), sum(item.requested_paths for item in baseline_batches),
+        sum(batch.requested_paths for batches in scenario_batches.values() for batch in batches),
+        coverage_complete, precision_complete, ranking_resolved, stop, tuple(snapshots),
+    )
 
 
 def run_progressive_trade_search(
