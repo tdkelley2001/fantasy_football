@@ -49,7 +49,9 @@ status and typed legality failures.
 
 Execution is represented by two independent stable fields. `execution_status`
 is `transaction_authorized` or `structural_hypothetical`; `acquisition_status`
-is `immediate_free_agent` or `conditional_waiver`. Therefore an over-capacity
+is `not_applicable`, `immediate_free_agent`, or `conditional_waiver`.
+Trade-only paths use `not_applicable`; absence of a conditional claim never
+implies that an acquisition occurred. Therefore an over-capacity
 intermediate sequence can never present an unqualified authorized status, and
 both immediate and conditional acquisitions remain distinguishable within
 either sequence class. A modeled conditional waiver records successful-claim
@@ -57,6 +59,12 @@ priority movement but never claims likely success or resolves higher-priority
 manager behavior. Held,
 unresolved, and unauthorized paths are counted as source rejections and never
 materialized as executable candidates.
+
+`transaction_authorized` is a modeled classification under the supported
+repository rules. It is not a guarantee that ESPN will execute the sequence,
+that a counterparty will accept a trade, or that an unmodeled live restriction
+will not intervene. Coverage reports no-acquisition, immediate-free-agent, and
+conditional-waiver path counts separately while preserving total reconciliation.
 
 Trade→acquisition and chain→acquisition preserve the chronological incomplete
 ownership and vacancy ledger. The explicit acquisition is authorized next,
