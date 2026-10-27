@@ -6,7 +6,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 M0–M5.8 and the post-M5 consolidation are **COMPLETE AND ACCEPTED**. M6.1 is **IMPLEMENTED — REVIEW PENDING**; M6.2–M8 are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution/recovery, paired manual what-if comparison, exhaustive action search, bounded result indexing, and synchronous application-service foundation are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
 
-The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to a minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. These application dependencies and services are M6/M7 work and are not implemented yet; existing focused CLIs remain developer diagnostics rather than the primary future interface.
+The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to the implemented minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. Background execution and the frontend remain M6.2/M7 work; existing focused CLIs remain developer diagnostics rather than the primary future interface.
 
 ## Authoritative documentation
 
@@ -312,8 +312,11 @@ python -m fantasy_football.app.server --database outputs/fantasy_football.sqlite
 ```
 
 It binds `127.0.0.1` and requires no ESPN credentials merely to start. See
-[`docs/APPLICATION_SERVICE.md`](docs/APPLICATION_SERVICE.md). Expensive searches
-remain synchronous until M6.2 background-run management is implemented.
+[`docs/APPLICATION_SERVICE.md`](docs/APPLICATION_SERVICE.md). Action searches
+remain synchronous until M6.2 background-run management is implemented, so
+requests must supply `wall_clock_seconds` (at most 30 seconds) and
+`evaluation_state_limit` (at most 25). These are temporary application
+transport limits; they do not restrict direct M5.8 engine execution.
 
 ## Historical implementation
 
