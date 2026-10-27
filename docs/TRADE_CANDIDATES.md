@@ -104,8 +104,9 @@ checks also pass.
 
 M5.3 provides completed-state equivalence identity, M5.4 provides progressive
 Monte Carlo trade evaluation, and M5.5 separately analyzes standalone immediate
-acquisitions. Trade/acquisition chains and integrated CLI search remain later
-milestones.
+acquisitions. M5.6–M5.8 now provide chains, unified action search, progressive
+evaluation, bounded orchestration, and current-result exports; application
+service integration remains M6 work.
 
 ## Optional V(R) screening (M5.2)
 
@@ -300,14 +301,17 @@ inputs. Candidate coverage, all-team precision, and ranking resolution are
 separate fields, and an intermediate snapshot is always provisional. The final
 snapshot carries the same explicit stop reason as the returned result. This is
 an in-process inspection interface, not a job store, queue, recovery mechanism,
-or frontend.
+or frontend. M5.8 reuses this accepted policy through an action-neutral state
+group boundary without changing these statistics.
 
 The current implementation is a simple exact sequential orchestrator with the
 accepted optional bounded process executor at each path block. It has no wall-
 clock cutoff, persistent job, resume store, cloud queue, or UI. Candidate budget
 and statistical precision remain independent. Standalone acquisition analysis
 is documented in `ACQUISITION_CANDIDATES.md`; chains, combined searches, and
-M5.8 machine-specific preflight and streaming work remain deferred.
+M5.8 machine-specific preflight, bounded result indexing, and orchestration are
+implemented in `SEARCH_ORCHESTRATION.md`; local application job management and
+query delivery remain M6 work.
 
 The synthetic benchmark uses four teams, eight players, four trade shapes, and
 two paths per state. It reports 27 raw/feasible/screen-retained candidates, 25

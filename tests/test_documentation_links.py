@@ -26,3 +26,23 @@ def test_relative_documentation_links_resolve(document: Path) -> None:
         if relative_path and not (document.parent / relative_path).resolve().exists():
             missing.append(raw_target)
     assert not missing, f"{document.relative_to(REPOSITORY_ROOT)} has missing links: {missing}"
+
+
+def test_authoritative_documents_share_current_product_direction() -> None:
+    readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+    master_spec = (REPOSITORY_ROOT / "docs" / "MASTER_SPEC.md").read_text(encoding="utf-8")
+    roadmap = (REPOSITORY_ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+
+    for document in (readme, master_spec, roadmap):
+        normalized = document.casefold()
+        assert "m0–m5.8" in normalized
+        assert "complete and accepted" in normalized
+        assert "m6–m8" in normalized
+        assert "not started" in normalized
+
+    assert "local web application" in readme
+    assert "FastAPI" in master_spec
+    assert "M6.1 Define stable application-facing operations" in roadmap
+    assert "M8 — Local V1 release" in roadmap
+    assert "Integrated CLI V1" not in master_spec
+    assert "Optional visual dashboard" not in master_spec

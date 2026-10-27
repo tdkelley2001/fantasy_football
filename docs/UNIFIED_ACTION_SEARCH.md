@@ -1,6 +1,6 @@
 # Unified immediate action search (M5.7)
 
-Status: **IMPLEMENTED — REVIEW PENDING**.
+Status: **COMPLETE AND ACCEPTED**.
 
 `fantasy_football.unified_actions` composes the accepted M5.1, M5.5, and M5.6
 references. It does not reimplement trade legality, acquisition authorization,
@@ -113,8 +113,9 @@ path to that result. It introduces
 no estimator, confidence interval, random draw, or ranking rule. Progressive
 sampling and multiplicity-aware finalist decisions are **not integrated by this
 adapter**. Its immutable state groups are the narrow input boundary for later
-M5.4 orchestration work reserved to M5.8. The fixed-batch result therefore makes
-no ranking-resolution or precision-completeness claim. Conditional-waiver
+M5.8 consumes these immutable groups through the accepted M5.4 progressive
+evaluator. The fixed-batch adapter itself still makes no ranking-resolution or
+precision-completeness claim. Conditional-waiver
 caveats remain path-level metadata and must not be presented as actionable
 certainty.
 
@@ -131,7 +132,8 @@ Candidate completeness and Monte Carlo precision are separate claims.
 V1 does not support trade→acquisition→trade interleaving, acquisition insertion
 inside a dependency chain, standalone drops without an addition, competing
 manager claim simulation, waiver success probabilities, future-week streaming,
-M5.8 scheduling/progressive orchestration, or GUI/background jobs. A requested
+or application background jobs. M5.8 scheduling/progressive orchestration is
+implemented separately in `SEARCH_ORCHESTRATION.md`. A requested
 standalone chain or chain→acquisition length that exceeds the unified total
 action limit is rejected explicitly rather than silently omitted.
 

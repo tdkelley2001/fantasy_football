@@ -1,6 +1,6 @@
 # Weekly Essential Transactions (M2.3d)
 
-Status: **implemented — review pending**. Governing requirements: `MASTER_SPEC.md` Sections 5 and 7 and the M2.3d gate.
+Status: **COMPLETE AND ACCEPTED**. Governing requirements: `MASTER_SPEC.md` Sections 5 and 7 and the M2.3d gate.
 
 ## Contract
 

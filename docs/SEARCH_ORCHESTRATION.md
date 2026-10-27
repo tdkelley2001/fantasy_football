@@ -1,6 +1,6 @@
 # Search orchestration and performance (M5.8)
 
-Status: **IMPLEMENTED — REVIEW PENDING**.
+Status: **COMPLETE AND ACCEPTED**.
 
 `fantasy_football.search_orchestration` is the action-family-neutral execution
 layer over accepted M5.7 candidate generation and M5.4 statistics. It performs
