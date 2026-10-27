@@ -1,11 +1,12 @@
-# Application service and HTTP contracts (M6.1)
+# Application service and HTTP contracts (M6.1–M6.2)
 
 Status: **IMPLEMENTED — REVIEW PENDING**.
 
 Governing requirements are `MASTER_SPEC.md` Sections 2, 8, 9, and 12 plus the
-M6.1 roadmap gate. M6.1 adds a synchronous local adapter over the accepted
-engine. It does not add analytical rules, background jobs, persistent run
-history, live updates, authentication, or frontend code.
+M6.1/M6.2 roadmap gates. M6.1 adds the synchronous adapter; M6.2 adds bounded
+background submission, lifecycle/progress, cancellation, durable local run
+metadata, retained queries, and cleanup. Neither adds analytical rules,
+authentication, or frontend code. See `RUN_MANAGEMENT.md` for M6.2 details.
 
 ## Boundaries
 
@@ -36,6 +37,15 @@ explicit evidence-selection DTO; an unknown model discriminator is rejected.
 | POST | `/api/v1/analyses/baseline` | Synchronous accepted M3.4 precision execution. |
 | POST | `/api/v1/analyses/manual-scenario` | Synchronous accepted M4 completion and paired evaluation. |
 | POST | `/api/v1/analyses/action-search` | Synchronous accepted M5.8 unified action search. |
+| POST | `/api/v1/runs/{baseline,manual-scenario,action-search}` | HTTP 202 background submission. |
+| GET | `/api/v1/runs[/{run_id}]` | Run list and lifecycle/provenance detail. |
+| GET | `/api/v1/runs/{run_id}/progress` | Structured engine/coarse operation progress. |
+| POST | `/api/v1/runs/{run_id}/cancel` | Idempotent cooperative cancellation. |
+| GET | `/api/v1/runs/{run_id}/result` | Completed retained result summary. |
+| GET | `/api/v1/runs/{run_id}/candidates` | Globally sorted/filtered candidate pages. |
+| GET | `/api/v1/runs/{run_id}/candidates/{candidate_id}` | Candidate action detail. |
+| GET | `/api/v1/runs/{run_id}/states/{state_id}` | Shared completed-state detail. |
+| DELETE | `/api/v1/runs/{run_id}` | Terminal-run deletion. |
 
 Requests use strict discriminators and forbid unknown fields. Probabilities are
 named `*_probability`; paired changes are `*_probability_points`; counts include
@@ -146,9 +156,10 @@ not used as a network security boundary. M6.3 will perform the broader review.
 - FastAPI's test stack emits one upstream AnyIO deprecation warning; it does not
   affect contract behavior.
 
-M6.2 owns bounded background execution, lifecycle/status, cancellation, retained
-temporary indexes, pagination/filtering/detail, concurrency, and interruption
-cleanup. M6.1 must not be represented as providing those capabilities.
+M6.2 implements bounded background execution, lifecycle/status, cancellation,
+retained indexed results, pagination/filtering/detail, concurrency, restart
+classification, retention, and cleanup. It uses polling and local SQLite;
+broader performance and security validation remains M6.3 work.
 
 ## Verification evidence
 

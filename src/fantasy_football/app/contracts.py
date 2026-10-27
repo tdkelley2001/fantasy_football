@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 
 API_SCHEMA_VERSION = "1.0"
@@ -415,5 +415,104 @@ class HealthResponse(ContractModel):
     package_version: str
     build_revision: str | None
     revision_status: Literal["explicit", "unknown"]
-    execution_mode: Literal["synchronous_m6_1"] = "synchronous_m6_1"
+    execution_mode: Literal["local_background_m6_2"] = "local_background_m6_2"
     local_only: Literal[True] = True
+
+
+RunType = Literal["baseline", "manual_scenario", "action_search"]
+RunStatus = Literal[
+    "queued", "running", "cancel_requested", "completed", "cancelled", "failed",
+    "interrupted",
+]
+
+
+class BackgroundRunSubmission(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run_id: str
+    run_type: RunType
+    status: RunStatus
+    created_at_utc: datetime
+
+
+class BackgroundRunRecord(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run_id: str
+    run_type: RunType
+    status: RunStatus
+    request_sha256: str
+    snapshot_id: str
+    build: BuildProvenance
+    created_at_utc: datetime
+    started_at_utc: datetime | None
+    finished_at_utc: datetime | None
+    expires_at_utc: datetime
+    stop_reason: str | None
+    error_code: str | None
+    error_message: str | None
+    result_available: bool
+
+
+class BackgroundProgress(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run_id: str
+    status: RunStatus
+    stage: str
+    candidates_explored: int = 0
+    candidates_retained: int = 0
+    unique_completed_states: int = 0
+    state_evaluations_completed: int = 0
+    simulation_paths_completed: int = 0
+    candidate_coverage_complete: bool = False
+    evaluation_coverage_complete: bool = False
+    statistical_precision_complete: bool = False
+    ranking_resolved: bool = False
+    elapsed_seconds: float = 0.0
+    stop_reason: str | None = None
+
+
+class BackgroundResultSummary(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run: BackgroundRunRecord
+    result: JsonValue
+
+
+class CandidateQueryPage(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run_id: str
+    offset: int
+    limit: int
+    total: int
+    sort_key: Literal["candidate_id", "evaluated_paths", "requester_improvement"]
+    sort_direction: Literal["asc", "desc"]
+    candidates: tuple[CandidateSummary, ...]
+
+
+class CandidateActionDetail(ContractModel):
+    action_index: int
+    action_type: str
+    team_id: int
+    counterparty_team_id: int | None
+    outgoing_player_ids: tuple[int, ...]
+    incoming_player_ids: tuple[int, ...]
+    acquired_player_id: int | None
+    dropped_player_id: int | None
+    source_candidate_id: str
+    conditional: bool
+
+
+class CandidateDetail(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run_id: str
+    candidate: CandidateSummary
+    actions: tuple[CandidateActionDetail, ...]
+    required_assumptions: tuple[str, ...]
+    structural_intermediate_only: bool
+
+
+class CompletedStateDetail(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    run_id: str
+    completed_state_sha256: str
+    candidate_ids: tuple[str, ...]
+    evaluated_paths: int
+    requester_championship_difference_probability_points: float | None
