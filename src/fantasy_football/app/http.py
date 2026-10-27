@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import logging
+import os
 from pathlib import Path
+import tempfile
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from fantasy_football.app.contracts import (
     ActionSearchRequest,
     ActionSearchResult,
+    BackgroundProgress,
+    BackgroundResultSummary,
+    BackgroundRunRecord,
+    BackgroundRunSubmission,
     API_SCHEMA_VERSION,
     BaselineAnalysisRequest,
     BaselineAnalysisResult,
+    CandidateDetail,
+    CandidateQueryPage,
+    CompletedStateDetail,
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
@@ -23,6 +33,11 @@ from fantasy_football.app.contracts import (
     SnapshotListQuery,
     SnapshotSelector,
     SnapshotSummary,
+)
+from fantasy_football.app.background import (
+    BackgroundRunCoordinator,
+    BackgroundRunPolicy,
+    BackgroundRunStore,
 )
 from fantasy_football.app.service import (
     ApplicationDependencies,
@@ -52,22 +67,54 @@ def create_app(
     service: ApplicationService | None = None,
     *,
     database_path: str | Path = "outputs/fantasy_football.sqlite3",
+    background_coordinator: BackgroundRunCoordinator | None = None,
 ) -> FastAPI:
     """Construct the credential-free local API with injectable storage/services."""
 
     application_service = service or ApplicationService(
         ApplicationDependencies(SnapshotStore(database_path))
     )
+    temporary_run_store = None
+    if background_coordinator is None:
+        if service is None:
+            run_store_path = str(Path(database_path).with_suffix(".runs.sqlite3"))
+        else:
+            descriptor, run_store_path = tempfile.mkstemp(
+                prefix="fantasy-football-m6-2-", suffix=".sqlite3"
+            )
+            os.close(descriptor)
+            temporary_run_store = run_store_path
+        background_coordinator = BackgroundRunCoordinator(
+            application_service, BackgroundRunStore(run_store_path), BackgroundRunPolicy()
+        )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        background_coordinator.close()
+        if temporary_run_store is not None:
+            for suffix in ("", "-wal", "-shm"):
+                try:
+                    Path(f"{temporary_run_store}{suffix}").unlink()
+                except FileNotFoundError:
+                    pass
+
     app = FastAPI(
         title="Fantasy Football Application Service",
         version=API_SCHEMA_VERSION,
         docs_url="/docs",
         redoc_url=None,
+        lifespan=lifespan,
     )
     app.state.application_service = application_service
+    app.state.background_coordinator = background_coordinator
+    app.state.temporary_run_store = temporary_run_store
 
     def dependency(request: Request) -> ApplicationService:
         return request.app.state.application_service
+
+    def runs(request: Request) -> BackgroundRunCoordinator:
+        return request.app.state.background_coordinator
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(_request: Request, exc: RequestValidationError):
@@ -160,5 +207,112 @@ def create_app(
         current: ApplicationService = Depends(dependency),
     ) -> ActionSearchResult:
         return current.run_action_search(body)
+
+    @app.post(
+        "/api/v1/runs/baseline", response_model=BackgroundRunSubmission,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def submit_baseline(
+        body: BaselineAnalysisRequest,
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> BackgroundRunSubmission:
+        return coordinator.submit("baseline", body)
+
+    @app.post(
+        "/api/v1/runs/manual-scenario", response_model=BackgroundRunSubmission,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def submit_manual(
+        body: ManualScenarioRequest,
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> BackgroundRunSubmission:
+        return coordinator.submit("manual_scenario", body)
+
+    @app.post(
+        "/api/v1/runs/action-search", response_model=BackgroundRunSubmission,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def submit_search(
+        body: ActionSearchRequest,
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> BackgroundRunSubmission:
+        return coordinator.submit("action_search", body)
+
+    @app.get("/api/v1/runs", response_model=tuple[BackgroundRunRecord, ...])
+    def list_runs(
+        run_status: str | None = Query(default=None, alias="status"),
+        limit: int = Query(default=50, ge=1, le=200),
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> tuple[BackgroundRunRecord, ...]:
+        return coordinator.store.list(status=run_status, limit=limit)
+
+    @app.get("/api/v1/runs/{run_id}", response_model=BackgroundRunRecord)
+    def get_run(
+        run_id: str, coordinator: BackgroundRunCoordinator = Depends(runs)
+    ) -> BackgroundRunRecord:
+        return coordinator.store.get(run_id)
+
+    @app.get("/api/v1/runs/{run_id}/progress", response_model=BackgroundProgress)
+    def get_progress(
+        run_id: str, coordinator: BackgroundRunCoordinator = Depends(runs)
+    ) -> BackgroundProgress:
+        return coordinator.store.progress(run_id)
+
+    @app.post("/api/v1/runs/{run_id}/cancel", response_model=BackgroundRunRecord)
+    def cancel_run(
+        run_id: str, coordinator: BackgroundRunCoordinator = Depends(runs)
+    ) -> BackgroundRunRecord:
+        return coordinator.cancel(run_id)
+
+    @app.get("/api/v1/runs/{run_id}/result", response_model=BackgroundResultSummary)
+    def get_result(
+        run_id: str, coordinator: BackgroundRunCoordinator = Depends(runs)
+    ) -> BackgroundResultSummary:
+        return coordinator.store.result(run_id)
+
+    @app.get("/api/v1/runs/{run_id}/candidates", response_model=CandidateQueryPage)
+    def query_candidates(
+        run_id: str,
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=50, ge=1, le=200),
+        sort_key: str = Query(default="candidate_id"),
+        direction: str = Query(default="asc"),
+        ordering: str | None = None,
+        authorization: str | None = None,
+        acquisition_status: str | None = None,
+        evaluated: bool | None = None,
+        team_id: int | None = Query(default=None, gt=0),
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> CandidateQueryPage:
+        return coordinator.store.query_candidates(
+            run_id, offset=offset, limit=limit, sort_key=sort_key, direction=direction,
+            ordering=ordering, authorization=authorization,
+            acquisition_status=acquisition_status, evaluated=evaluated, team_id=team_id,
+        )
+
+    @app.get(
+        "/api/v1/runs/{run_id}/candidates/{candidate_id}", response_model=CandidateDetail
+    )
+    def candidate_detail(
+        run_id: str, candidate_id: str,
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> CandidateDetail:
+        return coordinator.store.candidate_detail(run_id, candidate_id)
+
+    @app.get(
+        "/api/v1/runs/{run_id}/states/{state_id}", response_model=CompletedStateDetail
+    )
+    def state_detail(
+        run_id: str, state_id: str,
+        coordinator: BackgroundRunCoordinator = Depends(runs),
+    ) -> CompletedStateDetail:
+        return coordinator.store.state_detail(run_id, state_id)
+
+    @app.delete("/api/v1/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_run(
+        run_id: str, coordinator: BackgroundRunCoordinator = Depends(runs)
+    ) -> Response:
+        coordinator.store.delete(run_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return app

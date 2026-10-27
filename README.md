@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M5.8 and the post-M5 consolidation are **COMPLETE AND ACCEPTED**. M6.1 is **IMPLEMENTED — REVIEW PENDING**; M6.2–M8 are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution/recovery, paired manual what-if comparison, exhaustive action search, bounded result indexing, and synchronous application-service foundation are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+M0–M5.8 and the post-M5 consolidation are **COMPLETE AND ACCEPTED**. M6.1 is complete and accepted; M6.2 is **IMPLEMENTED — REVIEW PENDING**; M6.3–M8 are not started. The deterministic analytical engine plus synchronous and bounded local background application services are implemented. M6.2 provides durable run lifecycle/progress, cooperative cancellation, retained indexed result queries, and cleanup without changing accepted analytics.
 
 The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to the implemented minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. Background execution and the frontend remain M6.2/M7 work; existing focused CLIs remain developer diagnostics rather than the primary future interface.
 
@@ -35,6 +35,7 @@ The planned V1 product is a local web application: a preferred React/TypeScript/
 - [Post-M5 consolidation audit](docs/POST_M5_CONSOLIDATION_AUDIT.md) — accepted-foundation drift, application-readiness gaps, configuration review, and M6.1 starting scope.
 - [UI design vision](docs/UI_DESIGN_VISION.md) — the Integrated War Room interaction and visual north star for progressive M7 frontend development.
 - [Application service](docs/APPLICATION_SERVICE.md) — M6.1 versioned service/HTTP contracts, provenance identities, loopback startup, errors, and synchronous limitations.
+- [Background runs and retained results](docs/RUN_MANAGEMENT.md) — M6.2 lifecycle, cancellation, resource policy, persistence, and server-side result queries.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.
@@ -312,11 +313,10 @@ python -m fantasy_football.app.server --database outputs/fantasy_football.sqlite
 ```
 
 It binds `127.0.0.1` and requires no ESPN credentials merely to start. See
-[`docs/APPLICATION_SERVICE.md`](docs/APPLICATION_SERVICE.md). Action searches
-remain synchronous until M6.2 background-run management is implemented, so
-requests must supply `wall_clock_seconds` (at most 30 seconds) and
-`evaluation_state_limit` (at most 25). These are temporary application
-transport limits; they do not restrict direct M5.8 engine execution.
+[`docs/APPLICATION_SERVICE.md`](docs/APPLICATION_SERVICE.md). Small diagnostic
+searches retain M6.1 synchronous limits. M6.2 adds HTTP 202 background
+submission and polling under a separate bounded policy; see the run-management
+reference for lifecycle, cancellation, and retained result queries.
 
 ## Historical implementation
 

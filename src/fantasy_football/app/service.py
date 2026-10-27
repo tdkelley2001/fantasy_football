@@ -500,8 +500,17 @@ class ApplicationService:
             assumptions=result.assumptions,
         )
 
-    def run_action_search(self, request: ActionSearchRequest) -> ActionSearchResult:
-        self._validate_synchronous_search_resources(request)
+    def run_action_search(
+        self,
+        request: ActionSearchRequest,
+        *,
+        enforce_synchronous_policy: bool = True,
+        progress_observer=None,
+        stop_requested=None,
+        candidate_observer=None,
+    ) -> ActionSearchResult:
+        if enforce_synchronous_policy:
+            self._validate_synchronous_search_resources(request)
         loaded = self._load(request.snapshot)
         state = initialize_evolving_state(
             loaded.snapshot, scoring_week=loaded.snapshot.first_simulation_week,
@@ -558,9 +567,23 @@ class ApplicationService:
         result = execute_search_orchestration(
             loaded.snapshot, state, search_config, simulation,
             self._model(request.outcome_model),
+            progress_observer=progress_observer,
+            stop_requested=stop_requested,
         )
         try:
             coverage = result.enumeration.coverage
+            if candidate_observer is not None:
+                raw_by_id = (
+                    {item.candidate_id: item for item in result.enumeration.candidates}
+                    if result.result_index is None else None
+                )
+                for item in result.iter_candidates():
+                    raw = (
+                        raw_by_id[item.candidate_id]
+                        if raw_by_id is not None
+                        else result.result_index.get_candidate(item.candidate_id)
+                    )
+                    candidate_observer(item, raw)
             returned = tuple(islice(result.iter_candidates(), request.response_candidate_limit))
             provenance = self._provenance(
                 loaded, _SyntheticBatch(simulation, self._model(request.outcome_model), loaded),
