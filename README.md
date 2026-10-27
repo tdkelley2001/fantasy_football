@@ -4,12 +4,14 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M4 and M5.1–M5.7 are **COMPLETE AND ACCEPTED**. M5.8 search orchestration is **IMPLEMENTED — REVIEW PENDING**; M6 is not started and M7 is deferred. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution, recovery, and paired manual what-if comparison are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+M0–M5.8 are **COMPLETE AND ACCEPTED**. The post-M5 consolidation is **IMPLEMENTED — REVIEW PENDING**; M6–M8 are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution/recovery, paired manual what-if comparison, exhaustive action search, and bounded result indexing are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+
+The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to a minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. These application dependencies and services are M6/M7 work and are not implemented yet; existing focused CLIs remain developer diagnostics rather than the primary future interface.
 
 ## Authoritative documentation
 
 - [Master specification](docs/MASTER_SPEC.md) — the complete approved model specification and governing requirements.
-- [Development roadmap](docs/ROADMAP.md) — the M0-M7 milestone sequence, individual work packages, dependencies, gates, and current statuses.
+- [Development roadmap](docs/ROADMAP.md) — the M0–M8 milestone sequence, individual work packages, dependencies, gates, and current statuses.
 - [M0.2 ESPN connectivity findings](docs/ESPN_CONNECTIVITY.md) — sanitized live-access evidence, field provenance, validation results, and deferred questions.
 - [M0.3 future player-week findings](docs/ESPN_FUTURE_DATA_AUDIT.md) — projection, player-pool, bye, schedule, pagination, and provenance evidence.
 - [Missing projection policy](docs/MISSING_PROJECTION_POLICY.md) — approved raw-versus-effective representation, week 6 evidence, methodology, and limitations.
@@ -30,6 +32,7 @@ M0–M4 and M5.1–M5.7 are **COMPLETE AND ACCEPTED**. M5.8 search orchestration
 - [League configuration audit](docs/LEAGUE_CONFIGURATION_AUDIT.md) — standing inventory of API-derived rules, configuration, assumptions, and unsupported modes.
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
 - [Pre-M4 integration audit](docs/PRE_M4_INTEGRATION_AUDIT.md) — end-to-end identity, configuration, storage, performance, and consolidation findings.
+- [Post-M5 consolidation audit](docs/POST_M5_CONSOLIDATION_AUDIT.md) — accepted-foundation drift, application-readiness gaps, configuration review, and M6.1 starting scope.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.
@@ -294,7 +297,8 @@ diagnostics. Historical projections remain unverified even when retrieval
 succeeds. See [the M3.2 research report](docs/OUTCOME_DISTRIBUTION_RESEARCH.md).
 
 M5.8 search orchestration is available through the Python API in
-`fantasy_football.search_orchestration`; CLI integration remains M6 scope. See
+`fantasy_football.search_orchestration`; application-service integration is M6
+scope, while a broad interactive CLI is not planned. See
 [`docs/SEARCH_ORCHESTRATION.md`](docs/SEARCH_ORCHESTRATION.md) for its execution,
 precision, progress, resource-limit, and export contracts.
 

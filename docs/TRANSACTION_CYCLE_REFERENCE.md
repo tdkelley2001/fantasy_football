@@ -1,6 +1,6 @@
 # Complete-Cycle Transaction Reference (M2.3e)
 
-Status: **implemented — review pending**. Governing requirements: `MASTER_SPEC.md` Sections 5 and 7 and the M2.3e gate.
+Status: **COMPLETE AND ACCEPTED**. Governing requirements: `MASTER_SPEC.md` Sections 5 and 7 and the M2.3e gate.
 
 ## Interfaces and boundaries
 
