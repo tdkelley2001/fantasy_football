@@ -27,9 +27,12 @@ from fantasy_football.app.server import LOOPBACK_HOST, main as server_main
 from fantasy_football.app.service import (
     ApplicationDependencies,
     ApplicationService,
+    ApplicationServiceError,
+    SynchronousSearchSafetyPolicy,
     build_run_identity,
     discover_build_provenance,
 )
+from fantasy_football.search_orchestration import SearchResourceConfiguration
 from fantasy_football.canonical.serialization import snapshot_to_json
 from fantasy_football.evolving_state import IRPolicy, initialize_evolving_state
 from fantasy_football.espn_adapter import translate_bundle
@@ -137,6 +140,7 @@ def _action_request(snapshot, *, execution_mode="bounded_overlap"):
         ),
         resources=SearchResourceSettings(
             execution_mode=execution_mode, index_page_size=1,
+            evaluation_state_limit=10, wall_clock_seconds=5.0,
         ),
         response_candidate_limit=1,
     )
@@ -310,6 +314,23 @@ def test_http_analysis_routes_match_service_results(service, snapshot) -> None:
     assert search.json() == search_expected.model_dump(mode="json")
 
 
+def test_http_rejects_unsafe_synchronous_search_with_typed_error(service, snapshot) -> None:
+    client = TestClient(create_app(service))
+    request = _action_request(snapshot).model_copy(update={
+        "resources": SearchResourceSettings(evaluation_state_limit=1),
+    })
+    response = client.post(
+        "/api/v1/analyses/action-search", json=request.model_dump(mode="json")
+    )
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "synchronous_wall_clock_required",
+        "message": "Synchronous action search requires a finite wall_clock_seconds budget.",
+        "category": "unsupported_configuration",
+        "context": {"maximum_wall_clock_seconds": 30.0},
+    }
+
+
 def test_path_budget_mismatch_rejects_before_engine_execution(service, snapshot) -> None:
     request = BaselineAnalysisRequest(
         snapshot=_selector(snapshot), simulation=_simulation(2), precision=_precision(1),
@@ -401,6 +422,78 @@ def test_search_reports_incomplete_candidate_and_evaluation_coverage(service, sn
     assert result.coverage.statistical_precision_complete is False
     assert result.coverage.ranking_resolved is False
     assert any(item.evaluated_paths == 0 for item in result.candidates)
+
+
+@pytest.mark.parametrize(
+    "resources,code",
+    (
+        (SearchResourceSettings(evaluation_state_limit=1), "synchronous_wall_clock_required"),
+        (SearchResourceSettings(wall_clock_seconds=1.0), "synchronous_evaluation_limit_required"),
+        (
+            SearchResourceSettings(wall_clock_seconds=31.0, evaluation_state_limit=1),
+            "synchronous_wall_clock_exceeds_policy",
+        ),
+        (
+            SearchResourceSettings(wall_clock_seconds=1.0, evaluation_state_limit=26),
+            "synchronous_evaluation_limit_exceeds_policy",
+        ),
+    ),
+)
+def test_synchronous_search_policy_rejects_unsafe_budgets_before_engine(
+    service, snapshot, monkeypatch, resources, code
+) -> None:
+    invoked = False
+
+    def should_not_run(*_args, **_kwargs):
+        nonlocal invoked
+        invoked = True
+        raise AssertionError("M5.8 must not run for an unsafe synchronous request")
+
+    monkeypatch.setattr(service_module, "execute_search_orchestration", should_not_run)
+    request = _action_request(snapshot).model_copy(update={"resources": resources})
+    with pytest.raises(ApplicationServiceError) as error:
+        service.run_action_search(request)
+    assert error.value.code == code
+    assert invoked is False
+
+
+def test_synchronous_search_policy_is_explicitly_configurable(snapshot) -> None:
+    configured = ApplicationService(ApplicationDependencies(
+        FixtureStore(snapshot), execution_nonce_factory=lambda: "configured",
+        synchronous_search_policy=SynchronousSearchSafetyPolicy(
+            maximum_wall_clock_seconds=2.0,
+            maximum_evaluation_states=2,
+            maximum_candidate_limit=5,
+            maximum_paths_per_state=2,
+        ),
+    ))
+    request = _action_request(snapshot).model_copy(update={
+        "resources": SearchResourceSettings(
+            wall_clock_seconds=2.0, evaluation_state_limit=2, candidate_limit=5,
+        )
+    })
+    assert configured.run_action_search(request).coverage.retained_candidates >= 1
+
+
+def test_response_row_limit_does_not_change_analytical_candidate_limit(service, snapshot) -> None:
+    base = _action_request(snapshot, execution_mode="sequential_reference")
+    request = base.model_copy(update={
+        "candidate_search": base.candidate_search.model_copy(update={
+            "counterparty_team_ids": (2, 3, 4),
+            "tradeable_player_ids": (1, 2, 3, 4),
+        }),
+        "response_candidate_limit": 1,
+    })
+    result = service.run_action_search(request)
+    assert result.coverage.retained_candidates > result.coverage.returned_candidates == 1
+    assert result.coverage.response_truncated is True
+    assert result.coverage.candidate_coverage_complete is True
+
+
+def test_direct_m58_resource_contract_is_not_restricted_by_application_policy() -> None:
+    resources = SearchResourceConfiguration()
+    assert resources.wall_clock_seconds is None
+    assert resources.evaluation_state_limit is None
 
 
 def test_local_server_entry_point_has_no_public_bind_option(monkeypatch) -> None:

@@ -79,10 +79,30 @@ class ApplicationServiceError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class SynchronousSearchSafetyPolicy:
+    """Application transport limits; these are not engine or league rules."""
+
+    maximum_wall_clock_seconds: float = 30.0
+    maximum_evaluation_states: int = 25
+    maximum_candidate_limit: int = 10_000
+    maximum_paths_per_state: int = 1_000
+
+    def __post_init__(self) -> None:
+        for name in ("maximum_evaluation_states", "maximum_candidate_limit", "maximum_paths_per_state"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        value = self.maximum_wall_clock_seconds
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+            raise ValueError("maximum_wall_clock_seconds must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class ApplicationDependencies:
     store: SnapshotStore
     execution_nonce_factory: Callable[[], str] = lambda: str(uuid4())
     build_revision: str | None = None
+    synchronous_search_policy: SynchronousSearchSafetyPolicy = SynchronousSearchSafetyPolicy()
 
 
 def discover_build_provenance(explicit_revision: str | None = None) -> BuildProvenance:
@@ -154,6 +174,53 @@ class ApplicationService:
                 snapshot_id=selector.snapshot_id, season=selector.season,
             )
         return loaded
+
+    def _validate_synchronous_search_resources(self, request: ActionSearchRequest) -> None:
+        resources = request.resources
+        policy = self.dependencies.synchronous_search_policy
+        if resources.wall_clock_seconds is None:
+            raise ApplicationServiceError(
+                "synchronous_wall_clock_required", "unsupported_configuration",
+                "Synchronous action search requires a finite wall_clock_seconds budget.",
+                maximum_wall_clock_seconds=policy.maximum_wall_clock_seconds,
+            )
+        if resources.evaluation_state_limit is None:
+            raise ApplicationServiceError(
+                "synchronous_evaluation_limit_required", "unsupported_configuration",
+                "Synchronous action search requires a finite evaluation_state_limit.",
+                maximum_evaluation_states=policy.maximum_evaluation_states,
+            )
+        if resources.wall_clock_seconds > policy.maximum_wall_clock_seconds:
+            raise ApplicationServiceError(
+                "synchronous_wall_clock_exceeds_policy", "resource_exhausted",
+                "Requested wall-clock budget exceeds the synchronous application policy.",
+                requested_wall_clock_seconds=resources.wall_clock_seconds,
+                maximum_wall_clock_seconds=policy.maximum_wall_clock_seconds,
+            )
+        if resources.evaluation_state_limit > policy.maximum_evaluation_states:
+            raise ApplicationServiceError(
+                "synchronous_evaluation_limit_exceeds_policy", "resource_exhausted",
+                "Requested evaluation-state budget exceeds the synchronous application policy.",
+                requested_evaluation_states=resources.evaluation_state_limit,
+                maximum_evaluation_states=policy.maximum_evaluation_states,
+            )
+        if (
+            resources.candidate_limit is not None
+            and resources.candidate_limit > policy.maximum_candidate_limit
+        ):
+            raise ApplicationServiceError(
+                "synchronous_candidate_limit_exceeds_policy", "resource_exhausted",
+                "Requested candidate budget exceeds the synchronous application policy.",
+                requested_candidate_limit=resources.candidate_limit,
+                maximum_candidate_limit=policy.maximum_candidate_limit,
+            )
+        if request.sampling.maximum_paths_per_state > policy.maximum_paths_per_state:
+            raise ApplicationServiceError(
+                "synchronous_paths_per_state_exceeds_policy", "resource_exhausted",
+                "Requested per-state path budget exceeds the synchronous application policy.",
+                requested_paths_per_state=request.sampling.maximum_paths_per_state,
+                maximum_paths_per_state=policy.maximum_paths_per_state,
+            )
 
     def list_snapshots(self, query: SnapshotListQuery) -> tuple[SnapshotSummary, ...]:
         try:
@@ -434,6 +501,7 @@ class ApplicationService:
         )
 
     def run_action_search(self, request: ActionSearchRequest) -> ActionSearchResult:
+        self._validate_synchronous_search_resources(request)
         loaded = self._load(request.snapshot)
         state = initialize_evolving_state(
             loaded.snapshot, scoring_week=loaded.snapshot.first_simulation_week,

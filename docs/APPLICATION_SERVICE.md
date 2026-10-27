@@ -54,10 +54,12 @@ and can make analytical coverage incomplete.
 There are no hidden analytical defaults for seed, path budget, IR policy,
 waiver boundary, precision, outcome dispersion, requesting team, candidate
 universe, or action ordering. The few transport/runtime defaults—schema `1.0`,
-first path zero, sequential execution, one worker, queue/page sizes, and response
-limit 100, and synchronous 10,000-path ceiling—are present in the versioned DTO
-schema. The path ceiling is an M6.1 request-safety limit, not an analytical
-shortcut; M6.2 will govern larger work through bounded background policies.
+first path zero, sequential execution, one worker, queue/page sizes, response
+limit 100, and a 10,000-path DTO ceiling—are present in the versioned schema.
+The application service applies the stricter synchronous policy below before
+calling the engine. These limits are transport safety constraints, not
+analytical shortcuts; M6.2 will govern larger work through bounded background
+policies.
 Canonical roster, scoring,
 team count, postseason, and acquisition rules always come from the snapshot.
 
@@ -117,6 +119,25 @@ not used as a network security boundary. M6.3 will perform the broader review.
 ## M6.1 limits and M6.2 handoff
 
 - All analyses are synchronous and suitable only for bounded local requests.
+- Every action-search request must explicitly provide a finite
+  `wall_clock_seconds` and `evaluation_state_limit`. The default application
+  policy accepts at most 30 seconds, 25 evaluated completed states, 10,000
+  generated candidates when a candidate limit is supplied, and 1,000 Monte
+  Carlo paths per evaluated state. A dependency-injected
+  `SynchronousSearchSafetyPolicy` may lower or deliberately revise these
+  application limits.
+- Missing or excessive budgets fail before snapshot loading or M5.8 execution
+  with stable typed errors. The response-row limit only controls serialized
+  presentation rows; it never bounds candidate generation or evaluation.
+- M5.8 cooperative stopping remains authoritative once execution starts. An
+  active Monte Carlo batch may finish after the nominal deadline; completed
+  results and its measured overrun are retained. Candidate coverage and
+  numerical evaluation coverage remain separate and are labeled incomplete
+  whenever their respective limits stop work. No skipped result is reported as
+  converged or ranking-resolved.
+- The direct M5.8 Python API is unchanged and continues to support larger or
+  exhaustive explicitly configured work outside this temporary synchronous
+  HTTP policy.
 - No job IDs, polling, cancellation owner, durable run records, search resume,
   WebSockets, or long-lived result index exist.
 - Search candidate detail is a compact first page, not a query system.
@@ -131,17 +152,19 @@ cleanup. M6.1 must not be represented as providing those capabilities.
 
 ## Verification evidence
 
-- Fourteen focused application tests cover source-derived snapshot structure,
+- Twenty-two focused application tests cover source-derived snapshot structure,
   the accepted SQLite store, exact direct-engine baseline/manual/search parity,
   HTTP serialization, strict OpenAPI contracts, unknown schema/resource
-  rejection, explicit build/run identities, incomplete search coverage, safe
-  errors, loopback binding, and temporary-index cleanup on success and failure.
-- The focused suite passed in 1.38 seconds on the development Windows host. Its
+  rejection, explicit build/run identities, synchronous budget enforcement,
+  incomplete search coverage, response-versus-analysis limits, safe errors,
+  loopback binding, and temporary-index cleanup on success and failure.
+- The combined 22-test application and 37-test documentation suite passed in
+  1.83 seconds on the development Windows host. Its
   synthetic one-path HTTP baseline/manual/search parity workflow took 0.22
   seconds; direct baseline, manual, and bounded-search calls each took at most
   0.07 seconds. These tiny sanitized fixtures are contract checks, not realistic
   production-search throughput benchmarks.
-- All 812 credential-free repository tests passed in 129.11 seconds.
+- All 820 credential-free repository tests passed in 72.28 seconds.
 - Thirty-seven documentation-link/status tests, Python compilation, Ruff
   `F,E9`, dependency consistency, and Git whitespace checks passed.
 - One upstream Starlette test-client warning reports a deprecated AnyIO alias;
