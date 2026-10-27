@@ -1,6 +1,6 @@
 ﻿# Fantasy Football Decision Engine — Master Model Specification & Roadmap
 
-*Version: canonical schema v3 / SQLite schema v1 / historical research dataset schema v2 | 26 October 2026 | Status: M0–M5.8 complete and accepted; post-M5 consolidation implemented, review pending*
+*Version: canonical schema v3 / SQLite schema v1 / historical research dataset schema v2 / application API schema 1.0 | 26 October 2026 | Status: M0–M5.8 and post-M5 consolidation complete and accepted; M6.1 implemented, review pending*
 
 This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Status labels and evidence statements distinguish implemented and verified behavior from planned or unresolved behavior; a prospective requirement is not evidence that an algorithm or ESPN field has been implemented or confirmed.
 
@@ -378,7 +378,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### M5 — Automated actionable decision search [COMPLETE AND ACCEPTED]. M5.1–M5.8 provide exhaustive trade candidates and optional V(R) screening, canonical completed-state identity and shared evaluation, statistically guarded progressive Monte Carlo evaluation, standalone acquisitions, multi-trade chains, unified combined-action search, and bounded search orchestration with resource controls, indexed results, and exports. PASS EVIDENCE: every detailed M5 slice below is complete and accepted; recommendations preserve explicit coverage, legality, provenance, uncertainty, and resource-limit status.
 
-#### M6 — Application backend and validation [NOT STARTED]. Add stable application-service contracts, a minimal FastAPI foundation, bounded local run management, indexed result delivery, and API/direct-engine parity without changing accepted analytics. PASS: critical local application workflows are reproducible, correct, operationally bounded, and ready for production dashboard integration.
+#### M6 — Application backend and validation [IN PROGRESS — M6.1 REVIEW PENDING]. M6.1 adds stable application-service contracts, a minimal FastAPI foundation, synchronous direct-engine parity, and outer build/run provenance without changing accepted analytics. M6.2–M6.4 remain unstarted. PASS: critical local application workflows are reproducible, correct, operationally bounded, and ready for production dashboard integration.
 
 #### Post-V1 research backlog — Joint player/game correlations: after the independent baseline is established, investigate same-team and opponent dependence (including QB–receiver stacks), common game-script effects, and across-week player-state persistence. Require defensible joint ESPN-era actuals, stable covariance/factor calibration, efficient multivariate simulation and measured effects on championship probability or decision quality; do not include correlated score draws in V1.
 
@@ -492,7 +492,7 @@ M5.8 [COMPLETE AND ACCEPTED, 25 October 2026] Add action-family-neutral orchestr
 
 #### M6 — Application backend and validation
 
-M6.1 Define stable application-facing operations for snapshot selection/inspection, league overview and baseline results, manual what-if evaluation, trade/acquisition/chain/combined analysis, run configuration/validation, result retrieval/provenance, and typed safe errors. Introduce only the minimal FastAPI foundation. GATE: representative requests return validated results through the unchanged analytical engine.
+M6.1 [IMPLEMENTED — REVIEW PENDING, 26 October 2026] Define application API schema 1.0 and an HTTP-independent service for snapshot selection/inspection, accepted baseline precision analysis, M4 manual what-if evaluation, and M5.8 unified action analysis. Add a dependency-injected FastAPI factory, structured non-leaking errors, loopback-only server entry point, bounded synchronous search response, explicit result-index ownership, and outer application/build/run provenance without changing M3/M5 identities. GATE EVIDENCE: 14 focused application tests, 37 documentation tests, and all 812 credential-free tests pass; compilation, Ruff F/E9, dependency, and whitespace checks pass. See `docs/APPLICATION_SERVICE.md`.
 
 M6.2 Add local background execution, lifecycle/status, structured progress, cooperative cancellation, bounded concurrency, paged sortable/filterable results, stable candidate detail, temporary-index lifecycle/retention, and safe interruption/failure handling. Filtering or pagination must never rerun Monte Carlo. GATE: a complete asynchronous analysis can be launched, observed, inspected, and safely cancelled through the application interface.
 
@@ -524,7 +524,7 @@ M8.3 Validate runtime, resources, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M5.8 are complete and accepted; the post-M5 consolidation is implemented for review; M6–M8 are not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M5.8 and the post-M5 consolidation are complete and accepted; M6.1 is implemented for review; M6.2–M8 are not started.
 
 ### 12.2 Practical development method
 

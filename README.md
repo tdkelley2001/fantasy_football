@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M5.8 are **COMPLETE AND ACCEPTED**. The post-M5 consolidation is **IMPLEMENTED — REVIEW PENDING**; M6–M8 are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution/recovery, paired manual what-if comparison, exhaustive action search, and bounded result indexing are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
+M0–M5.8 and the post-M5 consolidation are **COMPLETE AND ACCEPTED**. M6.1 is **IMPLEMENTED — REVIEW PENDING**; M6.2–M8 are not started. New snapshots use canonical schema v3, while historical schema-v2 snapshots remain immutable and readable. The deterministic season engine, exact transaction references, settings-driven postseason, repeated-season runner, reconciliation, league-wide precision, bounded multiprocessing, progressive execution/recovery, paired manual what-if comparison, exhaustive action search, bounded result indexing, and synchronous application-service foundation are implemented. M4 output includes projection-only before/after optimal-lineup explanations for every team and remaining week. The empirical model remains deliberately provisional because its selected historical evidence has unverified pregame provenance; the earlier Normal model remains supported, and probability intervals quantify Monte Carlo sampling uncertainty rather than calibration uncertainty.
 
 The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to a minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. These application dependencies and services are M6/M7 work and are not implemented yet; existing focused CLIs remain developer diagnostics rather than the primary future interface.
 
@@ -34,6 +34,7 @@ The planned V1 product is a local web application: a preferred React/TypeScript/
 - [Pre-M4 integration audit](docs/PRE_M4_INTEGRATION_AUDIT.md) — end-to-end identity, configuration, storage, performance, and consolidation findings.
 - [Post-M5 consolidation audit](docs/POST_M5_CONSOLIDATION_AUDIT.md) — accepted-foundation drift, application-readiness gaps, configuration review, and M6.1 starting scope.
 - [UI design vision](docs/UI_DESIGN_VISION.md) — the Integrated War Room interaction and visual north star for progressive M7 frontend development.
+- [Application service](docs/APPLICATION_SERVICE.md) — M6.1 versioned service/HTTP contracts, provenance identities, loopback startup, errors, and synchronous limitations.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.
@@ -302,6 +303,17 @@ M5.8 search orchestration is available through the Python API in
 scope, while a broad interactive CLI is not planned. See
 [`docs/SEARCH_ORCHESTRATION.md`](docs/SEARCH_ORCHESTRATION.md) for its execution,
 precision, progress, resource-limit, and export contracts.
+
+The synchronous M6.1 local API can be installed and started with:
+
+```powershell
+python -m pip install -e ".[app]"
+python -m fantasy_football.app.server --database outputs/fantasy_football.sqlite3
+```
+
+It binds `127.0.0.1` and requires no ESPN credentials merely to start. See
+[`docs/APPLICATION_SERVICE.md`](docs/APPLICATION_SERVICE.md). Expensive searches
+remain synchronous until M6.2 background-run management is implemented.
 
 ## Historical implementation
 
