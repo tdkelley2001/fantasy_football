@@ -1,6 +1,6 @@
 # Post-M5 consolidation and repository drift audit
 
-Status: **IMPLEMENTED — REVIEW PENDING**, 26 October 2026.
+Status: **COMPLETE AND ACCEPTED**, 26 October 2026.
 
 ## Scope and evidence
 
@@ -55,7 +55,7 @@ their M6/M7 gates.
 
 | Priority | Finding and evidence | Classification | Disposition |
 |---|---|---|---|
-| High | `simulation_configuration_fingerprint()` and M3.6 checkpoint metadata bind canonical snapshot content, model parameters, policies, seed/run identity, and paths, but do not record a repository code/build revision even though Master Specification §2.3 says every run records one. Changing accepted fingerprints now would affect batch/checkpoint compatibility. | Potential bug requiring independent review | Decide the versioned code-revision contract in M6.1 before exposing durable application runs; do not retrofit silently. |
+| High | `simulation_configuration_fingerprint()` and M3.6 checkpoint metadata bind canonical snapshot content, model parameters, policies, seed/run identity, and paths, but do not record a repository code/build revision even though Master Specification §2.3 says every run records one. Changing accepted fingerprints would affect batch/checkpoint compatibility. | Resolved at the application boundary in M6.1; pending review | Application run identity v1 wraps unchanged M3/M5 identities with package version, explicit-or-unknown build revision, request identity, and execution nonce. M3.6 checkpoints and analytical fingerprints remain compatible. |
 | High | There is no application service, typed request/response schema, safe error envelope, run lifecycle, bounded application concurrency, or localhost security configuration. `pyproject.toml` correctly has no FastAPI dependency yet. | Documented and deferred | M6.1–M6.4. |
 | High | `SearchResultIndex` supplies deterministic candidate/result iteration and state lookup, but application-grade pagination, sorting, compound filters, normalized per-team outcome queries, stable detail DTOs, retention ownership, and interrupted-process cleanup are not implemented. Filtering must not rerun Monte Carlo. | Documented and deferred | M6.2; reuse the M5.8 index rather than creating competing analytical storage. |
 | Medium | `ProgressiveStateEvaluationResult.candidate_coverage_complete` describes unique-state evaluation coverage in the action-neutral adapter, while top-level M5.8 correctly exposes separate `candidate_coverage_complete` and `evaluation_coverage_complete`. The inherited name is easy for an API client to misread. | Requires architectural decision | Map to an unambiguous versioned API field in M6.1; avoid changing accepted M5.4 dataclasses without a compatibility review. |

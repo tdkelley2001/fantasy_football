@@ -1,0 +1,164 @@
+"""Minimal versioned FastAPI surface for synchronous M6.1 execution."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+from fantasy_football.app.contracts import (
+    ActionSearchRequest,
+    ActionSearchResult,
+    API_SCHEMA_VERSION,
+    BaselineAnalysisRequest,
+    BaselineAnalysisResult,
+    ErrorDetail,
+    ErrorResponse,
+    HealthResponse,
+    ManualScenarioRequest,
+    ManualScenarioResult,
+    SnapshotListQuery,
+    SnapshotSelector,
+    SnapshotSummary,
+)
+from fantasy_football.app.service import (
+    ApplicationDependencies,
+    ApplicationService,
+    ApplicationServiceError,
+)
+from fantasy_football.evolving_state import TransactionStateError
+from fantasy_football.monte_carlo import MonteCarloError
+from fantasy_football.monte_carlo_precision import PrecisionError
+from fantasy_football.scenario_evaluator import ScenarioEvaluationError
+from fantasy_football.search_orchestration import SearchOrchestrationError
+from fantasy_football.snapshot_store import SnapshotIntegrityError, SnapshotStore, SnapshotStoreError
+from fantasy_football.unified_actions import UnifiedActionError
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _error(status: int, code: str, category: str, message: str, **context) -> JSONResponse:
+    payload = ErrorResponse(
+        error=ErrorDetail(code=code, category=category, message=message, context=context)
+    )
+    return JSONResponse(status_code=status, content=payload.model_dump(mode="json"))
+
+
+def create_app(
+    service: ApplicationService | None = None,
+    *,
+    database_path: str | Path = "outputs/fantasy_football.sqlite3",
+) -> FastAPI:
+    """Construct the credential-free local API with injectable storage/services."""
+
+    application_service = service or ApplicationService(
+        ApplicationDependencies(SnapshotStore(database_path))
+    )
+    app = FastAPI(
+        title="Fantasy Football Application Service",
+        version=API_SCHEMA_VERSION,
+        docs_url="/docs",
+        redoc_url=None,
+    )
+    app.state.application_service = application_service
+
+    def dependency(request: Request) -> ApplicationService:
+        return request.app.state.application_service
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(_request: Request, exc: RequestValidationError):
+        fields = tuple(".".join(str(part) for part in item["loc"]) for item in exc.errors())
+        return _error(422, "invalid_request_schema", "invalid_request",
+                      "The request does not match API schema 1.0.", fields=",".join(fields))
+
+    @app.exception_handler(ApplicationServiceError)
+    async def service_error_handler(_request: Request, exc: ApplicationServiceError):
+        status = 404 if exc.category == "not_found" else 422
+        safe_context = {
+            str(key): value for key, value in exc.context.items()
+            if isinstance(value, (str, int, float, bool)) or value is None
+        }
+        return _error(status, exc.code, exc.category, str(exc), **safe_context)
+
+    invalid_errors = (
+        MonteCarloError, PrecisionError, ScenarioEvaluationError, SearchOrchestrationError,
+        UnifiedActionError, TransactionStateError,
+    )
+
+    @app.exception_handler(ValueError)
+    async def domain_error_handler(_request: Request, exc: ValueError):
+        if isinstance(exc, invalid_errors):
+            category = "invalid_scenario" if isinstance(exc, ScenarioEvaluationError) else "unsupported_configuration"
+            return _error(422, "engine_request_rejected", category, str(exc))
+        LOGGER.exception("Unexpected ValueError escaped the application service", exc_info=exc)
+        return _error(500, "internal_engine_failure", "internal_error",
+                      "The analytical engine failed unexpectedly.")
+
+    @app.exception_handler(SnapshotStoreError)
+    async def storage_error_handler(_request: Request, exc: SnapshotStoreError):
+        if isinstance(exc, SnapshotIntegrityError):
+            LOGGER.exception("Snapshot integrity failure", exc_info=exc)
+            return _error(500, "snapshot_integrity_failure", "engine_invariant",
+                          "Stored snapshot integrity validation failed.")
+        return _error(422, "snapshot_store_unavailable", "invalid_request",
+                      "The configured snapshot store is unavailable.")
+
+    @app.exception_handler(Exception)
+    async def unexpected_error_handler(_request: Request, exc: Exception):
+        LOGGER.exception("Unexpected application failure", exc_info=exc)
+        return _error(500, "internal_failure", "internal_error",
+                      "An unexpected internal failure occurred.")
+
+    @app.get("/api/v1/health", response_model=HealthResponse)
+    def health(current: ApplicationService = Depends(dependency)) -> HealthResponse:
+        return HealthResponse(
+            package_version=current.build.package_version,
+            build_revision=current.build.build_revision,
+            revision_status=current.build.revision_status,
+        )
+
+    @app.get("/api/v1/snapshots", response_model=tuple[SnapshotSummary, ...])
+    def snapshots(
+        league_id: int | None = Query(default=None, gt=0),
+        season: int | None = Query(default=None, ge=2000),
+        current: ApplicationService = Depends(dependency),
+    ) -> tuple[SnapshotSummary, ...]:
+        return current.list_snapshots(SnapshotListQuery(league_id=league_id, season=season))
+
+    @app.get("/api/v1/snapshots/{snapshot_id}", response_model=SnapshotSummary)
+    def snapshot_detail(
+        snapshot_id: str,
+        league_id: int | None = Query(default=None, gt=0),
+        season: int | None = Query(default=None, ge=2000),
+        current: ApplicationService = Depends(dependency),
+    ) -> SnapshotSummary:
+        return current.inspect_snapshot(
+            SnapshotSelector(snapshot_id=snapshot_id, league_id=league_id, season=season)
+        )
+
+    @app.post("/api/v1/analyses/baseline", response_model=BaselineAnalysisResult)
+    def baseline(
+        body: BaselineAnalysisRequest,
+        current: ApplicationService = Depends(dependency),
+    ) -> BaselineAnalysisResult:
+        return current.run_baseline(body)
+
+    @app.post("/api/v1/analyses/manual-scenario", response_model=ManualScenarioResult)
+    def manual_scenario(
+        body: ManualScenarioRequest,
+        current: ApplicationService = Depends(dependency),
+    ) -> ManualScenarioResult:
+        return current.run_manual_scenario(body)
+
+    @app.post("/api/v1/analyses/action-search", response_model=ActionSearchResult)
+    def action_search(
+        body: ActionSearchRequest,
+        current: ApplicationService = Depends(dependency),
+    ) -> ActionSearchResult:
+        return current.run_action_search(body)
+
+    return app
