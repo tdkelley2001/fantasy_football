@@ -62,7 +62,7 @@ their M6/M7 gates.
 | Medium | M5.8 disk-backs full candidates/states, but compact per-state comparisons, path batches needed for refinement, and JSON state-evaluation summaries remain memory-resident. Total process memory is therefore not bounded solely by queue/index settings. | No action necessary for accepted M5.8; documented and deferred | Measure realistic API workloads in M6.3 and design paged application result records in M6.2. |
 | Medium | Cooperative stopping exists at safe M5.8 boundaries, but there is no durable search-level resume or application cancellation owner. An active Monte Carlo batch finishes and reports overrun. | Documented and deferred | M6.2; preserve M3.6 checkpoint semantics rather than inventing another simulation checkpoint format. |
 | Medium | Current M5.8 export metadata records scope and analytical identities, but an application query contract must additionally preserve requested sort/filter expressions and distinguish generated, evaluated, precise, and ranking-resolved records. | Documented and deferred | M6.1/M6.2. |
-| Low | Master specification, roadmap, README, and four milestone documents contained stale M2.3d/e, M5.5, M5.7, or M5.8 review-pending/deferred text and the obsolete CLI-first M6/M7 plan. | Fixed during checkpoint | Status/history and M6–M8 roadmap reconciled without rewriting historical evidence. |
+| Low | Master specification, roadmap, README, and four milestone documents contained stale M2.3d/e, M5 parent, M5.5, M5.7, or M5.8 review-pending/deferred text and the obsolete CLI-first M6/M7 plan. | Fixed during checkpoint and final alignment follow-up | High-level and detailed M5 status/history now agree; the M6–M8 roadmap is reconciled without rewriting historical evidence. |
 | Low | `.gitignore` covers credentials, environments, SQLite sidecars, outputs, frontend dependencies/builds, caches, and research/checkpoint artifacts. No tracked credential, database, generated frontend, or private output was found. A local unreadable `.pytest-run-m04-final/` directory causes a Git warning but is not tracked. | No repository action necessary | Developer may remove the local artifact manually if desired; the checkpoint does not delete user files. |
 | Low | Independent exact references and seemingly duplicated sequential/optimized paths remain intentionally testable correctness oracles. Diagnostic CLI modules remain documented workflows. Static checks found no unused imports or unreachable syntax requiring deletion. | No action necessary | Retain until a future deprecation has explicit replacement and compatibility evidence. |
 
@@ -128,9 +128,9 @@ new analytics, a general plugin framework, or an extensive interactive CLI.
 
 ## Verification evidence
 
-- Documentation links and the authoritative product-direction/status contract:
-  34 passed.
-- Complete credential-free repository regression suite: 795 passed in 60.58
+- Documentation links and the authoritative product-direction/status contracts:
+  36 passed.
+- Complete credential-free repository regression suite: 797 passed in 60.18
   seconds on the development Windows host.
 - `python -m compileall -q src tests`: passed.
 - `python -m ruff check --select F,E9 src tests`: passed.
@@ -144,8 +144,11 @@ restriction, not a skipped or repaired test failure.
 ## Checkpoint conclusion
 
 No accepted analytical correctness blocker was confirmed. Documentation drift
-was corrected, application risks were assigned to M6, and the code/build-version
-provenance gap is explicitly reserved for independent architectural review.
+was corrected, including the final stale M5 parent summary. The approved M7
+Integrated War Room direction is recorded separately as a design north star.
+Application risks were assigned to M6, and the code/build-version provenance
+gap remains explicitly assigned to M6.1 for independent architectural review;
+the M3.6 checkpoint format and simulation fingerprints were not changed.
 Subject to the checkpoint regression results, the repository is ready to begin
 the narrowly scoped M6.1 contract/API-foundation package after this checkpoint
 is independently accepted.

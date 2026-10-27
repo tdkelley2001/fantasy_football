@@ -46,3 +46,23 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "M8 — Local V1 release" in roadmap
     assert "Integrated CLI V1" not in master_spec
     assert "Optional visual dashboard" not in master_spec
+
+
+def test_current_m5_parent_status_and_ui_vision_are_aligned() -> None:
+    master_spec = (REPOSITORY_ROOT / "docs" / "MASTER_SPEC.md").read_text(encoding="utf-8")
+    roadmap = (REPOSITORY_ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+
+    heading = re.compile(r"^#### M5 — .*?$", re.MULTILINE)
+    for name, document in (("MASTER_SPEC.md", master_spec), ("ROADMAP.md", roadmap)):
+        parent = heading.search(document)
+        assert parent is not None, f"{name} has no current M5 parent summary"
+        summary = parent.group(0)
+        assert "[COMPLETE AND ACCEPTED]" in summary
+        assert "IN PROGRESS" not in summary
+        assert "REVIEW PENDING" not in summary
+        assert "M5.1–M5.8" in summary
+
+    design_link = "UI_DESIGN_VISION.md"
+    assert design_link in roadmap
+    assert f"docs/{design_link}" in readme
