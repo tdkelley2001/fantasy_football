@@ -1,6 +1,6 @@
-# Application service and HTTP contracts (M6.1–M6.2)
+# Application service and HTTP contracts (M6.1–M6.4)
 
-Status: **IMPLEMENTED — REVIEW PENDING**.
+Status: **M6.1–M6.3 ACCEPTED; M6.4 IMPLEMENTED — REVIEW PENDING**.
 
 Governing requirements are `MASTER_SPEC.md` Sections 2, 8, 9, and 12 plus the
 M6.1/M6.2 roadmap gates. M6.1 adds the synchronous adapter; M6.2 adds bounded
@@ -33,7 +33,7 @@ explicit evidence-selection DTO; an unknown model discriminator is rejected.
 |---|---|---|
 | GET | `/api/v1/health` | Service/schema/build metadata; no snapshot or credentials required. |
 | GET | `/api/v1/snapshots` | Compact persisted snapshots with optional league/season filters. `team_count` is null because compact store metadata does not load the canonical document. |
-| GET | `/api/v1/snapshots/{snapshot_id}` | Full canonical league/team summary plus unresolved rule capabilities. |
+| GET | `/api/v1/snapshots/{snapshot_id}` | Canonical league/team/player/roster/schedule summary plus unresolved rule capabilities. |
 | POST | `/api/v1/analyses/baseline` | Synchronous accepted M3.4 precision execution. |
 | POST | `/api/v1/analyses/manual-scenario` | Synchronous accepted M4 completion and paired evaluation. |
 | POST | `/api/v1/analyses/action-search` | Synchronous accepted M5.8 unified action search. |
@@ -68,8 +68,7 @@ first path zero, sequential execution, one worker, queue/page sizes, response
 limit 100, and a 10,000-path DTO ceiling—are present in the versioned schema.
 The application service applies the stricter synchronous policy below before
 calling the engine. These limits are transport safety constraints, not
-analytical shortcuts; M6.2 will govern larger work through bounded background
-policies.
+analytical shortcuts; accepted M6.2 background policies govern larger work.
 Canonical roster, scoring,
 team count, postseason, and acquisition rules always come from the snapshot.
 
@@ -104,8 +103,8 @@ The synchronous action-search service owns the returned
 `SearchOrchestrationResult`. It serializes at most the response row limit inside
 a `try` block and always calls `close()` in `finally`, removing the M5.8
 temporary SQLite index and sidecars on success or serialization failure. It
-does not rely on garbage collection. M6.2 will transfer ownership to a bounded
-background-run lifecycle so indexed pages remain available while a run is active.
+does not rely on garbage collection. Background execution transfers results to
+the bounded durable run lifecycle so indexed pages remain queryable after completion.
 
 ## Errors and local execution
 
@@ -124,7 +123,7 @@ python -m fantasy_football.app.server --database outputs/fantasy_football.sqlite
 ```
 
 The entry point always binds `127.0.0.1`; it offers no public-host flag. CORS is
-not used as a network security boundary. M6.3 adds trusted loopback Host
+not used as a network security boundary. M6.3 added trusted loopback Host
 validation and rejects state-changing browser requests whose `Origin` is not
 localhost, `127.0.0.1`, or `::1`. Requests without an Origin remain available to
 native local clients. This is not authentication and does not authorize public
@@ -152,9 +151,9 @@ deployment; see `M6_3_BACKEND_VALIDATION.md`.
 - The direct M5.8 Python API is unchanged and continues to support larger or
   exhaustive explicitly configured work outside this temporary synchronous
   HTTP policy.
-- No job IDs, polling, cancellation owner, durable run records, search resume,
-  WebSockets, or long-lived result index exist.
-- Search candidate detail is a compact first page, not a query system.
+- Background run IDs, polling, cooperative cancellation, durable records, and
+  retained candidate/state queries are supported. WebSockets and run resume are not.
+- Synchronous candidate detail is bounded; background results provide the query system.
 - HTTP empirical-model evidence selection and explicit postseason ladder
   configuration are not yet exposed; they fail rather than use substitutes.
 - FastAPI's test stack emits one upstream AnyIO deprecation warning; it does not
@@ -163,7 +162,8 @@ deployment; see `M6_3_BACKEND_VALIDATION.md`.
 M6.2 implements bounded background execution, lifecycle/status, cancellation,
 retained indexed results, pagination/filtering/detail, concurrency, restart
 classification, retention, and cleanup. It uses polling and local SQLite;
-broader performance and security validation remains M6.3 work.
+M6.3 performance and security validation is accepted; M6.4 consolidates the
+contract and M7 handoff in `BACKEND_READINESS.md`.
 
 ## Verification evidence
 

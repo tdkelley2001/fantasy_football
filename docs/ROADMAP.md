@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0–M5.8, the post-M5 consolidation, M6.1, and M6.2 are **COMPLETE AND ACCEPTED**. M6.3 is **IMPLEMENTED — REVIEW PENDING**. M6.4–M8 are not started. No legacy implementation is credited toward these statuses.
+M0–M6.3 are **COMPLETE AND ACCEPTED**. M6.4 is **IMPLEMENTED — REVIEW PENDING**. M7–M8 are not started. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M8 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -24,7 +24,7 @@ Dependencies are sequential within each milestone and across the M0 → M8 miles
 
 #### M5 — Automated actionable decision search [COMPLETE AND ACCEPTED]. M5.1–M5.8 provide exhaustive trade candidates and optional V(R) screening, canonical completed-state identity and shared evaluation, statistically guarded progressive Monte Carlo evaluation, standalone acquisitions, multi-trade chains, unified combined-action search, and bounded search orchestration with resource controls, indexed results, and exports. PASS EVIDENCE: every detailed M5 slice below is complete and accepted; recommendations preserve explicit coverage, legality, provenance, uncertainty, and resource-limit status.
 
-#### M6 — Application backend and validation [IN PROGRESS — M6.3 REVIEW PENDING]. M6.1–M6.2 provide accepted contracts, synchronous parity, and bounded background execution/results. M6.3 validates analytical parity, configuration/identity propagation, performance/resources, worker lifecycle, error semantics, and localhost security, with targeted fixes only. M6.4 remains unstarted. PASS: critical application workflows are reproducible, correct, operationally bounded, and ready for production dashboard integration.
+#### M6 — Application backend and validation [IN PROGRESS — M6.4 REVIEW PENDING]. M6.1–M6.3 are accepted. M6.4 finalizes API compatibility, metadata joins, setup, operations, and frontend data readiness. PASS: critical application workflows are reproducible, correct, operationally bounded, and ready for dashboard integration without frontend analytical reconstruction.
 
 #### Post-V1 research backlog — Joint player/game correlations: after the independent baseline is established, investigate same-team and opponent dependence (including QB–receiver stacks), common game-script effects, and across-week player-state persistence. Require defensible joint ESPN-era actuals, stable covariance/factor calibration, efficient multivariate simulation and measured effects on championship probability or decision quality; do not include correlated score draws in V1.
 
@@ -142,9 +142,9 @@ M6.1 [COMPLETE AND ACCEPTED, 26 October 2026] Define application API schema 1.0 
 
 M6.2 [COMPLETE AND ACCEPTED, 27 October 2026] Add local background execution, lifecycle/status, structured progress, cooperative cancellation with atomic terminal commits, bounded concurrency and nested-worker policy, explicit baseline/manual/search admission limits, durable SQLite metadata, restart interruption classification, paged sortable/filterable retained results, candidate/completed-state detail, short-lived coordinator bookkeeping, retention/deletion, and safe temporary-index transfer/cleanup. Filtering and pagination do not rerun Monte Carlo. PASS EVIDENCE: 16 focused background tests, 76 combined application/background/documentation tests, and all 837 credential-free tests passed before independent acceptance. See `RUN_MANAGEMENT.md`.
 
-M6.3 [IMPLEMENTED — REVIEW PENDING, 27 October 2026] Independently validate direct/service/background/HTTP parity; canonical configuration and identity propagation; coverage/precision/ranking semantics; trade, acquisition, chain, and combined searches; performance, memory/storage, workers, interruption, errors, and localhost security. Correct explicit SQLite handle closure, live-instance leasing, Host/Origin protection, transactional storage admission, and retained all-team shared evaluations. The reproducible synthetic three-tier benchmark meets query/detail/health/submission targets; representative status polling measured 267.7 ms versus the provisional 250 ms target and peak child RSS was unavailable. GATE EVIDENCE: 86 combined focused tests, 35 explicit Windows multiprocessing/orchestration tests, and all 847 credential-free tests pass; compilation, Ruff F/E9, dependency, documentation, and whitespace checks pass. See `M6_3_BACKEND_VALIDATION.md`. Independent review remains required.
+M6.3 [COMPLETE AND ACCEPTED, 27 October 2026] Validate parity, configuration and identity, coverage/precision semantics, realistic performance/resources, Windows worker lifecycle, interruption, errors, and localhost security. The final 14-team/188-player evidence measured parent and aggregate-child RSS, responsive polling and queries, and exact sequential/parallel candidate-state parity. See `M6_3_BACKEND_VALIDATION.md`.
 
-M6.4 Finalize versioned API contracts, configuration and startup instructions, troubleshooting, regression evidence, and readiness documentation. GATE: the backend can support production dashboard work without duplicating analytical logic.
+M6.4 [IMPLEMENTED — REVIEW PENDING, 27 October 2026] Finalize additive API 1.0 compatibility, canonical player/roster/schedule joins, configuration/startup/troubleshooting, operational checks, regression evidence, and the M7 data-readiness matrix. See `BACKEND_READINESS.md`. GATE: the backend can support dashboard work without duplicating analytical logic.
 
 #### M7 — Futuristic interactive dashboard
 
@@ -173,7 +173,7 @@ M8.3 Validate runtime, resource use, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M5.8, the post-M5 consolidation, M6.1, and M6.2 are complete and accepted; M6.3 is implemented for review; M6.4–M8 are not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.3 are complete and accepted; M6.4 is implemented for review; M7–M8 are not started.
 
 ### 12.2 Practical development method
 
