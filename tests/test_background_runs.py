@@ -38,6 +38,15 @@ def _wait(store, run_id, statuses=("completed", "cancelled", "failed"), timeout=
     raise AssertionError(f"run {run_id} did not reach {statuses}")
 
 
+def _wait_released(coordinator, timeout=5):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if coordinator.transient_reference_count() == 0:
+            return
+        time.sleep(0.005)
+    raise AssertionError("coordinator retained terminal Future/Event references")
+
+
 @pytest.fixture
 def background(tmp_path):
     snapshot = _scenario_snapshot()
@@ -145,6 +154,7 @@ def test_queued_cancellation_is_idempotent_and_never_executes(background, monkey
     release.set()
     assert _wait(store, first.run_id).status == "completed"
     assert store.get(second.run_id).started_at_utc is None
+    _wait_released(coordinator)
 
 
 def test_running_cancellation_cannot_be_overwritten_by_completion(background, monkeypatch) -> None:
@@ -168,6 +178,49 @@ def test_running_cancellation_cannot_be_overwritten_by_completion(background, mo
     release.set()
     assert _wait(store, run.run_id).status == "cancelled"
     assert coordinator.cancel(run.run_id).status == "cancelled"
+    _wait_released(coordinator)
+
+
+def test_cancellation_wins_at_atomic_completion_boundary(background, monkeypatch) -> None:
+    snapshot, _service, store, coordinator = background
+    completion_entered, allow_commit = Event(), Event()
+    original_finish = store.finish
+
+    def gated_finish(run_id, status, **kwargs):
+        if status == "completed":
+            completion_entered.set()
+            assert allow_commit.wait(2)
+        return original_finish(run_id, status, **kwargs)
+
+    monkeypatch.setattr(store, "finish", gated_finish)
+    request = BaselineAnalysisRequest(
+        snapshot=_selector(snapshot), simulation=_simulation(), precision=_precision(),
+        outcome_model=_model(),
+    )
+    run = coordinator.submit("baseline", request)
+    assert completion_entered.wait(2)
+    assert coordinator.cancel(run.run_id).status == "cancel_requested"
+    allow_commit.set()
+    terminal = _wait(store, run.run_id)
+    assert terminal.status == "cancelled"
+    assert terminal.result_available is False
+    with pytest.raises(ApplicationServiceError) as unavailable:
+        store.result(run.run_id)
+    assert unavailable.value.code == "result_not_available"
+    _wait_released(coordinator)
+
+
+def test_cancellation_after_atomic_completion_preserves_success(background) -> None:
+    snapshot, _service, store, coordinator = background
+    request = BaselineAnalysisRequest(
+        snapshot=_selector(snapshot), simulation=_simulation(), precision=_precision(),
+        outcome_model=_model(),
+    )
+    run = coordinator.submit("baseline", request)
+    assert _wait(store, run.run_id).status == "completed"
+    assert coordinator.cancel(run.run_id).status == "completed"
+    assert store.result(run.run_id).run.status == "completed"
+    _wait_released(coordinator)
 
 
 def test_stale_active_run_is_interrupted_on_store_restart(tmp_path) -> None:
@@ -192,6 +245,36 @@ def test_queue_and_background_resource_limits_fail_before_execution(background) 
     with pytest.raises(ApplicationServiceError, match="engine workers") as error:
         coordinator.submit("action_search", request)
     assert error.value.code == "background_worker_limit_exceeds_policy"
+
+
+@pytest.mark.parametrize("run_type", ("baseline", "manual_scenario"))
+def test_baseline_and_manual_path_admission_is_bounded(tmp_path, run_type) -> None:
+    snapshot = _scenario_snapshot()
+    service = ApplicationService(ApplicationDependencies(FixtureStore(snapshot)))
+    store = BackgroundRunStore(tmp_path / f"{run_type}.sqlite3")
+    coordinator = BackgroundRunCoordinator(
+        service, store, BackgroundRunPolicy(
+            maximum_baseline_paths=1, maximum_manual_scenario_paths=1
+        ),
+    )
+    if run_type == "baseline":
+        request = BaselineAnalysisRequest(
+            snapshot=_selector(snapshot), simulation=_simulation(2), precision=_precision(2),
+            outcome_model=_model(),
+        )
+    else:
+        request = ManualScenarioRequest(
+            snapshot=_selector(snapshot), simulation=_simulation(2), precision=_precision(2),
+            outcome_model=_model(),
+            scenario={"scenario_id": "bounded", "changes": (), "protected_players": ()},
+        )
+    try:
+        with pytest.raises(ApplicationServiceError) as rejected:
+            coordinator.submit(run_type, request)
+        assert rejected.value.code == f"background_{run_type}_path_limit_exceeded"
+        assert store.list() == ()
+    finally:
+        coordinator.close()
 
 
 def test_pending_queue_is_bounded(background, monkeypatch) -> None:
@@ -234,6 +317,21 @@ def test_unexpected_worker_failure_becomes_safe_terminal_record(background, monk
     assert terminal.status == "failed"
     assert terminal.error_code == "background_execution_failed"
     assert "secret" not in terminal.error_message
+    _wait_released(coordinator)
+
+
+def test_terminal_runs_release_transient_coordinator_references(background) -> None:
+    snapshot, _service, store, coordinator = background
+    request = BaselineAnalysisRequest(
+        snapshot=_selector(snapshot), simulation=_simulation(), precision=_precision(),
+        outcome_model=_model(),
+    )
+    for _ in range(20):
+        run = coordinator.submit("baseline", request)
+        assert _wait(store, run.run_id).status == "completed"
+        _wait_released(coordinator)
+    assert len(store.list(limit=50)) == coordinator.policy.maximum_retained_runs
+    assert coordinator.transient_reference_count() == 0
 
 
 def test_global_sort_precedes_pagination_and_delete_cascades(background) -> None:
