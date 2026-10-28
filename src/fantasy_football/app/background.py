@@ -59,6 +59,8 @@ class BackgroundRunPolicy:
     maximum_wall_clock_seconds: float = 3_600.0
     maximum_evaluation_states: int = 1_000
     maximum_paths_per_state: int = 10_000
+    maximum_baseline_paths: int = 10_000
+    maximum_manual_scenario_paths: int = 10_000
     retention_seconds: int = 86_400
     maximum_retained_runs: int = 100
     maximum_result_store_bytes: int = 1_000_000_000
@@ -69,7 +71,8 @@ class BackgroundRunPolicy:
             "maximum_engine_workers_per_run", "maximum_total_engine_workers",
             "maximum_evaluation_states",
             "maximum_paths_per_state", "retention_seconds", "maximum_retained_runs",
-            "maximum_result_store_bytes",
+            "maximum_result_store_bytes", "maximum_baseline_paths",
+            "maximum_manual_scenario_paths",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -259,12 +262,18 @@ class BackgroundRunStore:
         progress = BackgroundProgress.model_validate_json(row["progress_json"]).model_copy(
             update={"status": status, "stage": status, "stop_reason": stop_reason}
         )
+        expected_status = {
+            "completed": "running",
+            "failed": "running",
+            "cancelled": "cancel_requested",
+            "interrupted": "running",
+        }[status]
         with self._connect() as connection:
             cursor = connection.execute(
                 "UPDATE runs SET status=?,finished_at=?,result_json=?,stop_reason=?,error_code=?,error_message=?,progress_json=? "
-                "WHERE run_id=? AND status IN ('running','cancel_requested')",
+                "WHERE run_id=? AND status=?",
                 (status, _text(_now()), result_json, stop_reason, error_code, error_message,
-                 progress.model_dump_json(), run_id),
+                 progress.model_dump_json(), run_id, expected_status),
             )
         return cursor.rowcount == 1
 
@@ -466,6 +475,17 @@ class BackgroundRunCoordinator:
                 raise ApplicationServiceError("background_path_limit_exceeds_policy", "resource_exhausted", "Requested per-state paths exceed background policy.")
         else:
             self.service._validate_precision_paths(request.simulation, request.precision)
+            maximum = (
+                self.policy.maximum_baseline_paths
+                if run_type == "baseline"
+                else self.policy.maximum_manual_scenario_paths
+            )
+            if request.simulation.path_count > maximum:
+                raise ApplicationServiceError(
+                    f"background_{run_type}_path_limit_exceeded", "resource_exhausted",
+                    "Requested simulation paths exceed the background admission policy.",
+                    requested_paths=request.simulation.path_count, maximum_paths=maximum,
+                )
 
     def submit(self, run_type: Literal["baseline", "manual_scenario", "action_search"], request) -> BackgroundRunSubmission:
         self._validate(run_type, request)
@@ -479,8 +499,11 @@ class BackgroundRunCoordinator:
                 _now() + timedelta(seconds=self.policy.retention_seconds),
             )
             self._events[run_id] = event
-            self._futures[run_id] = self._executor.submit(self._execute, run_id, run_type, request, event)
-            return submission
+        future = self._executor.submit(self._execute, run_id, run_type, request, event)
+        with self._lock:
+            self._futures[run_id] = future
+        future.add_done_callback(lambda completed, identity=run_id: self._release(identity, completed))
+        return submission
 
     def _execute(self, run_id: str, run_type: str, request, event: Event) -> None:
         if not self.store.transition_running(run_id):
@@ -517,10 +540,13 @@ class BackgroundRunCoordinator:
                 self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
             else:
                 stop = getattr(result, "stop_reason", None)
-                self.store.finish(
+                committed = self.store.finish(
                     run_id, "completed", result_json=result.model_dump_json(),
                     stop_reason=stop,
                 )
+                if not committed and self.store.get(run_id).status == "cancel_requested":
+                    self.store.discard_candidates(run_id)
+                    self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
         except Exception as exc:  # worker boundary intentionally converts to safe terminal metadata
             LOGGER.exception("Background analytical run %s failed", run_id, exc_info=exc)
             if event.is_set():
@@ -528,23 +554,36 @@ class BackgroundRunCoordinator:
                 self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
             else:
                 self.store.discard_candidates(run_id)
-                self.store.finish(
+                committed = self.store.finish(
                     run_id, "failed", stop_reason="engine_error",
                     error_code="background_execution_failed",
                     error_message="The analytical worker failed. Inspect local application logs.",
                 )
+                if not committed and self.store.get(run_id).status == "cancel_requested":
+                    self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
         finally:
             self.store.purge(self.policy.maximum_retained_runs)
 
     def cancel(self, run_id: str) -> BackgroundRunRecord:
         record = self.store.request_cancel(run_id)
-        event = self._events.get(run_id)
+        with self._lock:
+            event = self._events.get(run_id)
+            future = self._futures.get(run_id)
         if event is not None:
             event.set()
-        future = self._futures.get(run_id)
         if future is not None and record.status == "cancelled":
             future.cancel()
         return self.store.get(run_id)
+
+    def _release(self, run_id: str, future: Future) -> None:
+        with self._lock:
+            if self._futures.get(run_id) is future:
+                self._futures.pop(run_id, None)
+                self._events.pop(run_id, None)
+
+    def transient_reference_count(self) -> int:
+        with self._lock:
+            return len(self._events) + len(self._futures)
 
     def _retain_candidate(self, run_id: str, item, raw) -> None:
         self.store.add_candidate(run_id, item, raw)

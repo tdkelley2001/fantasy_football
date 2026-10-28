@@ -21,11 +21,14 @@ ranking, and analytical stop reasons.
 The coordinator uses a bounded `ThreadPoolExecutor` so HTTP never runs analysis
 inline. Threads provide scheduling isolation and responsive polling, not
 forceful CPU cancellation. M5.8 may use its accepted bounded process executor,
-constrained by per-run and aggregate nested-worker policy. Defaults are one
+constrained by per-run and aggregate nested-worker policy. Baseline and manual
+scenario submissions are independently admitted against explicit path ceilings;
+the accepted precision runner and direct engine remain unchanged. Defaults are one
 active run, eight queued, two analytical workers total, a 3,600-second search
-deadline, 1,000 evaluated states, 10,000 paths per state, 1 GB retained data,
-100 terminal runs, and 24-hour retention. These are application policies, not
-league rules.
+deadline, 1,000 evaluated states, 10,000 search paths per state, 10,000 baseline
+paths, 10,000 manual-scenario paths, 1 GB retained data, 100 terminal runs, and
+24-hour retention. These are transport/background admission policies, not
+analytical budgets, league rules, or changes to direct engine interfaces.
 
 ## Lifecycle and cancellation
 
@@ -37,7 +40,11 @@ running -> failed
 queued|running|cancel_requested -> interrupted (startup recovery)
 ```
 
-Terminal states never reactivate. Cancellation is idempotent. Queued
+Terminal states never reactivate. Terminal database writes are conditional:
+success and failure commit only from `running`, while cancellation commits only
+from `cancel_requested`. Thus an accepted cancellation cannot be overwritten by
+a stale success, and cancellation after committed success returns that success.
+Progress, result JSON, and terminal status commit together. Cancellation is idempotent. Queued
 cancellation prevents worker entry. M5.8 observes cancellation at accepted safe
 boundaries. Baseline/manual cancellation is coarse: an active engine call may
 finish, its result is discarded, and the run becomes `cancelled`. No thread or
@@ -69,6 +76,11 @@ copied into application storage in row writes. Queries therefore never rerun
 Monte Carlo. Cancellation/failure metadata remains inspectable, but partial
 candidate rows are discarded rather than presented as completed results.
 Deletion and retention purge cascade through candidate/team rows.
+
+Executor `Future` and cancellation `Event` objects are transient scheduling
+bookkeeping, not retained run history. A concurrency-safe done callback removes
+both after every quick completion, cancellation, or failure; durable SQLite
+records and results retain their independent configured lifecycle.
 
 Candidate filters and sorts are allowlisted and applied globally before limit
 and offset. Sorts are identity, evaluated paths, and requester championship
@@ -110,15 +122,16 @@ a distributed queue; restart classifies rather than resumes abandoned work.
 
 ## Verification evidence
 
-- Eleven focused background tests cover baseline/manual/action-search engine
+- Sixteen focused background tests cover baseline/manual/action-search engine
   parity, queued and running cancellation, idempotency, queue/worker limits,
-  restart interruption, safe worker failure, retained candidate/state detail,
+  atomic cancellation/completion ordering, baseline/manual admission ceilings,
+  transient-reference cleanup, restart interruption, safe worker failure, retained candidate/state detail,
   involved-team filtering, global sort-before-page behavior, deletion cascade,
   HTTP 202 submission/polling, and immutable deterministic results. They passed
-  in 1.99 seconds on the development Windows host; the tiny one-path action
-  search took 0.23 seconds and is a contract fixture, not a production benchmark.
-- The combined M6.1/M6.2/documentation focused gate passed 71 tests.
-- All 832 credential-free repository tests passed in 75.11 seconds.
+  in 2.64 seconds on the development Windows host; the tiny one-path action
+  search took 0.19 seconds and is a contract fixture, not a production benchmark.
+- The combined M6.1/M6.2/documentation focused gate passed 76 tests.
+- All 837 credential-free repository tests passed in 56.84 seconds.
 - Python compilation, Ruff `F,E9`, dependency consistency, documentation links,
   and Git whitespace checks passed. The only warning is the existing upstream
   Starlette test-client AnyIO alias deprecation.
