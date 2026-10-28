@@ -124,7 +124,11 @@ python -m fantasy_football.app.server --database outputs/fantasy_football.sqlite
 ```
 
 The entry point always binds `127.0.0.1`; it offers no public-host flag. CORS is
-not used as a network security boundary. M6.3 will perform the broader review.
+not used as a network security boundary. M6.3 adds trusted loopback Host
+validation and rejects state-changing browser requests whose `Origin` is not
+localhost, `127.0.0.1`, or `::1`. Requests without an Origin remain available to
+native local clients. This is not authentication and does not authorize public
+deployment; see `M6_3_BACKEND_VALIDATION.md`.
 
 ## M6.1 limits and M6.2 handoff
 

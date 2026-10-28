@@ -583,7 +583,7 @@ class ApplicationService:
                         if raw_by_id is not None
                         else result.result_index.get_candidate(item.candidate_id)
                     )
-                    candidate_observer(item, raw)
+                    candidate_observer(item, raw, result)
             returned = tuple(islice(result.iter_candidates(), request.response_candidate_limit))
             provenance = self._provenance(
                 loaded, _SyntheticBatch(simulation, self._model(request.outcome_model), loaded),

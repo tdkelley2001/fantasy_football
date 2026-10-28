@@ -7,10 +7,12 @@ import logging
 import os
 from pathlib import Path
 import tempfile
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from fantasy_football.app.contracts import (
     ActionSearchRequest,
@@ -109,6 +111,24 @@ def create_app(
     app.state.application_service = application_service
     app.state.background_coordinator = background_coordinator
     app.state.temporary_run_store = temporary_run_store
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["127.0.0.1", "localhost", "testserver", "[::1]"],
+    )
+
+    @app.middleware("http")
+    async def reject_untrusted_browser_origins(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if origin is not None and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            parsed = urlsplit(origin)
+            if parsed.scheme not in {"http", "https"} or parsed.hostname not in {
+                "localhost", "127.0.0.1", "::1",
+            }:
+                return _error(
+                    403, "untrusted_browser_origin", "invalid_request",
+                    "State-changing requests are accepted only from a local application origin.",
+                )
+        return await call_next(request)
 
     def dependency(request: Request) -> ApplicationService:
         return request.app.state.application_service
