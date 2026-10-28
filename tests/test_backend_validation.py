@@ -36,6 +36,7 @@ from tests.test_app_service import (
 )
 from tests.test_scenario_evaluator import _scenario_snapshot, _scenario_snapshot_with_bench
 from tests.test_postseason import _snapshot as _postseason_snapshot
+from benchmarks.benchmark_app_backend import representative_snapshot
 
 
 def _wait(store, run_id, timeout=10):
@@ -58,6 +59,15 @@ def _backend(tmp_path, snapshot=None, *, policy=None):
         service, store, policy or BackgroundRunPolicy(maximum_active_runs=1)
     )
     return snapshot, service, store, coordinator
+
+
+def test_representative_backend_fixture_has_realistic_sanitized_dimensions() -> None:
+    snapshot = representative_snapshot(free_agent_count=20, bench_per_team=7)
+    assert len(snapshot.teams) == 14
+    assert len(snapshot.roster_entries) == 14 * 12
+    assert len(snapshot.players) == 14 * 12 + 20
+    assert sum(item.capacity for item in snapshot.rules.lineup_slots if item.kind.value == "starter") == 5
+    assert snapshot.final_simulation_week - snapshot.first_simulation_week + 1 == 4
 
 
 def test_identical_submissions_preserve_analytical_identity_but_not_execution_identity(tmp_path):
@@ -256,5 +266,34 @@ def test_trade_chain_acquisition_and_combined_search_reconcile_across_layers(
         state = store.state_detail(run.run_id, detail.candidate.completed_state_sha256)
         if detail.candidate.evaluated_paths:
             assert len(state.all_team_impacts) == snapshot.rules.team_count
+    finally:
+        coordinator.close()
+
+
+def test_background_persists_each_shared_state_evaluation_once(tmp_path, monkeypatch) -> None:
+    source = _scenario_snapshot_with_bench()
+    snapshot = replace(
+        source,
+        fantasy_matchups=tuple(item for item in source.fantasy_matchups if item.bracket_type is None),
+    )
+    service = ApplicationService(ApplicationDependencies(FixtureStore(snapshot)))
+    store = BackgroundRunStore(tmp_path / "runs.sqlite3")
+    calls: list[str] = []
+    original = store.add_state_evaluation
+
+    def counted(run_id, state_sha256, teams, *, maximum_storage_bytes):
+        calls.append(state_sha256)
+        return original(
+            run_id, state_sha256, teams,
+            maximum_storage_bytes=maximum_storage_bytes,
+        )
+
+    monkeypatch.setattr(store, "add_state_evaluation", counted)
+    coordinator = BackgroundRunCoordinator(service, store)
+    request = _action_request(snapshot, execution_mode="sequential_reference")
+    try:
+        run = coordinator.submit("action_search", request)
+        assert _wait(store, run.run_id).status == "completed"
+        assert len(calls) == len(set(calls))
     finally:
         coordinator.close()

@@ -647,6 +647,7 @@ class BackgroundRunCoordinator:
             return
         try:
             if run_type == "action_search":
+                retained_state_ids: set[str] = set()
                 def progress(item):
                     current = self.store.get(run_id)
                     status = "cancel_requested" if current.status == "cancel_requested" else "running"
@@ -667,7 +668,7 @@ class BackgroundRunCoordinator:
                     request, enforce_synchronous_policy=False, progress_observer=progress,
                     stop_requested=event.is_set,
                     candidate_observer=lambda item, raw, result: self._retain_candidate(
-                        run_id, item, raw, result
+                        run_id, item, raw, result, retained_state_ids
                     ),
                 )
             elif run_type == "baseline":
@@ -738,7 +739,9 @@ class BackgroundRunCoordinator:
         with self._lock:
             return len(self._events) + len(self._futures)
 
-    def _retain_candidate(self, run_id: str, item, raw, result) -> None:
+    def _retain_candidate(
+        self, run_id: str, item, raw, result, retained_state_ids: set[str] | None = None
+    ) -> None:
         self.store.add_candidate(
             run_id, item, raw,
             maximum_storage_bytes=self.policy.maximum_result_store_bytes,
@@ -748,6 +751,8 @@ class BackgroundRunCoordinator:
                 "background_storage_limit_exceeded", "resource_exhausted",
                 "The background result store reached its configured storage limit.",
             )
+        if retained_state_ids is not None and item.completed_state_sha256 in retained_state_ids:
+            return
         evaluations = ()
         if result.fixed_evaluation is not None:
             evaluations = result.fixed_evaluation.evaluations
@@ -777,6 +782,8 @@ class BackgroundRunCoordinator:
                 run_id, item.completed_state_sha256, teams,
                 maximum_storage_bytes=self.policy.maximum_result_store_bytes,
             )
+            if retained_state_ids is not None:
+                retained_state_ids.add(item.completed_state_sha256)
 
     def close(self, *, wait: bool = True) -> None:
         for run_id in self.store.active_ids():
