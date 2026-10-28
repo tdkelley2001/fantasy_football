@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import sqlite3
 from threading import Event, Lock
@@ -25,12 +27,14 @@ from fantasy_football.app.contracts import (
     CandidateQueryPage,
     CandidateSummary,
     CompletedStateDetail,
+    TeamScenarioResult,
 )
 from fantasy_football.app.service import ApplicationService, ApplicationServiceError
 
 
 _ACTIVE = ("queued", "running", "cancel_requested")
 _TERMINAL = ("completed", "cancelled", "failed", "interrupted")
+_TERMINAL_METADATA_RESERVE_BYTES = 4_096
 LOGGER = logging.getLogger(__name__)
 
 
@@ -86,8 +90,10 @@ class BackgroundRunStore:
 
     def __init__(self, path: str | Path):
         self.path = str(Path(path))
+        self.instance_id = str(uuid4())
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
+        self._acquire_lease()
         self.mark_stale_interrupted()
 
     def _connect(self) -> sqlite3.Connection:
@@ -96,8 +102,17 @@ class BackgroundRunStore:
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
+    @contextmanager
+    def _connection(self):
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.executescript("""
                 PRAGMA journal_mode=WAL;
                 PRAGMA synchronous=FULL;
@@ -121,17 +136,60 @@ class BackgroundRunStore:
                 );
                 CREATE INDEX IF NOT EXISTS candidates_by_state
                     ON candidates(run_id, state_sha256, candidate_id);
+                CREATE TABLE IF NOT EXISTS application_lease (
+                    singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+                    instance_id TEXT NOT NULL, process_id INTEGER NOT NULL,
+                    acquired_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS candidate_teams (
                     run_id TEXT NOT NULL, candidate_id TEXT NOT NULL, team_id INTEGER NOT NULL,
                     PRIMARY KEY(run_id,candidate_id,team_id),
                     FOREIGN KEY(run_id,candidate_id) REFERENCES candidates(run_id,candidate_id)
                         ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS state_evaluations (
+                    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+                    state_sha256 TEXT NOT NULL, teams_json TEXT NOT NULL,
+                    PRIMARY KEY(run_id,state_sha256)
+                );
             """)
+
+    @staticmethod
+    def _process_alive(process_id: int) -> bool:
+        if process_id == os.getpid():
+            return True
+        try:
+            os.kill(process_id, 0)
+        except OSError:
+            return False
+        return True
+
+    def _acquire_lease(self) -> None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT instance_id,process_id FROM application_lease WHERE singleton=1"
+            ).fetchone()
+            if row is not None and self._process_alive(row["process_id"]):
+                raise ApplicationServiceError(
+                    "background_store_in_use", "resource_exhausted",
+                    "The background run store is already owned by a live application process.",
+                )
+            connection.execute("DELETE FROM application_lease WHERE singleton=1")
+            connection.execute(
+                "INSERT INTO application_lease VALUES (1,?,?,?)",
+                (self.instance_id, os.getpid(), _text(_now())),
+            )
+
+    def release_lease(self) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "DELETE FROM application_lease WHERE singleton=1 AND instance_id=?",
+                (self.instance_id,),
+            )
 
     def mark_stale_interrupted(self) -> None:
         finished = _text(_now())
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "UPDATE runs SET status='interrupted',finished_at=?,stop_reason='process_restart',"
                 "error_code='process_interrupted',error_message='The prior application process ended before this run reached a terminal state.' "
@@ -139,23 +197,51 @@ class BackgroundRunStore:
                 (finished,),
             )
 
+    @staticmethod
+    def _logical_storage_bytes(connection: sqlite3.Connection) -> int:
+        run_bytes = connection.execute(
+            "SELECT coalesce(sum(length(request_json)+length(build_json)+length(progress_json)"
+            "+coalesce(length(result_json),0)),0) FROM runs"
+        ).fetchone()[0]
+        candidate_bytes = connection.execute(
+            "SELECT coalesce(sum(length(summary_json)+length(detail_json)),0) FROM candidates"
+        ).fetchone()[0]
+        evaluation_bytes = connection.execute(
+            "SELECT coalesce(sum(length(teams_json)),0) FROM state_evaluations"
+        ).fetchone()[0]
+        return run_bytes + candidate_bytes + evaluation_bytes
+
+    def logical_storage_bytes(self) -> int:
+        with self._connection() as connection:
+            return self._logical_storage_bytes(connection)
+
     def create(self, run_id: str, run_type: str, request_json: str, snapshot_id: str,
-               build: BuildProvenance, expires: datetime) -> BackgroundRunSubmission:
+               build: BuildProvenance, expires: datetime,
+               *, maximum_storage_bytes: int | None = None) -> BackgroundRunSubmission:
         created = _now()
         progress = BackgroundProgress(run_id=run_id, status="queued", stage="queued")
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run_id, run_type, "queued", request_json, _digest(request_json), snapshot_id,
                  build.model_dump_json(), _text(created), None, None, _text(expires),
                  progress.model_dump_json(), None, None, None, None),
             )
+            if (
+                maximum_storage_bytes is not None
+                and self._logical_storage_bytes(connection) + _TERMINAL_METADATA_RESERVE_BYTES
+                > maximum_storage_bytes
+            ):
+                raise ApplicationServiceError(
+                    "background_storage_limit_exceeded", "resource_exhausted",
+                    "The background result store reached its configured storage limit.",
+                )
         return BackgroundRunSubmission(
             run_id=run_id, run_type=run_type, status="queued", created_at_utc=created
         )
 
     def _row(self, run_id: str) -> sqlite3.Row:
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
         if row is None:
             raise ApplicationServiceError(
@@ -163,7 +249,7 @@ class BackgroundRunStore:
                 run_id=run_id,
             )
         if row["status"] in _TERMINAL and _parse(row["expires_at"]) <= _now():
-            with self._connect() as connection:
+            with self._connection() as connection:
                 connection.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
             raise ApplicationServiceError(
                 "run_expired", "not_found", "The requested analysis run has expired.",
@@ -196,17 +282,17 @@ class BackgroundRunStore:
             sql, values = sql + " WHERE status=?", [status]
         sql += " ORDER BY created_at DESC,run_id LIMIT ?"
         values.append(limit)
-        with self._connect() as connection:
+        with self._connection() as connection:
             return tuple(self._record(row) for row in connection.execute(sql, values))
 
     def active_count(self) -> int:
-        with self._connect() as connection:
+        with self._connection() as connection:
             return connection.execute(
                 "SELECT count(*) FROM runs WHERE status IN ('queued','running','cancel_requested')"
             ).fetchone()[0]
 
     def active_ids(self) -> tuple[str, ...]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             return tuple(
                 row[0] for row in connection.execute(
                     "SELECT run_id FROM runs WHERE status IN ('queued','running','cancel_requested') "
@@ -216,7 +302,7 @@ class BackgroundRunStore:
 
     def transition_running(self, run_id: str) -> bool:
         progress = BackgroundProgress(run_id=run_id, status="running", stage="preparing")
-        with self._connect() as connection:
+        with self._connection() as connection:
             cursor = connection.execute(
                 "UPDATE runs SET status='running',started_at=?,progress_json=? WHERE run_id=? AND status='queued'",
                 (_text(_now()), progress.model_dump_json(), run_id),
@@ -227,7 +313,7 @@ class BackgroundRunStore:
         return BackgroundProgress.model_validate_json(self._row(run_id)["progress_json"])
 
     def set_progress(self, run_id: str, progress: BackgroundProgress) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "UPDATE runs SET progress_json=? WHERE run_id=? AND status IN ('running','cancel_requested')",
                 (progress.model_dump_json(), run_id),
@@ -237,7 +323,7 @@ class BackgroundRunStore:
         row = self._row(run_id)
         if row["status"] in _TERMINAL:
             return self._record(row)
-        with self._connect() as connection:
+        with self._connection() as connection:
             if row["status"] == "queued":
                 progress = BackgroundProgress.model_validate_json(row["progress_json"]).model_copy(
                     update={"status": "cancelled", "stage": "cancelled", "stop_reason": "user_cancelled"}
@@ -255,7 +341,8 @@ class BackgroundRunStore:
 
     def finish(self, run_id: str, status: str, *, result_json: str | None = None,
                stop_reason: str | None = None, error_code: str | None = None,
-               error_message: str | None = None) -> bool:
+               error_message: str | None = None,
+               maximum_storage_bytes: int | None = None) -> bool:
         if status not in _TERMINAL:
             raise ValueError("finish requires a terminal status")
         row = self._row(run_id)
@@ -268,13 +355,22 @@ class BackgroundRunStore:
             "cancelled": "cancel_requested",
             "interrupted": "running",
         }[status]
-        with self._connect() as connection:
+        with self._connection() as connection:
             cursor = connection.execute(
                 "UPDATE runs SET status=?,finished_at=?,result_json=?,stop_reason=?,error_code=?,error_message=?,progress_json=? "
                 "WHERE run_id=? AND status=?",
                 (status, _text(_now()), result_json, stop_reason, error_code, error_message,
                  progress.model_dump_json(), run_id, expected_status),
             )
+            if (
+                cursor.rowcount == 1
+                and maximum_storage_bytes is not None
+                and self._logical_storage_bytes(connection) > maximum_storage_bytes
+            ):
+                raise ApplicationServiceError(
+                    "background_storage_limit_exceeded", "resource_exhausted",
+                    "The background result store reached its configured storage limit.",
+                )
         return cursor.rowcount == 1
 
     def result(self, run_id: str) -> BackgroundResultSummary:
@@ -286,7 +382,7 @@ class BackgroundRunStore:
             )
         return BackgroundResultSummary(run=self._record(row), result=json.loads(row["result_json"]))
 
-    def add_candidate(self, run_id: str, item, raw) -> None:
+    def add_candidate(self, run_id: str, item, raw, *, maximum_storage_bytes: int | None = None) -> None:
         summary = CandidateSummary(
             candidate_id=item.candidate_id, completed_state_sha256=item.completed_state_sha256,
             ordering=str(item.ordering), transaction_authorization=str(item.execution_status),
@@ -303,7 +399,7 @@ class BackgroundRunStore:
             "required_assumptions": list(raw.required_assumptions),
             "structural_intermediate_only": raw.structural_intermediate_only,
         }
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "INSERT INTO candidates VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run_id, item.candidate_id, item.completed_state_sha256, str(item.ordering),
@@ -321,6 +417,15 @@ class BackgroundRunStore:
                 "INSERT INTO candidate_teams VALUES (?,?,?)",
                 ((run_id, item.candidate_id, team_id) for team_id in team_ids),
             )
+            if maximum_storage_bytes is not None:
+                if (
+                    self._logical_storage_bytes(connection) + _TERMINAL_METADATA_RESERVE_BYTES
+                    > maximum_storage_bytes
+                ):
+                    raise ApplicationServiceError(
+                        "background_storage_limit_exceeded", "resource_exhausted",
+                        "The background result store reached its configured storage limit.",
+                    )
 
     def storage_bytes(self) -> int:
         return sum(
@@ -371,7 +476,7 @@ class BackgroundRunStore:
         where = " AND ".join(clauses)
         null_order = "CASE WHEN improvement IS NULL THEN 1 ELSE 0 END, " if sort_key == "requester_improvement" else ""
         order = f"{null_order}{columns[sort_key]} {direction.upper()},candidate_id ASC"
-        with self._connect() as connection:
+        with self._connection() as connection:
             total = connection.execute(f"SELECT count(*) FROM candidates WHERE {where}", values).fetchone()[0]
             rows = connection.execute(
                 f"SELECT summary_json FROM candidates WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
@@ -385,7 +490,7 @@ class BackgroundRunStore:
 
     def candidate_detail(self, run_id: str, candidate_id: str) -> CandidateDetail:
         self.result(run_id)
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 "SELECT summary_json,detail_json FROM candidates WHERE run_id=? AND candidate_id=?",
                 (run_id, candidate_id),
@@ -402,11 +507,15 @@ class BackgroundRunStore:
 
     def state_detail(self, run_id: str, state_id: str) -> CompletedStateDetail:
         self.result(run_id)
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 "SELECT candidate_id,evaluated_paths,improvement FROM candidates "
                 "WHERE run_id=? AND state_sha256=? ORDER BY candidate_id", (run_id, state_id),
             ).fetchall()
+            evaluation = connection.execute(
+                "SELECT teams_json FROM state_evaluations WHERE run_id=? AND state_sha256=?",
+                (run_id, state_id),
+            ).fetchone()
         if not rows:
             raise ApplicationServiceError("completed_state_not_found", "not_found", "The requested completed state does not exist.")
         evaluated = max(row[1] for row in rows)
@@ -417,22 +526,49 @@ class BackgroundRunStore:
             requester_championship_difference_probability_points=(
                 next(iter(improvements)) if len(improvements) == 1 else None
             ),
+            all_team_impacts=() if evaluation is None else tuple(
+                TeamScenarioResult.model_validate(item) for item in json.loads(evaluation[0])
+            ),
         )
+
+    def add_state_evaluation(
+        self, run_id: str, state_id: str, teams: tuple[TeamScenarioResult, ...],
+        *, maximum_storage_bytes: int | None = None,
+    ) -> None:
+        payload = json.dumps(
+            [item.model_dump(mode="json") for item in teams],
+            sort_keys=True, separators=(",", ":"),
+        )
+        with self._connection() as connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO state_evaluations VALUES (?,?,?)",
+                (run_id, state_id, payload),
+            )
+            if (
+                maximum_storage_bytes is not None
+                and self._logical_storage_bytes(connection) + _TERMINAL_METADATA_RESERVE_BYTES
+                > maximum_storage_bytes
+            ):
+                raise ApplicationServiceError(
+                    "background_storage_limit_exceeded", "resource_exhausted",
+                    "The background result store reached its configured storage limit.",
+                )
 
     def delete(self, run_id: str) -> None:
         row = self._row(run_id)
         if row["status"] not in _TERMINAL:
             raise ApplicationServiceError("run_not_terminal", "invalid_request", "Only terminal runs may be deleted.")
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
 
     def discard_candidates(self, run_id: str) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("DELETE FROM candidates WHERE run_id=?", (run_id,))
+            connection.execute("DELETE FROM state_evaluations WHERE run_id=?", (run_id,))
 
     def purge(self, maximum: int) -> None:
         now = _text(_now())
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("DELETE FROM runs WHERE expires_at<? AND status IN ('completed','cancelled','failed','interrupted')", (now,))
             ids = connection.execute(
                 "SELECT run_id FROM runs WHERE status IN ('completed','cancelled','failed','interrupted') "
@@ -497,6 +633,7 @@ class BackgroundRunCoordinator:
             submission = self.store.create(
                 run_id, run_type, payload, request.snapshot.snapshot_id, self.service.build,
                 _now() + timedelta(seconds=self.policy.retention_seconds),
+                maximum_storage_bytes=self.policy.maximum_result_store_bytes,
             )
             self._events[run_id] = event
         future = self._executor.submit(self._execute, run_id, run_type, request, event)
@@ -529,7 +666,9 @@ class BackgroundRunCoordinator:
                 result = self.service.run_action_search(
                     request, enforce_synchronous_policy=False, progress_observer=progress,
                     stop_requested=event.is_set,
-                    candidate_observer=lambda item, raw: self._retain_candidate(run_id, item, raw),
+                    candidate_observer=lambda item, raw, result: self._retain_candidate(
+                        run_id, item, raw, result
+                    ),
                 )
             elif run_type == "baseline":
                 result = self.service.run_baseline(request)
@@ -537,30 +676,44 @@ class BackgroundRunCoordinator:
                 result = self.service.run_manual_scenario(request)
             if event.is_set() or self.store.get(run_id).status == "cancel_requested":
                 self.store.discard_candidates(run_id)
-                self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
+                self.store.finish(
+                    run_id, "cancelled", stop_reason="user_cancelled",
+                    maximum_storage_bytes=self.policy.maximum_result_store_bytes,
+                )
             else:
                 stop = getattr(result, "stop_reason", None)
                 committed = self.store.finish(
                     run_id, "completed", result_json=result.model_dump_json(),
                     stop_reason=stop,
+                    maximum_storage_bytes=self.policy.maximum_result_store_bytes,
                 )
                 if not committed and self.store.get(run_id).status == "cancel_requested":
                     self.store.discard_candidates(run_id)
-                    self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
+                    self.store.finish(
+                        run_id, "cancelled", stop_reason="user_cancelled",
+                        maximum_storage_bytes=self.policy.maximum_result_store_bytes,
+                    )
         except Exception as exc:  # worker boundary intentionally converts to safe terminal metadata
             LOGGER.exception("Background analytical run %s failed", run_id, exc_info=exc)
             if event.is_set():
                 self.store.discard_candidates(run_id)
-                self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
+                self.store.finish(
+                    run_id, "cancelled", stop_reason="user_cancelled",
+                    maximum_storage_bytes=self.policy.maximum_result_store_bytes,
+                )
             else:
                 self.store.discard_candidates(run_id)
                 committed = self.store.finish(
                     run_id, "failed", stop_reason="engine_error",
                     error_code="background_execution_failed",
                     error_message="The analytical worker failed. Inspect local application logs.",
+                    maximum_storage_bytes=self.policy.maximum_result_store_bytes,
                 )
                 if not committed and self.store.get(run_id).status == "cancel_requested":
-                    self.store.finish(run_id, "cancelled", stop_reason="user_cancelled")
+                    self.store.finish(
+                        run_id, "cancelled", stop_reason="user_cancelled",
+                        maximum_storage_bytes=self.policy.maximum_result_store_bytes,
+                    )
         finally:
             self.store.purge(self.policy.maximum_retained_runs)
 
@@ -585,16 +738,49 @@ class BackgroundRunCoordinator:
         with self._lock:
             return len(self._events) + len(self._futures)
 
-    def _retain_candidate(self, run_id: str, item, raw) -> None:
-        self.store.add_candidate(run_id, item, raw)
+    def _retain_candidate(self, run_id: str, item, raw, result) -> None:
+        self.store.add_candidate(
+            run_id, item, raw,
+            maximum_storage_bytes=self.policy.maximum_result_store_bytes,
+        )
         if self.store.storage_bytes() > self.policy.maximum_result_store_bytes:
             raise ApplicationServiceError(
                 "background_storage_limit_exceeded", "resource_exhausted",
                 "The background result store reached its configured storage limit.",
+            )
+        evaluations = ()
+        if result.fixed_evaluation is not None:
+            evaluations = result.fixed_evaluation.evaluations
+        elif result.progressive_evaluation is not None:
+            evaluations = result.progressive_evaluation.state_evaluations
+        evaluation = next(
+            (
+                value for value in evaluations
+                if value.completed_state_sha256 == item.completed_state_sha256
+            ),
+            None,
+        )
+        if evaluation is not None and evaluation.comparison is not None:
+            teams = tuple(
+                TeamScenarioResult(
+                    team_id=team.team_id,
+                    championship=self.service._paired(team.championship),
+                    playoff_qualification=self.service._paired(team.playoff_qualification),
+                    final_placements=tuple(
+                        (placement.placement, self.service._paired(placement))
+                        for placement in team.final_placements
+                    ),
+                )
+                for team in evaluation.comparison.teams
+            )
+            self.store.add_state_evaluation(
+                run_id, item.completed_state_sha256, teams,
+                maximum_storage_bytes=self.policy.maximum_result_store_bytes,
             )
 
     def close(self, *, wait: bool = True) -> None:
         for run_id in self.store.active_ids():
             self.cancel(run_id)
         self._executor.shutdown(wait=wait, cancel_futures=True)
+        self.store.release_lease()
 

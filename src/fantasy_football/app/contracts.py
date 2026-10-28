@@ -516,3 +516,4 @@ class CompletedStateDetail(ContractModel):
     candidate_ids: tuple[str, ...]
     evaluated_paths: int
     requester_championship_difference_probability_points: float | None
+    all_team_impacts: tuple[TeamScenarioResult, ...] = ()

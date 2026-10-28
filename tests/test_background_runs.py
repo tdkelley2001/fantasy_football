@@ -109,6 +109,9 @@ def test_background_action_retains_queryable_candidates_and_shared_states(backgr
     assert detail.actions
     state = store.state_detail(submission.run_id, detail.candidate.completed_state_sha256)
     assert detail.candidate.candidate_id in state.candidate_ids
+    assert tuple(item.team_id for item in state.all_team_impacts) == tuple(
+        sorted(team.team_id for team in snapshot.teams)
+    )
     involved = store.query_candidates(
         submission.run_id, offset=0, limit=20, sort_key="candidate_id",
         direction="asc", evaluated=None, team_id=1,
@@ -231,10 +234,12 @@ def test_stale_active_run_is_interrupted_on_store_restart(tmp_path) -> None:
         "stale", "baseline", "{}", "snapshot", build, _now() + timedelta(hours=1)
     )
     assert item.status == "queued"
+    store.release_lease()  # emulate the prior process no longer owning the store
     restarted = BackgroundRunStore(path)
     record = restarted.get("stale")
     assert record.status == "interrupted"
     assert record.stop_reason == "process_restart"
+    restarted.release_lease()
 
 
 def test_queue_and_background_resource_limits_fail_before_execution(background) -> None:

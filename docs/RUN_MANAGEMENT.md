@@ -66,6 +66,8 @@ safely; M5.8's measured overrun remains in the result.
 ## Persistence and queries
 
 The private local SQLite store uses WAL, foreign keys, and `synchronous=FULL`.
+An application-instance lease rejects a second live owner; a stale owner permits
+restart recovery without misclassifying genuinely active work.
 It records immutable request JSON/SHA-256, snapshot/build provenance, lifecycle
 timestamps, expiration, progress, stop/error data, and results. Clients cannot
 supply paths.
@@ -74,7 +76,10 @@ M5.8 temporary indexes remain worker-owned. Before close, every candidate
 summary, ordered action, candidate/state link, and shared evaluation field is
 copied into application storage in row writes. Queries therefore never rerun
 Monte Carlo. Cancellation/failure metadata remains inspectable, but partial
-candidate rows are discarded rather than presented as completed results.
+candidate rows are discarded rather than presented as completed results. Logical
+payload storage is checked inside each write transaction with reserved terminal
+metadata space, so an excessive candidate/state write rolls back rather than
+committing an overshoot. SQLite physical page/WAL overhead is measured separately.
 Deletion and retention purge cascade through candidate/team rows.
 
 Executor `Future` and cancellation `Event` objects are transient scheduling
@@ -87,7 +92,8 @@ and offset. Sorts are identity, evaluated paths, and requester championship
 improvement; null improvements sort last and candidate ID is the stable final
 tie-break. Filters cover ordering, involved team, authorization, acquisition
 condition, and evaluated state. Candidate details preserve ordered actions;
-state details expose all paths sharing one evaluation identity.
+state details expose all paths sharing one evaluation identity and the retained
+accepted all-team paired impacts for that shared evaluation.
 
 ## HTTP routes
 

@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M5.8 and the post-M5 consolidation are **COMPLETE AND ACCEPTED**. M6.1 is complete and accepted; M6.2 is **IMPLEMENTED — REVIEW PENDING**; M6.3–M8 are not started. The deterministic analytical engine plus synchronous and bounded local background application services are implemented. M6.2 provides durable run lifecycle/progress, cooperative cancellation, retained indexed result queries, and cleanup without changing accepted analytics.
+M0–M5.8, the post-M5 consolidation, M6.1, and M6.2 are **COMPLETE AND ACCEPTED**. M6.3 is **IMPLEMENTED — REVIEW PENDING**; M6.4–M8 are not started. The deterministic analytical engine plus synchronous and bounded local background application services are implemented and now have end-to-end parity, operational, performance, resource, and localhost-security validation evidence.
 
 The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to the implemented minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. Background execution and the frontend remain M6.2/M7 work; existing focused CLIs remain developer diagnostics rather than the primary future interface.
 
@@ -36,6 +36,7 @@ The planned V1 product is a local web application: a preferred React/TypeScript/
 - [UI design vision](docs/UI_DESIGN_VISION.md) — the Integrated War Room interaction and visual north star for progressive M7 frontend development.
 - [Application service](docs/APPLICATION_SERVICE.md) — M6.1 versioned service/HTTP contracts, provenance identities, loopback startup, errors, and synchronous limitations.
 - [Background runs and retained results](docs/RUN_MANAGEMENT.md) — M6.2 lifecycle, cancellation, resource policy, persistence, and server-side result queries.
+- [M6.3 backend validation](docs/M6_3_BACKEND_VALIDATION.md) — parity, configuration, identity, performance, memory/storage, worker, error, and localhost-security evidence.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.
