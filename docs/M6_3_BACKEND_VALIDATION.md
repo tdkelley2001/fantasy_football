@@ -3,163 +3,116 @@
 Status: **IMPLEMENTED — REVIEW PENDING** (27 October 2026).
 
 This audit implements the M6.3 gate in `MASTER_SPEC.md` Sections 8, 9, and 12.
-It validates the accepted M0–M6.2 system; it does not add a model, transaction
-rule, ranking, estimator, or frontend capability.
+It validates the accepted M0–M6.2 system and adds no model, transaction rule,
+ranking method, estimator, or frontend capability.
 
-## Scope and architecture exercised
+## Integration and correctness
 
-Tests traverse direct Python engines, `ApplicationService`, FastAPI, the
-background coordinator, durable run SQLite, retained candidate/state queries,
-and M5.8 temporary-index transfer. Baseline, identity manual scenarios,
-standalone trades, immediate acquisitions, two-step trade chains, and combined
-trade/chain/acquisition searches are included. Direct and background layers
-reconcile engine/search identities, all-team probability structures, candidate
-coverage, evaluation coverage, precision/ranking flags, stop reasons, candidate
-IDs, completed-state IDs, and ordered action steps. Retained completed-state
-detail now stores the accepted shared all-team paired evaluation once per state;
-equivalent candidate paths do not imply independent Monte Carlo evidence.
+Tests traverse direct engines, `ApplicationService`, FastAPI, the background
+coordinator, durable run SQLite, retained candidate/state queries, and M5.8
+temporary-index transfer. They reconcile analytical identities, all-team
+probabilities, coverage, precision/ranking flags, stop reasons, candidate IDs,
+completed-state IDs, ordered actions, cancellation, and cleanup. Retained state
+detail stores accepted all-team paired impacts once per completed state.
 
-Identical submissions preserve snapshot, model, seed/path, M3 engine, M5 state,
-and analytical-equivalence identities while receiving distinct M6 execution and
-presentation identities. Build revision remains `unknown` when neither an
-explicit revision nor `FANTASY_FOOTBALL_BUILD_REVISION` is supplied; such a run
-does not prove source-code byte equivalence.
+Identical submissions retain snapshot, model, seed/path, M3 engine, M5 state,
+and analytical-equivalence identities while receiving distinct M6 execution
+identities. An absent build revision remains `unknown`; it does not prove source
+byte equivalence. League structure comes from canonical configuration and
+unsupported settings still fail closed.
 
-## Configuration matrix
+## Operational corrections retained from M6.3
 
-Credential-free tests cover supported four-team analytical fixtures, an
-eight-team/four-qualifier postseason structure, and a sanitized 14-team/six-
-qualifier complete-season fixture. Snapshot/league/season identity, configured
-lineup slots and capacities, acquisition type, championship qualifier count,
-postseason periods, and canonical source gaps pass through without fixed league
-size branches. Existing canonical/adapter/postseason suites retain broader 8-,
-10-, and 14-team configuration coverage. Unsupported settings continue to fail
-in the canonical or engine layer rather than receiving an application fallback.
+- SQLite connections are explicitly closed, including on Windows.
+- A live-instance SQLite lease prevents a second application from interrupting
+  an active owner; stale ownership permits restart classification.
+- Trusted-host and hostile-origin checks protect the loopback-only service.
+- Logical payload limits are enforced transactionally with terminal-metadata
+  reserve; failed writes leave no partial candidate row.
+- Retained state detail preserves all-team paired evaluation results.
+- Shared state evaluations are now serialized and written once per run rather
+  than once per equivalent candidate path. Candidate links and IDs are unchanged.
 
-## Statistical and completion semantics
+The server remains hard-bound to `127.0.0.1`. It has no authentication or TLS
+and is not supported for public exposure.
 
-Public contracts keep candidate coverage, evaluation coverage, statistical
-precision, ranking resolution, transaction authorization, conditional waiver
-status, and evaluated path count separate. Null estimates remain null. Resource
-limits produce valid partial results with their engine stop reason; they are not
-infrastructure failures and are not labeled converged. Cancellation, process
-interruption, storage failure, invalid request/configuration, missing/expired
-run, and internal worker failure retain distinct durable/HTTP classifications.
+## Reproducible realistic-workload benchmark
 
-## Targeted corrections found by validation
+Run `python benchmarks/benchmark_app_backend.py --tier all`.
 
-1. **SQLite handle lifecycle (high, fixed).** `sqlite3.Connection` context
-   management commits or rolls back but does not close the object. Run-store
-   methods now use an explicit close-owning context manager. A Windows regression
-   deletes a just-used database immediately; the benchmark no longer leaves a
-   locked temporary directory.
-2. **Concurrent application startup (high, fixed).** Startup interruption
-   recovery previously could mark another live process's work interrupted. A
-   single-owner SQLite lease now rejects a second live application explicitly;
-   a stale owner permits accurate restart recovery.
-3. **Browser-origin/Host boundary (high, fixed).** Trusted-host validation
-   allows only loopback names plus the test host. State-changing requests with a
-   non-loopback `Origin` receive a typed 403. No permissive CORS headers are
-   emitted. Requests without `Origin` remain available to local CLI/native
-   clients.
-4. **Storage overshoot (medium, fixed).** Run and candidate/state payload limits
-   are checked inside the writing transaction using logical payload bytes, with
-   a 4 KiB reserve for safe terminal metadata. An excessive write rolls back;
-   the run fails safely and no candidate row commits. Physical SQLite page/WAL
-   allocation is reported separately and can exceed logical payload by fixed
-   database overhead.
-5. **All-team shared evaluation delivery (medium, fixed).** Retained state detail
-   now includes every available accepted all-team paired impact rather than only
-   the requesting-team ranking field.
+The 27 October 2026 host was Windows 11 build 26300, Python 3.12.10, AMD64
+Family 25 Model 97, 16 logical cores, and 33,605,840,896 bytes RAM. Dependencies
+were FastAPI 0.115.14, Starlette 0.46.2, Uvicorn 0.34.3, and Pydantic 2.14.1.
 
-## Local security disposition
+The sanitized representative fixture has 14 teams, 12 ordinary roster players
+per team, five starters (QB/RB/WR/TE/FLEX), seven bench places, 20 unrostered
+players, 188 total players, four remaining scoring weeks, and the generic
+six-qualifier postseason. These are benchmark inputs, never production rules.
 
-The server remains hard-bound to `127.0.0.1`; no public-host option exists.
-Trusted Host mitigates DNS-rebinding Host spoofing, and the origin check blocks
-hostile web pages from state-changing requests even when a simple browser POST
-is possible. Query sorts/filters remain fixed allowlists with bound SQL values;
-clients cannot supply storage paths. Public errors omit tracebacks, raw payloads,
-credentials, and filesystem paths, while local logs retain worker tracebacks.
+Both search sizes used seed 8128, the provisional Normal model, two matched
+paths per evaluated state, one active run, two process workers, one-path tasks,
+an eight-item queue, and a 120-second deadline. The representative universe
+generated two candidates/two states and evaluated both. The larger universe
+generated 12 candidates/12 states and evaluated four under its declared limit.
+Candidate coverage was exhaustive in both; the larger run stopped with
+`evaluation_limit` and did not claim evaluation or statistical completeness.
 
-Residual V1 risks: there is no user authentication, TLS, or authorization if an
-operator deliberately changes the binding outside the supported entry point;
-loopback malware can access the service; and permitted localhost origins share
-trust regardless of port. These are release/security review items for M6.4,
-not evidence that the service is suitable for public exposure.
+| Search | Generation | MC evaluation | Transfer/persist | Total | States generated/evaluated | page p50/p95 | detail p50/p95 | health p50/p95 (n) | SQLite | parent peak RSS | child peak RSS/processes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Representative | 0.203s | 9.031s | 0.256s | 9.490s | 2/2 | 5.5/5.6ms | 4.6/17.0ms | 1.4/15.3ms (350) | 348,160 B | 85,610,496 B | 136,921,088 B / 2 |
+| Larger | 0.812s | 14.953s | 0.340s | 16.105s | 12/4 | 3.5/5.2ms | 5.2/13.9ms | 1.4/14.8ms (564) | 569,344 B | 86,134,784 B | 136,921,088 B / 2 |
 
-## Reproducible performance workflow
+Allocation tracing was disabled during latency measurement. Separate one-path
+traced baselines recorded 2,194,332 and 2,193,886 Python bytes; these are not
+whole-process peaks. `psutil` sampled the parent and recursive children every
+10ms (531 and 669 samples). Two children were observed and returned to zero
+after shutdown; no persistent orphan remained. Aggregate child RSS is measured
+evidence, not a platform-enforced limit.
 
-Run:
+Health and status polling continued during process computation and p95 stayed
+under 250ms. Page/detail queries read retained SQLite rows and initiated no
+Monte Carlo. The larger store grew about 229KB for six times as many links.
+Transfer/persistence was 2.1% of total time; Monte Carlo evaluation dominated.
 
-```powershell
-python benchmarks/benchmark_app_backend.py --tier all
-```
+The representative workflow also reruns sequentially and compares its complete
+`(candidate_id, completed_state_sha256)` set and coverage with the two-worker
+result. Resource settings intentionally differ, so execution fingerprints are
+not used as analytical-equivalence evidence. Existing path-indexed M3.5 tests
+separately prove numerical worker-count equivalence.
 
-The 27 October 2026 development host was Windows 11 build 26300, Python 3.12.10,
-AMD64 Family 25 Model 97, 16 logical cores, and 33,605,840,896 bytes RAM.
-Dependencies were FastAPI 0.115.14, Starlette 0.46.2, Uvicorn 0.34.3, and
-Pydantic 2.14.1. Runs used the provisional Normal model, seed 8128, one path,
-one active application run, and at most two analytical workers. These are
-synthetic sanitized measurements, not live ESPN forecasts.
+These are synthetic sanitized measurements, not live ESPN forecasts or a claim
+that an entire live-league exhaustive universe fits these budgets.
 
-| Tier | Structure/work | baseline | manual | combined search | submit | status p95 | health p95 | candidate page p95 | detail p95 | SQLite | traced Python peak | RSS before → after |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Small | 4 teams, 9 players, 44 combined paths, 5 retained runs | 0.275s | 0.645s | 6.107s | 10.6ms | 98.6ms | 181.1ms | 7.1ms | 5.1ms | 262,144 B | 2,497,455 B | 75,010,048 → 81,346,560 B |
-| Representative | 14 teams/players, 3 retained runs | 0.658s | 1.861s | unavailable | 9.9ms | 267.7ms | 196.9ms | unavailable | unavailable | 303,104 B | 1,746,553 B | 81,956,864 → 82,821,120 B |
-| Stress | small combined search plus 50 repeated runs/queries | 0.240s | 0.617s | 6.149s | 8.7ms | 142.1ms | 139.4ms | 7.5ms | 5.9ms | 815,104 B | 1,863,438 B | 82,989,056 → 83,066,880 B |
+## Statistical and resource semantics
 
-The 50-row target was approximated by the complete 44-row combined-action
-fixture. Page/detail targets (500/250 ms), health target (250 ms), and nonblocking
-submission passed. Representative status polling measured 267.7 ms, 17.7 ms
-over the provisional 250 ms target. This is a **moderate M7 responsiveness risk**:
-the small sample and `tracemalloc` instrumentation make it non-conclusive, but
-the thread executor cannot guarantee GIL-independent responsiveness. M6.4 should
-repeat without allocation tracing and evaluate process isolation before release.
-No universal exhaustive-search completion budget is asserted.
+Candidate coverage, evaluation coverage, precision, ranking resolution,
+transaction authorization, waiver condition, and path count remain separate.
+Null estimates remain null. A resource-limited run returns valid partial data
+with its stop reason and is never relabeled converged. Cancellation, process
+interruption, storage failure, invalid configuration, missing/expired run, and
+worker failure remain distinct durable and HTTP states.
 
-RSS includes the parent process. Peak child-process count/RSS was unavailable in
-this harness and is explicitly null; no claim about strict aggregate process
-memory is made. The tested one-path workload did not activate a child pool.
-Database growth was predictable across 5/3/50 retained runs, coordinator
-references returned to zero, and isolated temporary stores deleted successfully.
+Polling RSS can miss short-lived peaks and does not enforce a process-memory
+ceiling. Exact V(R)/Monte Carlo evaluation dominates larger budgets; realistic
+searches therefore remain explicitly resource-bounded without candidate
+attractiveness pruning or heuristic substitution. Baseline/manual cancellation
+is still coarse while inside an accepted engine call. The local SQLite service
+remains single-owner rather than a distributed scheduler.
 
-## Worker/interruption evidence
+## Verification gate
 
-Focused tests cover normal/quick completion, queued and active cancellation,
-candidate-generation cooperative stopping through accepted M5.8 hooks,
-cancellation at the atomic completion boundary, failure, shutdown cancellation,
-stale restart classification, single-owner startup, queue/worker bounds,
-temporary-index cleanup, and terminal bookkeeping release. Existing spawn-based
-M3.5/M5.8 suites cover Windows worker equivalence and partition identity. Tests
-do not claim automatic resume or force-kill safety.
+Focused tests cover identity separation, Host/Origin security, distinct league
+structures, transactional rollback, Windows handle release, live-instance
+exclusion, realistic fixture dimensions, direct/service/background parity,
+shared-state write deduplication, acquisitions, chains, and combined searches.
+The complete credential-free suite, Windows spawn checks, Python compilation,
+Ruff `F,E9`, dependency consistency, documentation links, and Git whitespace
+are required before acceptance. The known Starlette AnyIO alias warning is
+upstream and unchanged.
 
-## Remaining limitations and handoff
+Final follow-up evidence: 49 focused M6.1–M6.3 tests passed; all 849
+credential-free tests passed in 64.50 seconds; 39 documentation-link tests,
+`pip check`, compilation, Ruff `F,E9`, and Git whitespace checks passed. The
+only warning was the existing upstream Starlette AnyIO alias deprecation.
 
-- Parent RSS and traced allocations are observed, but peak aggregate child RSS
-  remains unavailable (**medium**, M6.4 performance validation).
-- Representative polling narrowly missed the provisional target under tracing
-  (**medium**, M6.4/M7 responsiveness decision).
-- Baseline/manual cancellation remains coarse while inside an accepted engine
-  call (**documented**, M6.4 UX wording; no unsafe termination).
-- Single-owner local SQLite deliberately rejects concurrent application
-  instances; this is not a distributed scheduler (**accepted V1 constraint**).
-- Localhost-origin trust and lack of authentication prohibit public deployment
-  (**high if exposed**, M6.4 release security checklist).
-
-No finding requires changing an accepted fantasy-football or statistical
-algorithm. M6.3 remains pending independent review; M6.4 and M7 are not started.
-
-## Verification evidence
-
-- Nine focused M6.3 tests (twelve parametrized cases) cover identity separation,
-  Host/Origin security, distinct canonical league structures, transactional
-  storage rollback, Windows handle release, live-instance exclusion, and direct/
-  service/background/retained-result parity for acquisitions, chains, and
-  combined searches.
-- The combined M6.1–M6.3/documentation gate passed 86 tests in 7.82 seconds.
-- The explicit Windows multiprocessing/M5.8 compatibility gate passed 35 tests
-  in 14.15 seconds.
-- All 847 credential-free repository tests passed in 64.41 seconds.
-- Python compilation, Ruff `F,E9`, dependency consistency, documentation links,
-  and Git whitespace checks passed. The sole warning is the existing upstream
-  Starlette test-client AnyIO alias deprecation.
+M6.3 remains **IMPLEMENTED — REVIEW PENDING**. M6.4 and M7 are not started.
