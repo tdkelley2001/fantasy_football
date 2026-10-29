@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0–M6.4 are **COMPLETE AND ACCEPTED**. The pre-M7 consolidation checkpoint is **IMPLEMENTED — REVIEW PENDING**. M7.1–M8 are not started. No legacy implementation is credited toward these statuses.
+M0–M6.4 and the pre-M7 consolidation checkpoint are **COMPLETE AND ACCEPTED**. M7.1 is **IMPLEMENTED — REVIEW PENDING**; M7.2–M8 are not started. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M8 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -30,7 +30,7 @@ Dependencies are sequential within each milestone and across the M0 → M8 miles
 
 #### Post-V1 research backlog — Player-specific volatility and bias: evaluate regularized, data-sufficient player-level departures from shared position/projection-level distributions only after M3 calibration and sufficient as-of history have been collected. Compare temporally held-out calibration and resulting decision quality, with hierarchical shrinkage/fallback to group estimates; do not include player-specific residual parameters in V1 or presume they improve outcomes. Also revisit forecast-horizon variance only when genuine earlier as-of snapshots exist.
 
-#### M7 — Futuristic interactive dashboard [NOT STARTED]. Preferred React/TypeScript/Tailwind design system, League Command Center, Opportunity Explorer, Trade Lab, Simulation Control Center, and accessibility/usability validation, guided by the [Integrated War Room design vision](UI_DESIGN_VISION.md). PASS: principal workflows are navigable without low-level Python commands and every analytical claim reconciles with the backend.
+#### M7 — Futuristic interactive dashboard [IN PROGRESS — M7.1 REVIEW PENDING]. The React/TypeScript/Tailwind shell and source-backed Living League foundation are implemented; analytical workspaces remain staged, guided by the [Integrated War Room design vision](UI_DESIGN_VISION.md). PASS: principal workflows are navigable without low-level Python commands and every analytical claim reconciles with the backend.
 
 #### M8 — Local V1 release [NOT STARTED]. Local startup/install, end-to-end real-league workflow validation, runtime/interruption/recovery verification, security review, and final acceptance. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
@@ -146,14 +146,14 @@ M6.3 [COMPLETE AND ACCEPTED, 27 October 2026] Validate parity, configuration and
 
 M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize additive API 1.0 compatibility, canonical player/roster/schedule joins, configuration/startup/troubleshooting, operational checks, regression evidence, and the M7 data-readiness matrix. See `BACKEND_READINESS.md`.
 
-Pre-M7 consolidation [IMPLEMENTED — REVIEW PENDING, 28 October 2026] Reconcile accepted status and architecture, audit production/tests/diagnostics/benchmarks and configuration authority, harden executor-submission and lease-initialization failure windows, validate local frontend proxy integration, and record M7.1 readiness without adding frontend or analytical behavior. See `PRE_M7_REPOSITORY_AUDIT.md`.
+Pre-M7 consolidation [COMPLETE AND ACCEPTED, 28 October 2026] Reconcile accepted status and architecture, audit production/tests/diagnostics/benchmarks and configuration authority, harden executor-submission and lease-initialization failure windows, validate local frontend proxy integration, and record M7.1 readiness without adding frontend or analytical behavior. See `PRE_M7_REPOSITORY_AUDIT.md`.
 
 #### M7 — Futuristic interactive dashboard
 
 The [Integrated War Room — Hybrid Tactical Surface](UI_DESIGN_VISION.md) is the
 M7 design north star, not a frozen component specification.
 
-M7.1 Build the preferred React/TypeScript/Tailwind accessible dark design system and application shell. GATE: visual language and primary navigation are coherent, accessible, responsive, and reusable.
+M7.1 [IMPLEMENTED — REVIEW PENDING, 28 October 2026] Build the preferred React/TypeScript/Tailwind accessible design system, responsive Integrated War Room shell, typed API client, source-backed Living League foundation, honest operational states, and visual QA captures. GATE: visual language and primary navigation are coherent, accessible, responsive, and reusable. See `M7_1_FRONTEND_FOUNDATION.md`.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league-wide comparisons, postseason visualization, and uncertainty explanations. GATE: every displayed numerical result reconciles with the accepted engine.
 
@@ -175,7 +175,7 @@ M8.3 Validate runtime, resource use, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4 are complete and accepted; the pre-M7 checkpoint is implemented for review; M7.1–M8 are not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4 and the pre-M7 checkpoint are complete and accepted; M7.1 is implemented for review; M7.2–M8 are not started.
 
 ### 12.2 Practical development method
 

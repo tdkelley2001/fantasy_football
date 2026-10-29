@@ -37,7 +37,10 @@ def test_authoritative_documents_share_current_product_direction() -> None:
         normalized = document.casefold()
         assert "m0–m6.4" in normalized
         assert "complete and accepted" in normalized
-        assert "m7.1–m8" in normalized
+        assert "m7.1" in normalized
+        assert "implemented" in normalized
+        assert "review pending" in normalized
+        assert "m7.2–m8" in normalized
         assert "not started" in normalized
 
     assert "local web application" in readme
@@ -46,10 +49,12 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "M6.2 [COMPLETE AND ACCEPTED" in roadmap
     assert "M6.3 [COMPLETE AND ACCEPTED" in roadmap
     assert "M6.4 [COMPLETE AND ACCEPTED" in roadmap
-    assert "Pre-M7 consolidation [IMPLEMENTED — REVIEW PENDING" in roadmap
+    assert "Pre-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
+    assert "M7.1 [IMPLEMENTED — REVIEW PENDING" in roadmap
     assert "BACKEND_READINESS.md" in roadmap
     assert "docs/BACKEND_READINESS.md" in readme
     assert "docs/PRE_M7_REPOSITORY_AUDIT.md" in readme
+    assert "docs/M7_1_FRONTEND_FOUNDATION.md" in readme
     assert "M8 — Local V1 release" in roadmap
     assert "Integrated CLI V1" not in master_spec
     assert "Optional visual dashboard" not in master_spec

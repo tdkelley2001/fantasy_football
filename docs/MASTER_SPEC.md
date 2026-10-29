@@ -384,7 +384,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### Post-V1 research backlog — Player-specific volatility and bias: evaluate regularized, data-sufficient player-level departures from shared position/projection-level distributions only after M3 calibration and sufficient as-of history have been collected. Compare temporally held-out calibration and resulting decision quality, with hierarchical shrinkage/fallback to group estimates; do not include player-specific residual parameters in V1 or presume they improve outcomes. Also revisit forecast-horizon variance only when genuine earlier as-of snapshots exist.
 
-#### M7 — Futuristic interactive dashboard [NOT STARTED]. Build the React/TypeScript/Tailwind application shell, League Command Center, Opportunity Explorer, Trade Lab, and Simulation Control Center against accepted versioned backend contracts, guided by the Integrated War Room design north star in `UI_DESIGN_VISION.md`. PASS: principal workflows are accessible and responsive, and every numerical or legality claim reconciles with the engine.
+#### M7 — Futuristic interactive dashboard [IN PROGRESS — M7.1 REVIEW PENDING]. The React/TypeScript/Tailwind shell and source-backed Living League foundation are implemented; analytical workspaces remain deferred. All frontend data flows through accepted versioned backend contracts and follows `UI_DESIGN_VISION.md`. PASS: principal workflows are accessible and responsive, and every numerical or legality claim reconciles with the engine.
 
 #### M8 — Local V1 release [NOT STARTED]. Complete local installation/startup, end-to-end real-league validation, resource/interruption/recovery verification, security review, known limitations, and final acceptance. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
@@ -502,7 +502,7 @@ M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize the additive API 1.0 comp
 
 #### M7 — Futuristic interactive dashboard
 
-M7.1 Build a coherent accessible dark application shell and reusable design system with React, TypeScript, and Tailwind as the preferred provisional stack. Prioritize desktop while retaining responsive and reduced-motion behavior. GATE: visual language and navigation are coherent, accessible, and reusable.
+M7.1 [IMPLEMENTED — REVIEW PENDING, 28 October 2026] Build a coherent accessible dark-primary shell and reusable design system with React, strict TypeScript, Vite, and Tailwind. The implementation includes responsive/reduced-motion behavior, typed API 1.0 access, snapshot persistence by identifier, operational states, active-run visibility, a source-backed Living League entry surface, and sanitized actual-application visual captures. Analytical destinations remain honest placeholders. See `docs/M7_1_FRONTEND_FOUNDATION.md`. GATE: visual language and navigation are coherent, accessible, and reusable.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league comparisons, postseason visualization, and uncertainty explanation. GATE: every displayed number reconciles with the accepted engine.
 
@@ -524,7 +524,7 @@ M8.3 Validate runtime, resources, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4 are complete and accepted; the pre-M7 checkpoint is implemented for review; M7.1–M8 are not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4 and the pre-M7 checkpoint are complete and accepted; M7.1 is implemented for review; M7.2–M8 are not started.
 
 ### 12.2 Practical development method
 

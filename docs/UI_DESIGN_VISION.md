@@ -1,6 +1,6 @@
 # UI design vision: Integrated War Room
 
-Status: **APPROVED M7 DESIGN NORTH STAR**. M7 remains not started.
+Status: **APPROVED M7 DESIGN NORTH STAR**. M7.1 is **IMPLEMENTED — REVIEW PENDING**; see [M7.1 frontend foundation](M7_1_FRONTEND_FOUNDATION.md) for actual application captures and the implemented scope. This vision remains a north star, not a frozen component specification.
 
 ## Direction
 
