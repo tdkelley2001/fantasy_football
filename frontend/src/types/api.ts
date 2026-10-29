@@ -1,0 +1,134 @@
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "cancel_requested"
+  | "completed"
+  | "cancelled"
+  | "failed"
+  | "interrupted";
+
+export interface HealthResponse {
+  readonly api_schema_version: "1.0";
+  readonly service: "fantasy-football-application";
+  readonly package_version: string;
+  readonly build_revision: string | null;
+  readonly revision_status: "explicit" | "unknown";
+  readonly execution_mode: "local_background_m6_2";
+  readonly local_only: true;
+}
+
+export interface TeamSummary {
+  readonly team_id: number;
+  readonly display_name: string;
+  readonly wins: number;
+  readonly losses: number;
+  readonly ties: number;
+  readonly points_for: number;
+  readonly standing: number | null;
+  readonly playoff_seed: number | null;
+  readonly waiver_priority: number | null;
+}
+
+export interface PlayerSummary {
+  readonly player_id: number;
+  readonly display_name: string | null;
+  readonly default_position_id: number;
+  readonly eligible_lineup_slot_ids: readonly number[];
+  readonly nfl_team_id: number;
+  readonly injury_status: string | null;
+  readonly acquisition_status: string;
+  readonly is_undroppable: boolean | null;
+}
+
+export interface RosterAssignment {
+  readonly player_id: number;
+  readonly team_id: number;
+  readonly lineup_slot_id: number;
+}
+
+export interface MatchupPeriodSummary {
+  readonly matchup_period_id: number;
+  readonly scoring_weeks: readonly number[];
+  readonly phase: string;
+}
+
+export interface MatchupSummary {
+  readonly matchup_id: number;
+  readonly matchup_period_id: number;
+  readonly home_team_id: number | null;
+  readonly away_team_id: number | null;
+  readonly bracket_type: string | null;
+  readonly entry_status: string;
+}
+
+export interface LeagueStructure {
+  readonly lineup_slot_capacities: readonly (readonly [number, number, string])[];
+  readonly ordinary_roster_capacity: number;
+  readonly reserve_roster_capacity: number;
+  readonly championship_qualifier_count: number | null;
+  readonly championship_round_count: number;
+  readonly consolation_enabled: boolean | null;
+  readonly acquisition_type: string;
+  readonly acquisition_uses_budget: boolean;
+}
+
+export interface SnapshotSummary {
+  readonly api_schema_version: "1.0";
+  readonly snapshot_id: string;
+  readonly league_id: number;
+  readonly league_name: string | null;
+  readonly season: number;
+  readonly canonical_schema_version: number;
+  readonly canonical_sha256: string;
+  readonly source_count: number;
+  readonly source_ids: readonly string[];
+  readonly published_at_utc: string;
+  readonly retrieval_finished_at_utc: string;
+  readonly first_simulation_week: number;
+  readonly final_simulation_week: number;
+  readonly team_count: number | null;
+  readonly teams: readonly TeamSummary[];
+  readonly players: readonly PlayerSummary[];
+  readonly roster_assignments: readonly RosterAssignment[];
+  readonly matchup_periods: readonly MatchupPeriodSummary[];
+  readonly matchups: readonly MatchupSummary[];
+  readonly league_structure: LeagueStructure | null;
+  readonly capabilities: readonly {
+    readonly capability: string;
+    readonly status: string;
+    readonly source_id: string | null;
+    readonly detail: string | null;
+  }[];
+}
+
+export interface BackgroundRunRecord {
+  readonly api_schema_version: "1.0";
+  readonly run_id: string;
+  readonly run_type: "baseline" | "manual_scenario" | "action_search";
+  readonly status: RunStatus;
+  readonly request_sha256: string;
+  readonly snapshot_id: string;
+  readonly build: {
+    readonly package_version: string;
+    readonly build_revision: string | null;
+    readonly revision_status: "explicit" | "unknown";
+  };
+  readonly created_at_utc: string;
+  readonly started_at_utc: string | null;
+  readonly finished_at_utc: string | null;
+  readonly expires_at_utc: string;
+  readonly stop_reason: string | null;
+  readonly error_code: string | null;
+  readonly error_message: string | null;
+  readonly result_available: boolean;
+}
+
+export interface ApiErrorEnvelope {
+  readonly api_schema_version: "1.0";
+  readonly error: {
+    readonly code: string;
+    readonly message: string;
+    readonly category: string;
+    readonly context: Readonly<Record<string, string | number | boolean | null>>;
+  };
+}
