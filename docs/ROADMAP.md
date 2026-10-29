@@ -153,7 +153,7 @@ Pre-M7 consolidation [COMPLETE AND ACCEPTED, 28 October 2026] Reconcile accepted
 The [Integrated War Room — Hybrid Tactical Surface](UI_DESIGN_VISION.md) is the
 M7 design north star, not a frozen component specification.
 
-M7.1 [IMPLEMENTED — REVIEW PENDING, 28 October 2026] Build the preferred React/TypeScript/Tailwind accessible design system, responsive Integrated War Room shell, typed API client, source-backed Living League foundation, honest operational states, and visual QA captures. GATE: visual language and primary navigation are coherent, accessible, responsive, and reusable. See `M7_1_FRONTEND_FOUNDATION.md`.
+M7.1 [IMPLEMENTED — VISUAL DIRECTION REVIEW PENDING, 28 October 2026] Build the accessible Integrated War Room shell and source-backed Living League foundation. The technical foundation is retained while three structurally distinct Living League prototypes are available for comparison; no direction is selected. GATE: visual language and primary navigation are coherent, accessible, responsive, and reusable. See `M7_1_FRONTEND_FOUNDATION.md` and `M7_1_VISUAL_DIRECTION_REVIEW.md`.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league-wide comparisons, postseason visualization, and uncertainty explanations. GATE: every displayed numerical result reconciles with the accepted engine.
 

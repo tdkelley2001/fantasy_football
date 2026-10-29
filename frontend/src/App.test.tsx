@@ -27,3 +27,9 @@ test("renders typed API errors without fabricated data",async()=>{ vi.spyOn(glob
 test("falls back from a deleted persisted snapshot",async()=>{ localStorage.setItem("war-room-snapshot","deleted"); mockApi(); render(<App/>); await screen.findAllByText("North Harbor"); expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id); });
 test("core shell has no detectable accessibility violations",async()=>{ mockApi(); const {container}=render(<App/>); await screen.findAllByText("North Harbor"); const result=await axe.run(container); expect(result.violations).toEqual([]); });
 test("mobile navigation remains semantically available",async()=>{ mockApi(); render(<App/>); await screen.findAllByText("North Harbor"); expect(screen.getByRole("navigation",{name:"Mobile primary navigation"})).toBeInTheDocument(); });
+test.each([
+  ["A · Tactical map","Tactical League Map"],
+  ["B · Competitive landscape","Competitive Landscape"],
+  ["C · Strategy table","Digital Strategy Table"],
+])("opens the %s prototype without losing source-backed data",async(tab,title)=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findAllByText("North Harbor"); await user.click(screen.getByRole("tab",{name:new RegExp(tab)})); expect(screen.getByRole("heading",{name:title})).toBeInTheDocument(); expect(screen.getAllByText(/North Harbor|NH/).length).toBeGreaterThan(0); });
+test("team selection updates contextual prototype intelligence",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findAllByText("North Harbor"); await user.click(screen.getByRole("tab",{name:/Tactical map/})); await user.click(screen.getByRole("button",{name:/2SU5–2/})); expect(screen.getByRole("heading",{name:"Sunday Union"})).toBeInTheDocument(); });

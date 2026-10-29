@@ -502,7 +502,7 @@ M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize the additive API 1.0 comp
 
 #### M7 — Futuristic interactive dashboard
 
-M7.1 [IMPLEMENTED — REVIEW PENDING, 28 October 2026] Build a coherent accessible dark-primary shell and reusable design system with React, strict TypeScript, Vite, and Tailwind. The implementation includes responsive/reduced-motion behavior, typed API 1.0 access, snapshot persistence by identifier, operational states, active-run visibility, a source-backed Living League entry surface, and sanitized actual-application visual captures. Analytical destinations remain honest placeholders. See `docs/M7_1_FRONTEND_FOUNDATION.md`. GATE: visual language and navigation are coherent, accessible, and reusable.
+M7.1 [IMPLEMENTED — VISUAL DIRECTION REVIEW PENDING, 28 October 2026] Build a coherent accessible dark-primary shell and reusable design system with React, strict TypeScript, Vite, and Tailwind. The accepted technical foundation remains intact while Tactical League Map, Competitive Landscape, and Digital Strategy Table prototypes support independent comparison without selecting a direction or adding analytics. See `docs/M7_1_FRONTEND_FOUNDATION.md` and `docs/M7_1_VISUAL_DIRECTION_REVIEW.md`. GATE: visual language and navigation are coherent, accessible, and reusable.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league comparisons, postseason visualization, and uncertainty explanation. GATE: every displayed number reconciles with the accepted engine.
 

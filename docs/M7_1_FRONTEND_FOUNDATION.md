@@ -2,6 +2,8 @@
 
 Status: **IMPLEMENTED — REVIEW PENDING (28 October 2026)**.
 
+Visual review found the initial shell too dashboard-conventional. The follow-up preserves it as a comparison and adds three isolated prototypes documented in [M7.1 visual direction review](M7_1_VISUAL_DIRECTION_REVIEW.md). No direction has been selected.
+
 ## Contract and scope
 
 M7.1 implements the Integrated War Room shell required by `MASTER_SPEC.md` M7.1. It presents API 1.0 data and does not calculate rules, projections, probabilities, legality, or rankings. Living League is the source-backed foundation view. Opportunity Explorer, Trade Lab, and Simulation Control are explicitly non-operational placeholders for later M7 packages.
