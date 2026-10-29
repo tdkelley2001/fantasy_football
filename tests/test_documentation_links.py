@@ -50,11 +50,12 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "M6.3 [COMPLETE AND ACCEPTED" in roadmap
     assert "M6.4 [COMPLETE AND ACCEPTED" in roadmap
     assert "Pre-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
-    assert "M7.1 [IMPLEMENTED — REVIEW PENDING" in roadmap
+    assert "M7.1 [IMPLEMENTED — VISUAL DIRECTION REVIEW PENDING" in roadmap
     assert "BACKEND_READINESS.md" in roadmap
     assert "docs/BACKEND_READINESS.md" in readme
     assert "docs/PRE_M7_REPOSITORY_AUDIT.md" in readme
     assert "docs/M7_1_FRONTEND_FOUNDATION.md" in readme
+    assert "docs/M7_1_VISUAL_DIRECTION_REVIEW.md" in readme
     assert "M8 — Local V1 release" in roadmap
     assert "Integrated CLI V1" not in master_spec
     assert "Optional visual dashboard" not in master_spec

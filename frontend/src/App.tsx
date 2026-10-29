@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, ArrowUpRight, Database, FlaskConical, LayoutGrid, Menu, Moon, RefreshCw, Settings, ShieldCheck, Sun, Trophy, Users, X } from "lucide-react";
 import { api, ApiError } from "./lib/api";
 import type { BackgroundRunRecord, HealthResponse, SnapshotSummary } from "./types/api";
+import { ConceptSwitcher, type VisualConcept } from "./VisualConcepts";
 
 type Destination = "league" | "opportunities" | "trades" | "simulation";
 type Theme = "dark" | "light";
@@ -27,28 +28,30 @@ export function App() {
   const [error, setError] = useState<ApiError>();
   const [contextOpen, setContextOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [visualConcept, setVisualConcept] = useState<VisualConcept>(() => {
+    const value = new URLSearchParams(location.search).get("concept");
+    return value === "tactical" || value === "landscape" || value === "table" ? value : "shell";
+  });
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true); setError(undefined);
-    const controller = new AbortController();
     try {
       const [nextHealth, nextSnapshots, nextRuns] = await Promise.all([
-        api.health(controller.signal), api.snapshots(controller.signal), api.runs(controller.signal),
+        api.health(signal), api.snapshots(signal), api.runs(signal),
       ]);
       setHealth(nextHealth); setSnapshots(nextSnapshots); setRuns(nextRuns);
       if (nextSnapshots.length) {
         const saved = localStorage.getItem("war-room-snapshot");
         const id = nextSnapshots.some((item) => item.snapshot_id === saved) ? saved! : nextSnapshots[0].snapshot_id;
-        setSelected(await api.snapshot(id, controller.signal));
+        setSelected(await api.snapshot(id, signal));
         localStorage.setItem("war-room-snapshot", id);
       } else setSelected(undefined);
     } catch (cause) {
       if (!(cause instanceof DOMException && cause.name === "AbortError")) setError(cause instanceof ApiError ? cause : new ApiError("Unexpected application error.", -1));
-    } finally { setLoading(false); }
-    return () => controller.abort();
+    } finally { if (!signal?.aborted) setLoading(false); }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, []);
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem("war-room-theme", theme); }, [theme]);
 
   const chooseSnapshot = async (id: string) => {
@@ -58,7 +61,6 @@ export function App() {
     finally { setLoading(false); }
   };
   const activeRuns = runs.filter((run) => ["queued", "running", "cancel_requested"].includes(run.status));
-  const selectedLabel = snapshots.find((item) => item.snapshot_id === selected?.snapshot_id);
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to strategy surface</a>
@@ -78,7 +80,7 @@ export function App() {
     </header>
     {menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>} 
     <main id="main-content" tabIndex={-1}>
-      {loading && !selected ? <LoadingState/> : error ? <FailureState error={error} retry={() => void load()}/> : !selected ? <EmptyState/> : destination === "league" ? <LivingLeague snapshot={selected}/> : <FutureWorkspace destination={destination} activeRuns={activeRuns}/>} 
+      {loading && !selected ? <LoadingState/> : error ? <FailureState error={error} retry={() => void load()}/> : !selected ? <EmptyState/> : destination === "league" ? <><ConceptSwitcher concept={visualConcept} onChange={setVisualConcept}/>{visualConcept === "shell" ? <LivingLeague snapshot={selected}/> : <ConceptSwitcher.Render concept={visualConcept} snapshot={selected}/>}</> : <FutureWorkspace destination={destination} activeRuns={activeRuns}/>}
     </main>
     <aside className={`context-panel ${contextOpen ? "context-open" : ""}`} aria-label="League context">
       <div className="context-head"><div><span className="eyebrow">Decision context</span><h2>Source & build</h2></div><button className="icon-button" aria-label="Close league context" onClick={() => setContextOpen(false)}><X/></button></div>
@@ -100,7 +102,7 @@ function LivingLeague({ snapshot }: { snapshot: SnapshotSummary }) {
       <article className="card standings"><CardHead kicker="Competitive order" title="League table" meta={`${teams.length} clubs`}/><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>Points</th></tr></thead><tbody>{teams.map((team) => <tr key={team.team_id}><td><span className="rank">{team.standing ?? "—"}</span></td><td><strong>{team.display_name}</strong><small>{team.playoff_seed ? `Seed ${team.playoff_seed}` : "Seed unresolved"}</small></td><td>{team.wins}-{team.losses}{team.ties ? `-${team.ties}` : ""}</td><td>{team.points_for.toFixed(1)}</td></tr>)}</tbody></table></div></article>
       <article className="card pitch-card"><CardHead kicker="Tactical field" title="League pressure map" meta="Standings only"/><div className="pitch" aria-label="Top league positions"><div className="midfield"/>{teams.slice(0,6).map((team, index) => <div key={team.team_id} className={`team-chip chip-${index}`}><span>{team.standing ?? index+1}</span><strong>{initials(team.display_name)}</strong><small>{team.wins}-{team.losses}</small></div>)}</div><p className="caption">A spatial view of current standings—not a probability forecast.</p></article>
       <article className="card matchups"><CardHead kicker="Schedule intelligence" title={period ? `Matchup period ${period.matchup_period_id}` : "Upcoming matchups"} meta={period ? `Weeks ${period.scoring_weeks.join(", ")}` : "Unresolved"}/><div className="matchup-list">{matchups.length ? matchups.map((game) => <div className="matchup" key={game.matchup_id}><TeamLine team={game.away_team_id ? teamById.get(game.away_team_id) : undefined}/><span className="versus">VS</span><TeamLine team={game.home_team_id ? teamById.get(game.home_team_id) : undefined}/><small>{game.bracket_type ?? period?.phase ?? "scheduled"}</small></div>) : <p className="quiet">No matchup records are available for this decision period.</p>}</div></article>
-      <article className="card intel"><CardHead kicker="Roster intelligence" title="Snapshot coverage" meta="Observed data"/><div className="metric-grid"><Metric value={snapshot.players.length} label="Players"/><Metric value={snapshot.roster_assignments.length} label="Assignments"/><Metric value={snapshot.capabilities.filter(c => c.status.toLowerCase().includes("verified") || c.status.toLowerCase().includes("supported")).length} label="Supported rules"/><Metric value={snapshot.source_count} label="Evidence sources"/></div><div className="insight"><ArrowUpRight/><p><strong>Strategy surfaces are connected.</strong><span>Opportunity, trade, and simulation workspaces arrive in later M7 packages.</span></p></div></article>
+      <article className="card intel"><CardHead kicker="Roster intelligence" title="Snapshot coverage" meta="Observed records"/><div className="metric-grid"><Metric value={snapshot.players.length} label="Player records"/><Metric value={snapshot.roster_assignments.length} label="Roster assignments"/><Metric value={snapshot.capabilities.length} label="Capability records"/><Metric value={snapshot.source_count} label="Linked sources"/></div><div className="insight"><ArrowUpRight/><p><strong>Strategy surfaces are connected.</strong><span>Opportunity, trade, and simulation workspaces arrive in later M7 packages.</span></p></div></article>
     </section>
   </div>;
 }

@@ -40,6 +40,7 @@ V1 is a local web application restricted to localhost. The implemented React/Typ
 - [M6.4 backend readiness](docs/BACKEND_READINESS.md) — stable API policy, frontend data inventory, setup, troubleshooting, operations, and M7 handoff.
 - [Pre-M7 repository audit](docs/PRE_M7_REPOSITORY_AUDIT.md) — final architecture, lifecycle, configuration, hygiene, security, and M7.1 readiness disposition.
 - [M7.1 frontend foundation](docs/M7_1_FRONTEND_FOUNDATION.md) — stack, shell, local startup, accessibility, scope boundaries, and actual visual-QA captures.
+- [M7.1 visual direction review](docs/M7_1_VISUAL_DIRECTION_REVIEW.md) — three rendered Living League concepts, comparative assessment, recommendation, and review evidence.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.
