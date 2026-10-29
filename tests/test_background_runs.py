@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 import sqlite3
+import subprocess
+import sys
 from threading import Event
 import time
 
@@ -242,6 +244,45 @@ def test_stale_active_run_is_interrupted_on_store_restart(tmp_path) -> None:
     restarted.release_lease()
 
 
+def test_different_live_process_lease_blocks_competing_owner(tmp_path) -> None:
+    path = tmp_path / "cross-process.sqlite3"
+    script = (
+        "import sys,time; "
+        "from fantasy_football.app.background import BackgroundRunStore; "
+        "store=BackgroundRunStore(sys.argv[1]); print('ready', flush=True); time.sleep(30)"
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", script, str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline().strip() == "ready"
+        with pytest.raises(ApplicationServiceError) as rejected:
+            BackgroundRunStore(path)
+        assert rejected.value.code == "background_store_in_use"
+    finally:
+        child.terminate()
+        child.wait(timeout=5)
+
+
+def test_initialization_failure_releases_acquired_lease(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "initialization-failure.sqlite3"
+    original = BackgroundRunStore.mark_stale_interrupted
+
+    def fail(_store):
+        raise RuntimeError("deliberate startup recovery failure")
+
+    monkeypatch.setattr(BackgroundRunStore, "mark_stale_interrupted", fail)
+    with pytest.raises(RuntimeError, match="startup recovery failure"):
+        BackgroundRunStore(path)
+    monkeypatch.setattr(BackgroundRunStore, "mark_stale_interrupted", original)
+    recovered = BackgroundRunStore(path)
+    recovered.release_lease()
+
+
 def test_queue_and_background_resource_limits_fail_before_execution(background) -> None:
     snapshot, _service, _store, coordinator = background
     request = _action_request(snapshot).model_copy(update={
@@ -336,6 +377,32 @@ def test_terminal_runs_release_transient_coordinator_references(background) -> N
         assert _wait(store, run.run_id).status == "completed"
         _wait_released(coordinator)
     assert len(store.list(limit=50)) == coordinator.policy.maximum_retained_runs
+    assert coordinator.transient_reference_count() == 0
+
+
+def test_executor_submission_failure_is_compensated_without_transient_leak(
+    background, monkeypatch
+) -> None:
+    snapshot, _service, store, coordinator = background
+    request = BaselineAnalysisRequest(
+        snapshot=_selector(snapshot), simulation=_simulation(), precision=_precision(),
+        outcome_model=_model(),
+    )
+
+    def reject(*_args, **_kwargs):
+        raise RuntimeError("executor is shutting down")
+
+    monkeypatch.setattr(coordinator._executor, "submit", reject)
+    with pytest.raises(ApplicationServiceError) as rejected:
+        coordinator.submit("baseline", request)
+    assert rejected.value.code == "background_submission_failed"
+    records = store.list(status="failed")
+    assert len(records) == 1
+    assert records[0].stop_reason == "executor_submission_failed"
+    assert records[0].error_code == "background_submission_failed"
+    assert records[0].started_at_utc is None
+    assert records[0].result_available is False
+    assert store.active_count() == 0
     assert coordinator.transient_reference_count() == 0
 
 

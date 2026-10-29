@@ -1,6 +1,6 @@
 # M6.4 backend readiness and API 1.0 handoff
 
-Status: **IMPLEMENTED — REVIEW PENDING**.
+Status: **COMPLETE AND ACCEPTED** (28 October 2026).
 
 Governing requirements are `MASTER_SPEC.md` Sections 8, 9, and 12 and the M6.4
 roadmap gate. The dependency direction remains HTTP → application service →
@@ -81,6 +81,14 @@ analysis only after a sanitized snapshot exists: POST a schema-1.0 request to a
 `/api/v1/runs/*` endpoint, poll `/runs/{id}` or `/progress`, then fetch `/result`.
 Action candidates and states use their paged/detail endpoints. Stop with Ctrl+C;
 the coordinator closes workers and releases the SQLite lease.
+
+For M7 development, run the frontend dev server on loopback and configure its
+development proxy to forward `/api` to `http://127.0.0.1:8000`. Browser code
+then uses relative `/api/v1/...` URLs through a same-origin frontend surface;
+the proxy, not browser CORS, reaches FastAPI. Direct localhost origins remain
+accepted for development, but Host/Origin protections must not be widened to
+arbitrary networks. The eventual local release should likewise present one
+loopback origin; static-asset packaging belongs to M8, not this checkpoint.
 
 Synchronous `/analyses/*` routes are conservative diagnostics. Action search
 requires finite wall-clock and evaluated-state limits. Background `/runs/*`
