@@ -23,9 +23,13 @@ from fantasy_football.app.contracts import (
     LeagueStructure,
     ManualScenarioRequest,
     ManualScenarioResult,
+    MatchupPeriodSummary,
+    MatchupSummary,
     PairedMetricResult,
     PlacementProbability,
     ProbabilityValue,
+    PlayerSummary,
+    RosterAssignment,
     RuleCapability,
     RunIdentity,
     SearchCoverageResult,
@@ -299,6 +303,54 @@ class ApplicationService:
                     standing=team.standing, playoff_seed=team.playoff_seed,
                     waiver_priority=team.waiver_priority,
                 ) for team in sorted(snapshot.teams, key=lambda item: item.team_id)
+            ),
+            players=tuple(
+                PlayerSummary(
+                    player_id=player.player_id,
+                    display_name=player.display_name,
+                    default_position_id=player.default_position_id,
+                    eligible_lineup_slot_ids=player.eligible_lineup_slot_ids,
+                    nfl_team_id=player.nfl_team_id,
+                    injury_status=player.injury_status,
+                    acquisition_status=player.acquisition_status,
+                    is_undroppable=player.is_undroppable,
+                )
+                for player in sorted(snapshot.players, key=lambda item: item.player_id)
+            ),
+            roster_assignments=tuple(
+                RosterAssignment(
+                    player_id=item.player_id,
+                    team_id=item.team_id,
+                    lineup_slot_id=item.lineup_slot_id,
+                )
+                for item in sorted(
+                    snapshot.roster_entries,
+                    key=lambda value: (value.team_id, value.lineup_slot_id, value.player_id),
+                )
+            ),
+            matchup_periods=tuple(
+                MatchupPeriodSummary(
+                    matchup_period_id=item.matchup_period_id,
+                    scoring_weeks=item.scoring_weeks,
+                    phase=item.phase.value,
+                )
+                for item in sorted(
+                    snapshot.matchup_periods, key=lambda value: value.matchup_period_id
+                )
+            ),
+            matchups=tuple(
+                MatchupSummary(
+                    matchup_id=item.matchup_id,
+                    matchup_period_id=item.matchup_period_id,
+                    home_team_id=item.home_team_id,
+                    away_team_id=item.away_team_id,
+                    bracket_type=item.bracket_type,
+                    entry_status=item.entry_status.value,
+                )
+                for item in sorted(
+                    snapshot.fantasy_matchups,
+                    key=lambda value: (value.matchup_period_id, value.matchup_id),
+                )
             ),
             capabilities=capabilities,
         )

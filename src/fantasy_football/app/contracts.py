@@ -44,6 +44,38 @@ class TeamSummary(ContractModel):
     waiver_priority: int | None
 
 
+class PlayerSummary(ContractModel):
+    player_id: int
+    display_name: str | None
+    default_position_id: int
+    eligible_lineup_slot_ids: tuple[int, ...]
+    nfl_team_id: int
+    injury_status: str | None
+    acquisition_status: str
+    is_undroppable: bool | None
+
+
+class RosterAssignment(ContractModel):
+    player_id: int
+    team_id: int
+    lineup_slot_id: int
+
+
+class MatchupPeriodSummary(ContractModel):
+    matchup_period_id: int
+    scoring_weeks: tuple[int, ...]
+    phase: str
+
+
+class MatchupSummary(ContractModel):
+    matchup_id: int
+    matchup_period_id: int
+    home_team_id: int | None
+    away_team_id: int | None
+    bracket_type: str | None
+    entry_status: str
+
+
 class RuleCapability(ContractModel):
     capability: str
     status: str
@@ -78,6 +110,10 @@ class SnapshotSummary(ContractModel):
     final_simulation_week: int
     team_count: int | None
     teams: tuple[TeamSummary, ...] = ()
+    players: tuple[PlayerSummary, ...] = ()
+    roster_assignments: tuple[RosterAssignment, ...] = ()
+    matchup_periods: tuple[MatchupPeriodSummary, ...] = ()
+    matchups: tuple[MatchupSummary, ...] = ()
     league_structure: LeagueStructure | None = None
     capabilities: tuple[RuleCapability, ...] = ()
 

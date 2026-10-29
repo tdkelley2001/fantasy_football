@@ -1,6 +1,6 @@
 # Background run management and retained results (M6.2)
 
-Status: **IMPLEMENTED — REVIEW PENDING**.
+Status: **COMPLETE AND ACCEPTED**; consolidated for M6.4 handoff.
 
 This implements `MASTER_SPEC.md` Sections 8, 9, and 12 and the M6.2 roadmap
 gate. It changes application execution only. Accepted engines remain
@@ -117,14 +117,15 @@ Polling and ownership:
 Synchronous M6.1 routes remain small-run diagnostics. Background policy is
 independently bounded; it is not an unlimited bypass.
 
-## M6.3 concerns
+## M6.3/M6.4 disposition
 
 V1 remains loopback-only without multi-user authorization. Schemas/query
 allowlists prevent arbitrary SQL and paths, errors omit tracebacks and paths,
-and queue/storage/retention are bounded. M6.3 must further verify browser-origin
+and queue/storage/retention are bounded. M6.3 verified browser-origin
 protections, realistic memory/disk behavior, active multiprocessing shutdown,
 Windows spawn behavior, and policy sizing. This is a local metadata store, not
 a distributed queue; restart classifies rather than resumes abandoned work.
+See `M6_3_BACKEND_VALIDATION.md` and `BACKEND_READINESS.md`.
 
 ## Verification evidence
 

@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M5.8, the post-M5 consolidation, M6.1, and M6.2 are **COMPLETE AND ACCEPTED**. M6.3 is **IMPLEMENTED — REVIEW PENDING**; M6.4–M8 are not started. The deterministic analytical engine plus synchronous and bounded local background application services are implemented and now have end-to-end parity, operational, performance, resource, and localhost-security validation evidence.
+M0–M6.3 are **COMPLETE AND ACCEPTED**. M6.4 is **IMPLEMENTED — REVIEW PENDING**; M7–M8 are not started. The deterministic analytical engine plus synchronous and bounded local background application services are implemented and have end-to-end parity, operational, performance, resource, and localhost-security validation evidence.
 
 The planned V1 product is a local web application: a preferred React/TypeScript/Tailwind frontend talks to the implemented minimal FastAPI application service, which delegates all league rules and analytics to the accepted Python engine and uses local SQLite-backed persistence/results. V1 is localhost-only. Background execution and the frontend remain M6.2/M7 work; existing focused CLIs remain developer diagnostics rather than the primary future interface.
 
@@ -37,6 +37,7 @@ The planned V1 product is a local web application: a preferred React/TypeScript/
 - [Application service](docs/APPLICATION_SERVICE.md) — M6.1 versioned service/HTTP contracts, provenance identities, loopback startup, errors, and synchronous limitations.
 - [Background runs and retained results](docs/RUN_MANAGEMENT.md) — M6.2 lifecycle, cancellation, resource policy, persistence, and server-side result queries.
 - [M6.3 backend validation](docs/M6_3_BACKEND_VALIDATION.md) — parity, configuration, identity, performance, memory/storage, worker, error, and localhost-security evidence.
+- [M6.4 backend readiness](docs/BACKEND_READINESS.md) — stable API policy, frontend data inventory, setup, troubleshooting, operations, and M7 handoff.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.
@@ -306,7 +307,7 @@ scope, while a broad interactive CLI is not planned. See
 [`docs/SEARCH_ORCHESTRATION.md`](docs/SEARCH_ORCHESTRATION.md) for its execution,
 precision, progress, resource-limit, and export contracts.
 
-The synchronous M6.1 local API can be installed and started with:
+The finalized local API can be installed and started with:
 
 ```powershell
 python -m pip install -e ".[app]"
@@ -317,7 +318,9 @@ It binds `127.0.0.1` and requires no ESPN credentials merely to start. See
 [`docs/APPLICATION_SERVICE.md`](docs/APPLICATION_SERVICE.md). Small diagnostic
 searches retain M6.1 synchronous limits. M6.2 adds HTTP 202 background
 submission and polling under a separate bounded policy; see the run-management
-reference for lifecycle, cancellation, and retained result queries.
+reference for lifecycle, cancellation, and retained result queries. The complete
+clean-start procedure and compatibility policy are in
+[`docs/BACKEND_READINESS.md`](docs/BACKEND_READINESS.md).
 
 ## Historical implementation
 

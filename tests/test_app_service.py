@@ -153,6 +153,17 @@ def test_snapshot_service_preserves_source_derived_nondefault_structure(service,
         sorted(item.team_id for item in snapshot.teams)
     )
     assert result.first_simulation_week == snapshot.first_simulation_week
+    player_ids = {item.player_id for item in result.players}
+    team_ids = {item.team_id for item in result.teams}
+    assert player_ids == {item.player_id for item in snapshot.players}
+    assert all(item.player_id in player_ids for item in result.roster_assignments)
+    assert all(item.team_id in team_ids for item in result.roster_assignments)
+    assert tuple(item.matchup_period_id for item in result.matchup_periods) == tuple(
+        sorted(item.matchup_period_id for item in snapshot.matchup_periods)
+    )
+    assert {(item.matchup_period_id, item.matchup_id) for item in result.matchups} == {
+        (item.matchup_period_id, item.matchup_id) for item in snapshot.fantasy_matchups
+    }
     listed = service.list_snapshots(SnapshotListQuery(league_id=snapshot.league_id))
     assert listed[0].team_count is None
     assert listed[0].canonical_sha256 == service.dependencies.store.loaded.metadata.canonical_sha256
@@ -271,6 +282,9 @@ def test_http_starts_without_credentials_and_returns_versioned_structured_errors
     detail = client.get(f"/api/v1/snapshots/{snapshot.snapshot_id}")
     assert detail.status_code == 200
     assert detail.json()["team_count"] == 4
+    assert len(detail.json()["players"]) == len(snapshot.players)
+    assert "raw_owner_team_id" not in detail.text
+    assert "undroppable_source_id" not in detail.text
     missing = client.get("/api/v1/snapshots/missing")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "snapshot_not_found"
@@ -278,6 +292,27 @@ def test_http_starts_without_credentials_and_returns_versioned_structured_errors
     assert malformed.status_code == 422
     assert malformed.json()["error"]["category"] == "invalid_request"
     assert "traceback" not in malformed.text.casefold()
+
+
+def test_openapi_1_0_exposes_stable_m7_join_and_run_contracts(service) -> None:
+    schema = create_app(service).openapi()
+    assert schema["info"]["version"] == "1.0"
+    required_paths = {
+        "/api/v1/snapshots/{snapshot_id}",
+        "/api/v1/runs/action-search",
+        "/api/v1/runs/{run_id}/progress",
+        "/api/v1/runs/{run_id}/candidates",
+        "/api/v1/runs/{run_id}/candidates/{candidate_id}",
+        "/api/v1/runs/{run_id}/states/{state_id}",
+    }
+    assert required_paths.issubset(schema["paths"])
+    properties = schema["components"]["schemas"]["SnapshotSummary"]["properties"]
+    assert {"teams", "players", "roster_assignments", "matchup_periods", "matchups"} <= set(
+        properties
+    )
+    candidate = schema["components"]["schemas"]["CandidateSummary"]["properties"]
+    assert "completed_state_sha256" in candidate
+    assert "requester_championship_difference_probability_points" in candidate
 
 
 def test_http_analysis_routes_match_service_results(service, snapshot) -> None:
