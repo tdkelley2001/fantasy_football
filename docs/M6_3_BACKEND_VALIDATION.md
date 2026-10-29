@@ -115,4 +115,4 @@ credential-free tests passed in 64.50 seconds; 39 documentation-link tests,
 `pip check`, compilation, Ruff `F,E9`, and Git whitespace checks passed. The
 only warning was the existing upstream Starlette AnyIO alias deprecation.
 
-M6.3 remains **IMPLEMENTED — REVIEW PENDING**. M6.4 and M7 are not started.
+M6.3 and M6.4 are **COMPLETE AND ACCEPTED**. M7.1 is not started.

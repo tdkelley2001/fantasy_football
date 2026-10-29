@@ -1,6 +1,6 @@
 # Application service and HTTP contracts (M6.1–M6.4)
 
-Status: **M6.1–M6.3 ACCEPTED; M6.4 IMPLEMENTED — REVIEW PENDING**.
+Status: **M6.1–M6.4 COMPLETE AND ACCEPTED** (28 October 2026).
 
 Governing requirements are `MASTER_SPEC.md` Sections 2, 8, 9, and 12 plus the
 M6.1/M6.2 roadmap gates. M6.1 adds the synchronous adapter; M6.2 adds bounded

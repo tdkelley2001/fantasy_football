@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0–M6.3 are **COMPLETE AND ACCEPTED**. M6.4 is **IMPLEMENTED — REVIEW PENDING**. M7–M8 are not started. No legacy implementation is credited toward these statuses.
+M0–M6.4 are **COMPLETE AND ACCEPTED**. The pre-M7 consolidation checkpoint is **IMPLEMENTED — REVIEW PENDING**. M7.1–M8 are not started. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M8 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -24,7 +24,7 @@ Dependencies are sequential within each milestone and across the M0 → M8 miles
 
 #### M5 — Automated actionable decision search [COMPLETE AND ACCEPTED]. M5.1–M5.8 provide exhaustive trade candidates and optional V(R) screening, canonical completed-state identity and shared evaluation, statistically guarded progressive Monte Carlo evaluation, standalone acquisitions, multi-trade chains, unified combined-action search, and bounded search orchestration with resource controls, indexed results, and exports. PASS EVIDENCE: every detailed M5 slice below is complete and accepted; recommendations preserve explicit coverage, legality, provenance, uncertainty, and resource-limit status.
 
-#### M6 — Application backend and validation [IN PROGRESS — M6.4 REVIEW PENDING]. M6.1–M6.3 are accepted. M6.4 finalizes API compatibility, metadata joins, setup, operations, and frontend data readiness. PASS: critical application workflows are reproducible, correct, operationally bounded, and ready for dashboard integration without frontend analytical reconstruction.
+#### M6 — Application backend and validation [COMPLETE AND ACCEPTED]. M6.1–M6.4 provide stable API contracts, canonical metadata joins, bounded execution, lifecycle/results, parity/security/performance evidence, setup, operations, and frontend data readiness. PASS: critical application workflows are reproducible, correct, operationally bounded, and ready for dashboard integration without frontend analytical reconstruction.
 
 #### Post-V1 research backlog — Joint player/game correlations: after the independent baseline is established, investigate same-team and opponent dependence (including QB–receiver stacks), common game-script effects, and across-week player-state persistence. Require defensible joint ESPN-era actuals, stable covariance/factor calibration, efficient multivariate simulation and measured effects on championship probability or decision quality; do not include correlated score draws in V1.
 
@@ -144,7 +144,9 @@ M6.2 [COMPLETE AND ACCEPTED, 27 October 2026] Add local background execution, li
 
 M6.3 [COMPLETE AND ACCEPTED, 27 October 2026] Validate parity, configuration and identity, coverage/precision semantics, realistic performance/resources, Windows worker lifecycle, interruption, errors, and localhost security. The final 14-team/188-player evidence measured parent and aggregate-child RSS, responsive polling and queries, and exact sequential/parallel candidate-state parity. See `M6_3_BACKEND_VALIDATION.md`.
 
-M6.4 [IMPLEMENTED — REVIEW PENDING, 27 October 2026] Finalize additive API 1.0 compatibility, canonical player/roster/schedule joins, configuration/startup/troubleshooting, operational checks, regression evidence, and the M7 data-readiness matrix. See `BACKEND_READINESS.md`. GATE: the backend can support dashboard work without duplicating analytical logic.
+M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize additive API 1.0 compatibility, canonical player/roster/schedule joins, configuration/startup/troubleshooting, operational checks, regression evidence, and the M7 data-readiness matrix. See `BACKEND_READINESS.md`.
+
+Pre-M7 consolidation [IMPLEMENTED — REVIEW PENDING, 28 October 2026] Reconcile accepted status and architecture, audit production/tests/diagnostics/benchmarks and configuration authority, harden executor-submission and lease-initialization failure windows, validate local frontend proxy integration, and record M7.1 readiness without adding frontend or analytical behavior. See `PRE_M7_REPOSITORY_AUDIT.md`.
 
 #### M7 — Futuristic interactive dashboard
 
@@ -173,7 +175,7 @@ M8.3 Validate runtime, resource use, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.3 are complete and accepted; M6.4 is implemented for review; M7–M8 are not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4 are complete and accepted; the pre-M7 checkpoint is implemented for review; M7.1–M8 are not started.
 
 ### 12.2 Practical development method
 

@@ -94,7 +94,11 @@ class BackgroundRunStore:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
         self._acquire_lease()
-        self.mark_stale_interrupted()
+        try:
+            self.mark_stale_interrupted()
+        except Exception:
+            self.release_lease()
+            raise
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=30)
@@ -158,6 +162,19 @@ class BackgroundRunStore:
     def _process_alive(process_id: int) -> bool:
         if process_id == os.getpid():
             return True
+        if os.name == "nt":
+            import ctypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+            process_query_limited_information = 0x1000
+            handle = kernel32.OpenProcess(
+                process_query_limited_information, False, process_id
+            )
+            if handle:
+                kernel32.CloseHandle(handle)
+                return True
+            # Access denied also proves that a process currently owns the PID.
+            return ctypes.get_last_error() == 5
         try:
             os.kill(process_id, 0)
         except OSError:
@@ -306,6 +323,32 @@ class BackgroundRunStore:
             cursor = connection.execute(
                 "UPDATE runs SET status='running',started_at=?,progress_json=? WHERE run_id=? AND status='queued'",
                 (_text(_now()), progress.model_dump_json(), run_id),
+            )
+        return cursor.rowcount == 1
+
+    def fail_queued_submission(self, run_id: str) -> bool:
+        """Atomically fail work that could not be admitted to the executor."""
+
+        row = self._row(run_id)
+        progress = BackgroundProgress.model_validate_json(row["progress_json"]).model_copy(
+            update={
+                "status": "failed",
+                "stage": "failed",
+                "stop_reason": "executor_submission_failed",
+            }
+        )
+        with self._connection() as connection:
+            cursor = connection.execute(
+                "UPDATE runs SET status='failed',finished_at=?,stop_reason=?,error_code=?,"
+                "error_message=?,progress_json=? WHERE run_id=? AND status='queued'",
+                (
+                    _text(_now()),
+                    "executor_submission_failed",
+                    "background_submission_failed",
+                    "The local background executor rejected the analysis before it started.",
+                    progress.model_dump_json(),
+                    run_id,
+                ),
             )
         return cursor.rowcount == 1
 
@@ -636,8 +679,16 @@ class BackgroundRunCoordinator:
                 maximum_storage_bytes=self.policy.maximum_result_store_bytes,
             )
             self._events[run_id] = event
-        future = self._executor.submit(self._execute, run_id, run_type, request, event)
-        with self._lock:
+            try:
+                future = self._executor.submit(self._execute, run_id, run_type, request, event)
+            except Exception as exc:
+                self._events.pop(run_id, None)
+                self.store.fail_queued_submission(run_id)
+                raise ApplicationServiceError(
+                    "background_submission_failed", "resource_exhausted",
+                    "The local background executor rejected the analysis before it started.",
+                    run_id=run_id,
+                ) from exc
             self._futures[run_id] = future
         future.add_done_callback(lambda completed, identity=run_id: self._release(identity, completed))
         return submission
