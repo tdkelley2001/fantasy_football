@@ -30,7 +30,7 @@ Dependencies are sequential within each milestone and across the M0 → M8 miles
 
 #### Post-V1 research backlog — Player-specific volatility and bias: evaluate regularized, data-sufficient player-level departures from shared position/projection-level distributions only after M3 calibration and sufficient as-of history have been collected. Compare temporally held-out calibration and resulting decision quality, with hierarchical shrinkage/fallback to group estimates; do not include player-specific residual parameters in V1 or presume they improve outcomes. Also revisit forecast-horizon variance only when genuine earlier as-of snapshots exist.
 
-#### M7 — Futuristic interactive dashboard [IN PROGRESS — M7.1 REVIEW PENDING]. The React/TypeScript/Tailwind shell and source-backed Living League foundation are implemented; analytical workspaces remain staged, guided by the [Integrated War Room design vision](UI_DESIGN_VISION.md). PASS: principal workflows are navigable without low-level Python commands and every analytical claim reconciles with the backend.
+#### M7 — Analytics-first interactive application [IN PROGRESS — M7.1 REVIEW PENDING]. The React/TypeScript/Tailwind shell and source-backed League Overview are implemented; analytical workspaces remain staged, guided by the [premium football analytics design vision](UI_DESIGN_VISION.md). PASS: principal workflows are navigable without low-level Python commands and every analytical claim reconciles with the backend.
 
 #### M8 — Local V1 release [NOT STARTED]. Local startup/install, end-to-end real-league workflow validation, runtime/interruption/recovery verification, security review, and final acceptance. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
@@ -148,12 +148,11 @@ M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize additive API 1.0 compatib
 
 Pre-M7 consolidation [COMPLETE AND ACCEPTED, 28 October 2026] Reconcile accepted status and architecture, audit production/tests/diagnostics/benchmarks and configuration authority, harden executor-submission and lease-initialization failure windows, validate local frontend proxy integration, and record M7.1 readiness without adding frontend or analytical behavior. See `PRE_M7_REPOSITORY_AUDIT.md`.
 
-#### M7 — Futuristic interactive dashboard
+#### M7 — Analytics-first interactive application
 
-The [Integrated War Room — Hybrid Tactical Surface](UI_DESIGN_VISION.md) is the
-M7 design north star, not a frozen component specification.
+The [premium football analytics platform](UI_DESIGN_VISION.md) is the M7 design north star. Earlier spatial Integrated War Room concepts are archived evidence, not active product architecture.
 
-M7.1 [IMPLEMENTED — VISUAL DIRECTION REVIEW PENDING, 28 October 2026] Build the accessible Integrated War Room shell and source-backed Living League foundation. The technical foundation is retained while three structurally distinct Living League prototypes are available for comparison; no direction is selected. GATE: visual language and primary navigation are coherent, accessible, responsive, and reusable. See `M7_1_FRONTEND_FOUNDATION.md` and `M7_1_VISUAL_DIRECTION_REVIEW.md`.
+M7.1 [IMPLEMENTED — REVIEW PENDING, 29 October 2026] Build the accessible analytics-first shell and source-backed League Overview. The selected editorial composition combines an observed-points chart, team focus, matchup context, standings, postseason configuration, and provenance without inventing forecasts. The earlier three-concept exploration is archived. GATE: visual language and primary navigation are coherent, accessible, responsive, reusable, and supported by actual dark, light, laptop, mobile, detail, empty, and disconnected captures. See `M7_1_FRONTEND_FOUNDATION.md` and `M7_1_VISUAL_DIRECTION_REVIEW.md`.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league-wide comparisons, postseason visualization, and uncertainty explanations. GATE: every displayed numerical result reconciles with the accepted engine.
 

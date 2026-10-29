@@ -384,7 +384,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### Post-V1 research backlog — Player-specific volatility and bias: evaluate regularized, data-sufficient player-level departures from shared position/projection-level distributions only after M3 calibration and sufficient as-of history have been collected. Compare temporally held-out calibration and resulting decision quality, with hierarchical shrinkage/fallback to group estimates; do not include player-specific residual parameters in V1 or presume they improve outcomes. Also revisit forecast-horizon variance only when genuine earlier as-of snapshots exist.
 
-#### M7 — Futuristic interactive dashboard [IN PROGRESS — M7.1 REVIEW PENDING]. The React/TypeScript/Tailwind shell and source-backed Living League foundation are implemented; analytical workspaces remain deferred. All frontend data flows through accepted versioned backend contracts and follows `UI_DESIGN_VISION.md`. PASS: principal workflows are accessible and responsive, and every numerical or legality claim reconciles with the engine.
+#### M7 — Analytics-first interactive application [IN PROGRESS — M7.1 REVIEW PENDING]. The React/TypeScript/Tailwind shell and source-backed League Overview are implemented; analytical workspaces remain deferred. All frontend data flows through accepted versioned backend contracts and follows `UI_DESIGN_VISION.md`. PASS: principal workflows are accessible and responsive, and every numerical or legality claim reconciles with the engine.
 
 #### M8 — Local V1 release [NOT STARTED]. Complete local installation/startup, end-to-end real-league validation, resource/interruption/recovery verification, security review, known limitations, and final acceptance. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
@@ -500,9 +500,9 @@ M6.3 [COMPLETE AND ACCEPTED, 27 October 2026] Independently validate direct/serv
 
 M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize the additive API 1.0 compatibility policy, expose canonical player/roster/schedule metadata required to resolve existing action IDs, document frontend data readiness and explicit gaps, and consolidate local startup, configuration, troubleshooting, security, operations, performance, and regression evidence. No frontend or analytical behavior is added. See `docs/BACKEND_READINESS.md`.
 
-#### M7 — Futuristic interactive dashboard
+#### M7 — Analytics-first interactive application
 
-M7.1 [IMPLEMENTED — VISUAL DIRECTION REVIEW PENDING, 28 October 2026] Build a coherent accessible dark-primary shell and reusable design system with React, strict TypeScript, Vite, and Tailwind. The accepted technical foundation remains intact while Tactical League Map, Competitive Landscape, and Digital Strategy Table prototypes support independent comparison without selecting a direction or adding analytics. See `docs/M7_1_FRONTEND_FOUNDATION.md` and `docs/M7_1_VISUAL_DIRECTION_REVIEW.md`. GATE: visual language and navigation are coherent, accessible, and reusable.
+M7.1 [IMPLEMENTED — REVIEW PENDING, 29 October 2026] Build a coherent, accessible analytics-first shell and League Overview with React, strict TypeScript, Vite, and Tailwind. The active reference uses multiple source-backed visual forms and explicitly separates observed standings data from deferred simulations. Superseded spatial prototypes remain archived evidence. See `docs/M7_1_FRONTEND_FOUNDATION.md` and `docs/M7_1_VISUAL_DIRECTION_REVIEW.md`. GATE: visual language and navigation are coherent, accessible, responsive, reusable, and validated with actual implementation captures.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league comparisons, postseason visualization, and uncertainty explanation. GATE: every displayed number reconciles with the accepted engine.
 
