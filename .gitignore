@@ -11,6 +11,7 @@ venv/
 frontend/node_modules/
 frontend/dist/
 .pytest_cache/
+.pytest-*/
 .coverage
 htmlcov/
 dist/
