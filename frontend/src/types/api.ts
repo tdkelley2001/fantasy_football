@@ -147,17 +147,27 @@ export interface TeamProbabilityResult {
   readonly final_placements: readonly { readonly placement: number; readonly estimate: ProbabilityValue }[];
 }
 
+export interface RunIdentity {
+  readonly identity_schema_version: "application-run-identity-v1";
+  readonly analytical_equivalence_sha256: string;
+  readonly application_execution_sha256: string;
+  readonly presentation_query_sha256: string;
+  readonly execution_nonce: string;
+  readonly build: BackgroundRunRecord["build"];
+}
+
 export interface AnalysisProvenance {
   readonly snapshot_id: string;
   readonly canonical_sha256: string;
   readonly simulation_config_sha256: string;
   readonly engine_run_identity_sha256: string;
   readonly model_id: string;
-  readonly model_parameters: readonly (readonly [string, string | number | boolean | null])[];
+  readonly model_parameters: readonly (readonly [string, string | number | boolean])[];
   readonly master_seed: number;
   readonly first_path_index: number;
   readonly requested_path_count: number;
   readonly effective_request_sha256: string;
+  readonly application_run: RunIdentity;
 }
 
 export interface BaselineAnalysisResult {
@@ -169,8 +179,9 @@ export interface BaselineAnalysisResult {
   readonly requested_paths: number;
   readonly completed_paths: number;
   readonly incomplete_paths: number;
+  readonly candidate_coverage_complete: null;
   readonly teams: readonly TeamProbabilityResult[];
-  readonly incomplete_capabilities: readonly (readonly [string, string])[];
+  readonly incomplete_capabilities: readonly (readonly [string, number])[];
   readonly limitations: readonly string[];
 }
 
