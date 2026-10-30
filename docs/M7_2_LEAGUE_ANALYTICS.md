@@ -27,6 +27,14 @@ M7.2 applies the [visual-first information design standard](UI_DESIGN_VISION.md)
 
 The run selector is a direct control rather than a visualization. It changes the complete retained evidence context and never blends values across runs.
 
+## Precision and API contract semantics
+
+A completed background execution is not automatically a statistically qualified forecast. The prominent qualification notice independently reports incomplete paths, incomplete analytical capabilities, failure to reach the league-wide precision target, and any team metric whose `precision_reached` value is false. Technical disclosure retains requested/completed/incomplete path counts and the stop reason. Confidence intervals describe Monte Carlo sampling uncertainty only; outcome-model evidence and calibration limitations remain separately labeled.
+
+Both championship and playoff graphics consume only supplied API intervals. Playoff bands use bounded interval markers distinct from the championship dot-and-whisker grammar. When an estimate exists but its interval is null, the exact estimate remains visible with **Interval unavailable** and no artificial zero-width marker. Keyboard-accessible labels state the estimate, interval availability or endpoints, and metric precision status.
+
+The frontend DTOs mirror API 1.0: `incomplete_capabilities` entries are `(capability, scoring_week)` pairs, baseline results retain `candidate_coverage_complete: null`, and provenance includes the complete `application_run` identity. The sanitized fixture follows this authoritative shape.
+
 ## Incomplete and invalid states
 
 Incomplete paths or capabilities produce a prominent warning that estimates are conditional on completed valid paths and are not unconditional league probabilities. With no usable completed baseline, observed standings remain visible and the page states whether matching work is active or ended unsuccessfully. It does not fabricate analytics or submit work.
@@ -35,6 +43,6 @@ Incomplete paths or capabilities produce a prominent warning that estimates are 
 
 Every visual value is also text. Native buttons link team selection, focus remains visible, and the placement matrix has a semantic table disclosure. The matrix scrolls on narrow displays while probability and team detail layouts collapse to one column. Dark and light themes reuse M7.1 tokens.
 
-The production build, strict TypeScript check, and 20 frontend tests pass. Tests cover retained selection, run switching, snapshot isolation, four- and fourteen-team configuration, confidence intervals, null estimates, exact placements, incomplete coverage, unavailable results, cancellation, accessibility, and no-result behavior. The sanitized eight-team visual fixture produces desktop dark/light, laptop, mobile, selected-team, and no-result captures under `docs/images/m7-2/`.
+The production build, strict TypeScript check, and 24 frontend tests pass. Tests cover retained selection, rapid run switching, late cancelled responses, in-flight snapshot changes, four- and fourteen-team configuration, league-wide and metric precision, confidence intervals, missing intervals, null estimates, exact placements, incomplete capabilities, unavailable results, cancellation, accessibility, and no-result behavior. The sanitized eight-team visual fixture produces desktop dark/light, laptop, mobile, selected-team, no-result, precision-limited, and unavailable-interval captures under `docs/images/m7-2/`.
 
 Limitations: M7.2 consumes retained results only. Run creation, live progress, scenarios, trades, and acquisitions remain later packages. Monte Carlo interval precision does not eliminate outcome-model uncertainty.
