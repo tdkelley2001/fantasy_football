@@ -1,6 +1,7 @@
 import type {
   ApiErrorEnvelope,
   BackgroundRunRecord,
+  BackgroundBaselineResultSummary,
   HealthResponse,
   SnapshotSummary,
 } from "../types/api";
@@ -42,4 +43,6 @@ export const api = {
   snapshot: (snapshotId: string, signal?: AbortSignal) =>
     getJson<SnapshotSummary>(`/api/v1/snapshots/${encodeURIComponent(snapshotId)}`, signal),
   runs: (signal?: AbortSignal) => getJson<readonly BackgroundRunRecord[]>("/api/v1/runs?limit=50", signal),
+  runResult: (runId: string, signal?: AbortSignal) =>
+    getJson<BackgroundBaselineResultSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/result`, signal),
 };

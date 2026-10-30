@@ -123,6 +123,63 @@ export interface BackgroundRunRecord {
   readonly result_available: boolean;
 }
 
+export interface ConfidenceInterval {
+  readonly method: string;
+  readonly interval_confidence_level: number;
+  readonly simultaneous_family_confidence_level: number;
+  readonly lower_probability: number;
+  readonly upper_probability: number;
+  readonly half_width_probability: number;
+}
+
+export interface ProbabilityValue {
+  readonly successes: number;
+  readonly trials: number;
+  readonly probability: number | null;
+  readonly interval: ConfidenceInterval | null;
+  readonly precision_reached: boolean;
+}
+
+export interface TeamProbabilityResult {
+  readonly team_id: number;
+  readonly championship: ProbabilityValue;
+  readonly playoff_qualification: ProbabilityValue;
+  readonly final_placements: readonly { readonly placement: number; readonly estimate: ProbabilityValue }[];
+}
+
+export interface AnalysisProvenance {
+  readonly snapshot_id: string;
+  readonly canonical_sha256: string;
+  readonly simulation_config_sha256: string;
+  readonly engine_run_identity_sha256: string;
+  readonly model_id: string;
+  readonly model_parameters: readonly (readonly [string, string | number | boolean | null])[];
+  readonly master_seed: number;
+  readonly first_path_index: number;
+  readonly requested_path_count: number;
+  readonly effective_request_sha256: string;
+}
+
+export interface BaselineAnalysisResult {
+  readonly api_schema_version: "1.0";
+  readonly provenance: AnalysisProvenance;
+  readonly precision_config_sha256: string;
+  readonly stopping_reason: string;
+  readonly league_wide_precision_reached: boolean;
+  readonly requested_paths: number;
+  readonly completed_paths: number;
+  readonly incomplete_paths: number;
+  readonly teams: readonly TeamProbabilityResult[];
+  readonly incomplete_capabilities: readonly (readonly [string, string])[];
+  readonly limitations: readonly string[];
+}
+
+export interface BackgroundBaselineResultSummary {
+  readonly api_schema_version: "1.0";
+  readonly run: BackgroundRunRecord;
+  readonly result: BaselineAnalysisResult;
+}
+
 export interface ApiErrorEnvelope {
   readonly api_schema_version: "1.0";
   readonly error: {
