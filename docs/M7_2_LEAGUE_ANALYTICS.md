@@ -14,6 +14,19 @@ The read-only League Overview contains ranked championship probability points wi
 
 Backend probabilities remain decimal values in `[0, 1]`; presentation converts them to percentages. A null estimate is **Unavailable**, never zero. The frontend performs no probability, interval, or placement inference.
 
+## Visual representation decisions
+
+M7.2 applies the [visual-first information design standard](UI_DESIGN_VISION.md) component by component:
+
+- **Championship probability — ranked dot-and-whisker plot.** Position on a common 0–100% scale supports accurate league-wide comparison, while the horizontal whisker preserves the engine-supplied simultaneous confidence interval. Exact percentages remain adjacent to every mark.
+- **Playoff qualification — ranked probability bands.** Filled bands make qualification likelihood and threshold separation quickly scannable while remaining visually distinct from the championship forecast. Exact percentages are embedded in each band.
+- **Final placement — team-by-placement heatmap.** The two-dimensional matrix exposes distribution shape, concentration, and plausible finish ranges across the entire league without reducing each team to a single expected rank. Every cell contains its exact percentage, and a semantic table supplies an accessible alternative.
+- **Selected-team context — focused detail panel.** A compact focal panel is appropriate for inspecting two exact forecast metrics, their intervals, and observed record context after graphical league comparison. It is supporting detail rather than the primary league-wide representation.
+- **Run provenance and precision — progressive disclosure.** These exact categorical and identifier records do not gain clarity from an arbitrary chart, so a disclosure with aligned facts and definitions is the primary representation.
+- **No-result and incomplete states — explicit status narrative plus observed standings.** No chart is drawn without valid analytical evidence. Incomplete coverage receives a prominent warning; a compact standings list is retained only as factual fallback context because inventing a graphical forecast would be misleading.
+
+The run selector is a direct control rather than a visualization. It changes the complete retained evidence context and never blends values across runs.
+
 ## Incomplete and invalid states
 
 Incomplete paths or capabilities produce a prominent warning that estimates are conditional on completed valid paths and are not unconditional league probabilities. With no usable completed baseline, observed standings remain visible and the page states whether matching work is active or ended unsuccessfully. It does not fabricate analytics or submit work.

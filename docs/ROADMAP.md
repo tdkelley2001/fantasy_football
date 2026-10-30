@@ -150,7 +150,7 @@ Pre-M7 consolidation [COMPLETE AND ACCEPTED, 28 October 2026] Reconcile accepted
 
 #### M7 — Analytics-first interactive application
 
-The [premium football analytics platform](UI_DESIGN_VISION.md) is the M7 design north star. Earlier spatial Integrated War Room concepts are archived evidence, not active product architecture.
+The [premium football analytics platform](UI_DESIGN_VISION.md) is the M7 design north star. Its visual-first information standard applies to M7.2 and every subsequent frontend package: meaningful graphics lead when they clarify the analytical relationship, with exact and accessible alternatives; tables lead only when they communicate more honestly. Earlier spatial Integrated War Room concepts are archived evidence, not active product architecture.
 
 M7.1 [COMPLETE AND ACCEPTED, 29 October 2026] Build the accessible analytics-first shell and source-backed League Overview. The final refinement replaces permanent global side navigation with a compact horizontal header and responsive menu, strengthens chart/matchup/team composition, and scopes team selection to league identity. No forecasts are invented. The earlier three-concept exploration is archived. GATE: visual language and primary navigation are coherent, accessible, responsive, reusable, and supported by actual dark, light, laptop, mobile, detail, empty, and disconnected captures. See `M7_1_FRONTEND_FOUNDATION.md` and `M7_1_VISUAL_DIRECTION_REVIEW.md`.
 
