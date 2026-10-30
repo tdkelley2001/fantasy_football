@@ -1,6 +1,8 @@
 # M7.1 visual direction review
 
-Status: **DESIGN EXPLORATION READY FOR INDEPENDENT REVIEW — NO DIRECTION SELECTED**.
+Status: **ARCHIVED HISTORICAL DESIGN EVIDENCE — SUPERSEDED 29 OCTOBER 2026**.
+
+The analytics-first M7.1 redesign supersedes these concepts. This document and its original screenshots are intentionally preserved as historical implementation and review evidence; none of the concepts below is an active route or product direction.
 
 This checkpoint implements three isolated Living League presentation prototypes under `MASTER_SPEC.md` M7.1. They reuse the accepted React shell, API 1.0 DTOs, tokens, sanitized fixture, and factual league fields. The current shell remains available for comparison. No backend, league-rule, probability, ranking, or transaction behavior changed.
 

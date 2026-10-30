@@ -4,9 +4,9 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M6.4 and the pre-M7 consolidation checkpoint are **COMPLETE AND ACCEPTED**. M7.1 is **IMPLEMENTED — REVIEW PENDING**; M7.2–M8 are not started. The deterministic analytical engine, local application service, and first Integrated War Room frontend foundation are implemented.
+M0–M6.4 and the pre-M7 consolidation checkpoint are **COMPLETE AND ACCEPTED**. M7.1 is **IMPLEMENTED — REVIEW PENDING**; M7.2–M8 are not started. The deterministic analytical engine, local application service, and analytics-first frontend foundation are implemented.
 
-V1 is a local web application restricted to localhost. The implemented React/TypeScript/Tailwind M7.1 shell talks to FastAPI, which delegates all league rules and analytics to the accepted Python engine and uses SQLite-backed persistence/results. Later M7 packages add analytical interaction; focused CLIs remain developer diagnostics.
+V1 is a local web application restricted to localhost. The implemented React/TypeScript/Tailwind M7.1 shell and observed League Overview talk to FastAPI, which delegates all league rules and analytics to the accepted Python engine and uses SQLite-backed persistence/results. Later M7 packages add analytical interaction; focused CLIs remain developer diagnostics.
 
 ## Authoritative documentation
 
@@ -33,14 +33,14 @@ V1 is a local web application restricted to localhost. The implemented React/Typ
 - [Pre-M3 repository audit](docs/PRE_M3_REPOSITORY_AUDIT.md) — consolidated module, quality, security, and readiness findings.
 - [Pre-M4 integration audit](docs/PRE_M4_INTEGRATION_AUDIT.md) — end-to-end identity, configuration, storage, performance, and consolidation findings.
 - [Post-M5 consolidation audit](docs/POST_M5_CONSOLIDATION_AUDIT.md) — accepted-foundation drift, application-readiness gaps, configuration review, and M6.1 starting scope.
-- [UI design vision](docs/UI_DESIGN_VISION.md) — the Integrated War Room interaction and visual north star for progressive M7 frontend development.
+- [UI design vision](docs/UI_DESIGN_VISION.md) — the premium, visualization-first football analytics north star for M7.
 - [Application service](docs/APPLICATION_SERVICE.md) — M6.1 versioned service/HTTP contracts, provenance identities, loopback startup, errors, and synchronous limitations.
 - [Background runs and retained results](docs/RUN_MANAGEMENT.md) — M6.2 lifecycle, cancellation, resource policy, persistence, and server-side result queries.
 - [M6.3 backend validation](docs/M6_3_BACKEND_VALIDATION.md) — parity, configuration, identity, performance, memory/storage, worker, error, and localhost-security evidence.
 - [M6.4 backend readiness](docs/BACKEND_READINESS.md) — stable API policy, frontend data inventory, setup, troubleshooting, operations, and M7 handoff.
 - [Pre-M7 repository audit](docs/PRE_M7_REPOSITORY_AUDIT.md) — final architecture, lifecycle, configuration, hygiene, security, and M7.1 readiness disposition.
-- [M7.1 frontend foundation](docs/M7_1_FRONTEND_FOUNDATION.md) — stack, shell, local startup, accessibility, scope boundaries, and actual visual-QA captures.
-- [M7.1 visual direction review](docs/M7_1_VISUAL_DIRECTION_REVIEW.md) — three rendered Living League concepts, comparative assessment, recommendation, and review evidence.
+- [M7.1 frontend foundation](docs/M7_1_FRONTEND_FOUNDATION.md) — analytics-first reference screen, request correctness, accessibility, scope, and actual visual-QA captures.
+- [Archived M7.1 visual exploration](docs/M7_1_VISUAL_DIRECTION_REVIEW.md) — superseded three-concept comparison retained as historical evidence.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
 - [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) — M5.7 combined immediate trade, chain, acquisition, streaming, state grouping, and evaluation adapter.

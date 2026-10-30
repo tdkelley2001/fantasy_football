@@ -1,32 +1,36 @@
-# M7.1 frontend foundation
+# M7.1 analytics-first frontend foundation
 
-Status: **IMPLEMENTED — REVIEW PENDING (28 October 2026)**.
-
-Visual review found the initial shell too dashboard-conventional. The follow-up preserves it as a comparison and adds three isolated prototypes documented in [M7.1 visual direction review](M7_1_VISUAL_DIRECTION_REVIEW.md). No direction has been selected.
+Status: **IMPLEMENTED — REVIEW PENDING (29 October 2026)**.
 
 ## Contract and scope
 
-M7.1 implements the Integrated War Room shell required by `MASTER_SPEC.md` M7.1. It presents API 1.0 data and does not calculate rules, projections, probabilities, legality, or rankings. Living League is the source-backed foundation view. Opportunity Explorer, Trade Lab, and Simulation Control are explicitly non-operational placeholders for later M7 packages.
+Under `MASTER_SPEC.md` M7.1, the frontend presents accepted API 1.0 fields and never calculates league rules, projections, probabilities, legality, or rankings. The active League Overview is an observed snapshot surface. Opportunity Explorer, Trade Lab, and Simulation Center remain honestly labeled, non-operational destinations for M7.3–M7.5; M7.2 supplies the later simulation-driven overview.
 
-The browser reads relative `/api/v1` URLs. Vite proxies `/api` to FastAPI at `http://127.0.0.1:8000`; Host/Origin protections are unchanged. Integrated contracts are health/build metadata, snapshot listing/detail, and background-run listing.
+The browser reads relative `/api/v1` URLs. Vite proxies `/api` to the local FastAPI service. Integrated contracts are health/build metadata, snapshot listing/detail, and background-run listing. No backend or analytical contract changed.
 
 ## Stack and structure
 
-- React/React DOM 19.3.1; TypeScript 7.0.2 strict mode
-- Vite 8.3.5 and React plugin 6.1.2; Tailwind CSS/Vite plugin 4.3.3
-- Lucide React 1.63.0
-- Vitest 5.0.5, Testing Library 16.3.3, jsdom 30.1.3, axe-core 4.14.0
-- Playwright Core 1.64.1 with installed Microsoft Edge for visual QA only
+- React/React DOM 19.3.1 and strict TypeScript 7.0.2
+- Vite 8.3.5, Tailwind CSS/Vite 4.3.3, and Lucide React 1.63.0
+- Vitest, Testing Library, jsdom, axe-core, and Playwright Core for verification
 
-`frontend/src/App.tsx` owns the small presentation state and shell; `types/api.ts` mirrors consumed API DTOs; `lib/api.ts` is the typed client; `styles.css` defines tokens, responsive layout, and surface patterns. No general state library or dashboard framework is used.
+`App.tsx` owns shell and request state. `LeagueOverview.tsx` owns the source-backed reference composition. `types/api.ts` mirrors consumed DTOs, `lib/api.ts` is the typed client, and `styles.css` contains tokens and responsive presentation. The prior three-concept source remains isolated historical evidence and is not loaded by the active application.
 
-## Design and interaction
+## Selected design
 
-Dark mode is primary: deep graphite/navy foundations, layered cool surfaces, restrained teal accents, and warm focus points. Light mode has independently selected colors. CSS properties provide color, elevation, radius, focus, and motion tokens. A tactical field motif displays standings facts only and is labeled as not being a forecast.
+The selected layout uses a compact league masthead, interactive horizontal observed-points comparison, contextual team focus, featured scheduled matchup, compact standings, configured postseason context, and evidence provenance footer. These are distinct visual forms rather than interchangeable cards. Team monograms and matchup treatments create football identity without unlicensed logos or player imagery.
 
-The shell provides a rail, command bar, persistent snapshot selector, workspace, contextual source/build drawer, connection state, and active-run indicator. Phone widths use a keyboard-operable drawer and bottom navigation. Reduced-motion preferences collapse motion. Focus rings, skip navigation, landmarks, accessible names, live status, and non-hover controls are included.
+Observed points and current standings are explicitly labeled as snapshot facts, not forecasts. Postseason qualification counts are configuration context; qualification probabilities are expressly deferred. Null and unresolved configuration values remain unresolved.
 
-Only `war-room-theme` and `war-room-snapshot` identifiers are stored locally. Payloads/results are not persisted. A missing saved snapshot falls back safely.
+Dark mode uses deep neutral surfaces, restrained teal, and warm selection emphasis. Light mode has separate surface and contrast choices. Modern sans-serif typography, aligned numerals, minimal borders, and compact labels replace the superseded oversized-serif, neon, spatial War Room direction.
+
+## Interaction and request correctness
+
+The shell provides persistent snapshot selection, primary analytical navigation, local connection and active-run status, theme switching, responsive navigation, and a source/build drawer. The drawer receives focus on opening, closes with Escape, and restores focus to its trigger.
+
+Each effect owns and aborts its request controller. Snapshot requests carry monotonically increasing versions; only the latest non-aborted request may commit data, loading state, or local selection. Rapid selection remains enabled while a prior detail request is pending. Retry replaces the active controller and disconnected state never preserves stale success as current data.
+
+Only `war-room-theme` and `war-room-snapshot` identifiers are stored locally. Payloads and results are not persisted.
 
 ## Local startup
 
@@ -39,27 +43,24 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. Validation commands are `npm run typecheck`, `npm test -- --run`, and `npm run build`.
 
-## Honest states
-
-Loading uses a labeled skeleton. Empty storage explains how data becomes available. Transport failure is a disconnected local engine; typed API errors retain backend messages. Run status reports active records or “No active runs.” Deferred destinations never show invented rankings or probabilities.
-
 ## Visual QA evidence
 
-These are screenshots of the implemented React app using isolated `frontend/dev/fixture-server.mjs`, an unambiguously sanitized QA fixture. Default startup always uses FastAPI. Reproduce with `node dev/capture-visuals.mjs` while Vite and the fixture are running.
+All captures are from the actual React application using the sanitized `frontend/dev/fixture-server.mjs` data. Reproduce with `node dev/capture-visuals.mjs` while Vite and the fixture are running.
 
 | Capture | Viewport / state |
 |---|---|
-| [Desktop dark](images/m7-1/desktop-dark-1440x1000.png) | 1440 × 1000, populated fixture |
-| [Laptop dark](images/m7-1/laptop-dark-1280x800.png) | 1280 × 800, populated fixture |
-| [Mobile dark](images/m7-1/mobile-dark-390x844.png) | 390 × 844, responsive navigation |
-| [Desktop light](images/m7-1/desktop-light-1440x1000.png) | 1440 × 1000, light theme |
-| [Empty store](images/m7-1/empty-1280x800.png) | 1280 × 800, empty response |
-| [Disconnected](images/m7-1/disconnected-1280x800.png) | 1280 × 800, API unavailable |
+| [Desktop dark](images/m7-1/analytics-desktop-dark-1440x1000.png) | 1440 × 1000, populated |
+| [Desktop light](images/m7-1/analytics-desktop-light-1440x1000.png) | 1440 × 1000, populated |
+| [Laptop](images/m7-1/analytics-laptop-dark-1280x800.png) | 1280 × 800, populated |
+| [Mobile](images/m7-1/analytics-mobile-dark-390x844.png) | 390 × 844, responsive |
+| [Selected team](images/m7-1/analytics-team-selected-1440x1000.png) | Sunday Union detail selected |
+| [Empty store](images/m7-1/analytics-empty-1280x800.png) | no snapshots |
+| [Disconnected](images/m7-1/analytics-disconnected-1280x800.png) | local API unavailable |
 
-This is a review checkpoint, not a design freeze. The original visual image was absent, so the implementation follows the accepted written vision.
+Review confirms editorial hierarchy, multiple meaningful visual forms, legible chart labels, football-specific identity, deliberate dark/light modes, and complete mobile content. The fixed mobile navigation intentionally remains visible; bottom content padding keeps the final controls reachable.
 
 ## Verification and limitations
 
-Tests cover initialization, detail rendering, active runs, keyboard navigation, theme persistence, empty/disconnected/error states, stale selection, responsive navigation semantics, and axe-core. The production bundle is approximately 241 kB JavaScript and 17 kB CSS before gzip (76 kB and 5 kB gzip).
+Frontend tests cover source-backed rendering, rapid-request races, unmount cleanup, selection persistence, keyboard navigation, drawer focus, theme persistence, empty/disconnected/typed-error states, responsive navigation semantics, and axe-core. Player photos, NFL marks, and team logos are not used; any future imagery requires a licensed and provenance-documented source.
 
-M7.1 does not poll progress, submit/cancel work, render probabilities, inspect candidates, or construct scenarios. Those remain M7.2–M7.5. Automated accessibility checks do not replace independent keyboard, screen-reader, contrast, and usability review.
+M7.1 does not poll run progress, render simulation probabilities, inspect candidates, submit work, or construct scenarios. Those capabilities remain gated to M7.2–M7.5. Automated accessibility checks supplement rather than replace independent keyboard, screen-reader, contrast, and usability review.
