@@ -50,7 +50,7 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "M6.3 [COMPLETE AND ACCEPTED" in roadmap
     assert "M6.4 [COMPLETE AND ACCEPTED" in roadmap
     assert "Pre-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
-    assert "M7.1 [IMPLEMENTED — REVIEW PENDING" in roadmap
+    assert "M7.1 [IMPLEMENTED — FINAL REVIEW PENDING" in roadmap
     assert "analytics-first" in roadmap.casefold()
     assert "BACKEND_READINESS.md" in roadmap
     assert "docs/BACKEND_READINESS.md" in readme
