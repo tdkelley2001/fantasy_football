@@ -18,7 +18,7 @@ The browser reads relative `/api/v1` URLs. Vite proxies `/api` to the local Fast
 
 ## Selected design
 
-The selected layout uses a compact league masthead, interactive horizontal observed-points comparison, contextual team focus, featured scheduled matchup, compact standings, configured postseason context, and evidence provenance footer. These are distinct visual forms rather than interchangeable cards. Team monograms and matchup treatments create football identity without unlicensed logos or player imagery.
+The selected layout uses a compact league masthead, prominent interactive horizontal observed-points comparison, contextual team focus, featured scheduled matchup, compact standings, configured postseason context, and evidence provenance footer. An asymmetric lead surface, inset matchup feature, and quieter supporting detail avoid repetitive full-width bands. Reusable colored team marks and restrained football separators strengthen identity without unlicensed logos or player imagery.
 
 Observed points and current standings are explicitly labeled as snapshot facts, not forecasts. Postseason qualification counts are configuration context; qualification probabilities are expressly deferred. Null and unresolved configuration values remain unresolved.
 
@@ -26,9 +26,9 @@ Dark mode uses deep neutral surfaces, restrained teal, and warm selection emphas
 
 ## Interaction and request correctness
 
-The shell provides persistent snapshot selection, primary analytical navigation, local connection and active-run status, theme switching, responsive navigation, and a source/build drawer. The drawer receives focus on opening, closes with Escape, and restores focus to its trigger.
+The shell provides compact horizontal desktop navigation, persistent snapshot selection, local connection and active-run status, theme switching, and a source/build drawer in one cohesive header. Narrow screens replace the desktop destinations with an accessible menu rather than compressing them. Both the menu and context drawer receive focus on opening, close with Escape, and restore focus to their triggers. League Insights is visibly marked as future functionality.
 
-Each effect owns and aborts its request controller. Snapshot requests carry monotonically increasing versions; only the latest non-aborted request may commit data, loading state, or local selection. Rapid selection remains enabled while a prior detail request is pending. Retry replaces the active controller and disconnected state never preserves stale success as current data.
+Each effect owns and aborts its request controller. Snapshot requests carry monotonically increasing versions; only the latest non-aborted request may commit data, loading state, or local selection. Rapid selection remains enabled while a prior detail request is pending. Retry replaces the active controller and disconnected state never preserves stale success as current data. Team focus is scoped to the active league identity: it is retained only when the new snapshot belongs to the same league and still contains the team; otherwise the new snapshot's official first team becomes the default. Numeric IDs alone never bridge different leagues.
 
 Only `war-room-theme` and `war-room-snapshot` identifiers are stored locally. Payloads and results are not persisted.
 
@@ -57,10 +57,10 @@ All captures are from the actual React application using the sanitized `frontend
 | [Empty store](images/m7-1/analytics-empty-1280x800.png) | no snapshots |
 | [Disconnected](images/m7-1/analytics-disconnected-1280x800.png) | local API unavailable |
 
-Review confirms editorial hierarchy, multiple meaningful visual forms, legible chart labels, football-specific identity, deliberate dark/light modes, and complete mobile content. The fixed mobile navigation intentionally remains visible; bottom content padding keeps the final controls reachable.
+Review confirms compact desktop/laptop navigation, an uncluttered mobile header and menu, strong chart prominence, asymmetrical editorial hierarchy, readable values, football-specific team/matchup identity, deliberate dark/light modes, and complete mobile content. Supporting standings use an intentionally scrollable local region on narrow screens without causing page-level horizontal overflow.
 
 ## Verification and limitations
 
-Frontend tests cover source-backed rendering, rapid-request races, unmount cleanup, selection persistence, keyboard navigation, drawer focus, theme persistence, empty/disconnected/typed-error states, responsive navigation semantics, and axe-core. Player photos, NFL marks, and team logos are not used; any future imagery requires a licensed and provenance-documented source.
+Frontend tests cover source-backed rendering, rapid-request races, unmount cleanup, same-league selection retention rules, cross-league ID isolation, keyboard navigation, menu/drawer focus, theme persistence, empty/disconnected/typed-error states, responsive navigation semantics, and axe-core. Player photos, NFL marks, and team logos are not used; any future imagery requires a licensed and provenance-documented source.
 
 M7.1 does not poll run progress, render simulation probabilities, inspect candidates, submit work, or construct scenarios. Those capabilities remain gated to M7.2–M7.5. Automated accessibility checks supplement rather than replace independent keyboard, screen-reader, contrast, and usability review.

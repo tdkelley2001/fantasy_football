@@ -502,7 +502,7 @@ M6.4 [COMPLETE AND ACCEPTED, 28 October 2026] Finalize the additive API 1.0 comp
 
 #### M7 — Analytics-first interactive application
 
-M7.1 [IMPLEMENTED — REVIEW PENDING, 29 October 2026] Build a coherent, accessible analytics-first shell and League Overview with React, strict TypeScript, Vite, and Tailwind. The active reference uses multiple source-backed visual forms and explicitly separates observed standings data from deferred simulations. Superseded spatial prototypes remain archived evidence. See `docs/M7_1_FRONTEND_FOUNDATION.md` and `docs/M7_1_VISUAL_DIRECTION_REVIEW.md`. GATE: visual language and navigation are coherent, accessible, responsive, reusable, and validated with actual implementation captures.
+M7.1 [IMPLEMENTED — FINAL REVIEW PENDING, 29 October 2026] Build a coherent, accessible analytics-first shell and League Overview with React, strict TypeScript, Vite, and Tailwind. Compact horizontal global navigation and a responsive menu preserve space for future contextual analysis; the active reference uses multiple source-backed visual forms, league-scoped team selection, and explicit separation of observed standings from deferred simulations. Superseded spatial prototypes remain archived evidence. See `docs/M7_1_FRONTEND_FOUNDATION.md` and `docs/M7_1_VISUAL_DIRECTION_REVIEW.md`. GATE: visual language and navigation are coherent, accessible, responsive, reusable, and validated with actual implementation captures.
 
 M7.2 Build the League Command Center for standings, championship/playoff probabilities, trajectories, league comparisons, postseason visualization, and uncertainty explanation. GATE: every displayed number reconciles with the accepted engine.
 

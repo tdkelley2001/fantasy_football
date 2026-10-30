@@ -25,6 +25,6 @@ Mandatory field-centric tactical surfaces, league constellations, spatial team m
 
 ## Product structure
 
-The primary navigation is League Overview, Opportunity Explorer, Trade Lab, and Simulation Center. League Insights is deferred. M7.1 establishes the shell and observed League Overview only; later packages add their accepted analytical interactions without changing the visual integrity rules above.
+Compact horizontal global navigation exposes League Overview, Opportunity Explorer, Trade Lab, and Simulation Center; League Insights is visibly deferred. Narrow layouts use an accessible menu instead of compressing every destination. Contextual sidebars remain available for filters, team selection, and analytical detail, but are not permanent global navigation. M7.1 establishes the shell and observed League Overview only; later packages add their accepted analytical interactions without changing the visual integrity rules above.
 
 The selected M7.1 implementation is a reference language, not a frozen component specification. New screens should extend its analytical labels, chart grammar, editorial spacing, identity treatments, provenance cues, and accessible interaction patterns in response to real data and workflows.
