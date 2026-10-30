@@ -1,6 +1,6 @@
 # M7.2 League Overview Analytics
 
-Status: **IMPLEMENTED — REVIEW PENDING (29 October 2026)**.
+Status: **COMPLETE AND ACCEPTED (29 October 2026)**.
 
 Governing contracts: `MASTER_SPEC.md` M7.2, `ROADMAP.md` M7.2, the accepted M3.4 probability semantics, and M6 retained-run contracts.
 

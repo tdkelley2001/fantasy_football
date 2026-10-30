@@ -3,6 +3,7 @@ import { Activity, BarChart3, Database, FlaskConical, LayoutGrid, Menu, Moon, Re
 import { api, ApiError } from "./lib/api";
 import type { BackgroundRunRecord, HealthResponse, SnapshotSummary } from "./types/api";
 import { LeagueOverview } from "./LeagueOverview";
+import { OpportunityExplorer } from "./OpportunityExplorer";
 
 type Destination = "league" | "opportunities" | "trades" | "simulation" | "insights";
 type Theme = "dark" | "light";
@@ -89,7 +90,7 @@ export function App() {
         <button ref={menuTrigger} className="icon-button menu-trigger" aria-label="Open navigation" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu/></button>
       </div>
     </header>
-    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs}/>:<FutureWorkspace destination={destination} activeRuns={activeRuns}/>}</main>
+    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs}/>:<FutureWorkspace destination={destination} activeRuns={activeRuns}/>}</main>
     {(menuOpen||contextOpen)&&<button className="scrim" aria-label="Dismiss overlay" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
     {menuOpen&&<aside className="mobile-menu open" aria-label="Mobile primary navigation">
       <div className="drawer-head"><div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Navigation</span></div></div><button ref={menuClose} disabled={!menuOpen} className="icon-button" aria-label="Close navigation" onClick={()=>{setMenuOpen(false);menuTrigger.current?.focus();}}><X/></button></div>
