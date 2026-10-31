@@ -41,6 +41,8 @@ export function App() {
   const contextClose=useRef<HTMLButtonElement>(null);
   const menuTrigger=useRef<HTMLButtonElement>(null);
   const menuClose=useRef<HTMLButtonElement>(null);
+  const contextPanel=useRef<HTMLElement>(null);
+  const menuPanel=useRef<HTMLElement>(null);
 
   const load = async (signal?: AbortSignal) => {
     const version=++requestVersion.current;
@@ -65,8 +67,8 @@ export function App() {
 
   useEffect(()=>{const controller=new AbortController();activeController.current=controller;void load(controller.signal);return()=>{requestVersion.current++;controller.abort();};},[]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("war-room-theme",theme);},[theme]);
-  useEffect(()=>drawerFocus(contextOpen,contextClose,contextTrigger,setContextOpen),[contextOpen]);
-  useEffect(()=>drawerFocus(menuOpen,menuClose,menuTrigger,setMenuOpen),[menuOpen]);
+  useEffect(()=>drawerFocus(contextOpen,contextPanel,contextClose,contextTrigger,setContextOpen),[contextOpen]);
+  useEffect(()=>drawerFocus(menuOpen,menuPanel,menuClose,menuTrigger,setMenuOpen),[menuOpen]);
 
   const chooseSnapshot=async(id:string)=>{
     activeController.current?.abort();const controller=new AbortController();activeController.current=controller;const version=++requestVersion.current;
@@ -94,13 +96,13 @@ export function App() {
         <button ref={menuTrigger} className="icon-button menu-trigger" aria-label="Open navigation" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu/></button>
       </div>
     </header>
-    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace destination={destination} activeRuns={activeRuns}/>}</main>
-    {(menuOpen||contextOpen)&&<button className="scrim" aria-label="Dismiss overlay" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
-    {menuOpen&&<aside className="mobile-menu open" aria-label="Mobile primary navigation">
+    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace activeRuns={activeRuns}/>}</main>
+    {(menuOpen||contextOpen)&&<div className="scrim" aria-hidden="true" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
+    {menuOpen&&<aside ref={menuPanel} className="mobile-menu open" role="dialog" aria-modal="true" aria-label="Mobile primary navigation">
       <div className="drawer-head"><div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Navigation</span></div></div><button ref={menuClose} disabled={!menuOpen} className="icon-button" aria-label="Close navigation" onClick={()=>{setMenuOpen(false);menuTrigger.current?.focus();}}><X/></button></div>
       <nav><NavButtons destination={destination} navigate={navigate}/></nav>
     </aside>}
-    <aside className={`context-panel ${contextOpen?"context-open":""}`} aria-label="League context" aria-hidden={!contextOpen}>
+    <aside ref={contextPanel} className={`context-panel ${contextOpen?"context-open":""}`} role="dialog" aria-modal={contextOpen||undefined} aria-label="League context" aria-hidden={!contextOpen}>
       <div className="context-head"><div><span className="eyebrow">Decision context</span><h2>Source & build</h2></div><button ref={contextClose} disabled={!contextOpen} className="icon-button" aria-label="Close league context" onClick={()=>{setContextOpen(false);contextTrigger.current?.focus();}}><X/></button></div>
       {selected?<><Info label="Snapshot" value={selected.snapshot_id}/><Info label="Published" value={formatDate(selected.published_at_utc)}/><Info label="Canonical model" value={`Schema v${selected.canonical_schema_version}`}/><Info label="Evidence sources" value={`${selected.source_count} linked`}/><Info label="Simulation horizon" value={`Weeks ${selected.first_simulation_week}–${selected.final_simulation_week}`}/></>:<p>No snapshot selected.</p>}
       {health&&<div className="build-card"><ShieldCheck/><div><strong>API contract {health.api_schema_version}</strong><span>{health.package_version} · {health.build_revision??"revision unavailable"}</span></div></div>}
@@ -109,9 +111,25 @@ export function App() {
 }
 
 function NavButtons({destination,navigate}:{destination:Destination;navigate:(id:Destination)=>void}) { return <>{nav.map(([id,label,Icon,future])=><button key={id} className={destination===id?"active":""} aria-current={destination===id?"page":undefined} onClick={()=>navigate(id)}><Icon/><span>{label}</span>{future&&<small>Future</small>}</button>)}</>; }
-function drawerFocus(open:boolean,close:React.RefObject<HTMLButtonElement|null>,trigger:React.RefObject<HTMLButtonElement|null>,setOpen:(value:boolean)=>void) { if(!open)return;close.current?.focus();const handler=(event:KeyboardEvent)=>{if(event.key==="Escape"){setOpen(false);trigger.current?.focus();}};document.addEventListener("keydown",handler);return()=>document.removeEventListener("keydown",handler); }
+function drawerFocus(open:boolean,panel:React.RefObject<HTMLElement|null>,close:React.RefObject<HTMLButtonElement|null>,trigger:React.RefObject<HTMLButtonElement|null>,setOpen:(value:boolean)=>void) {
+  if(!open)return;
+  const background=[document.querySelector<HTMLElement>(".app-header"),document.querySelector<HTMLElement>("#main-content")].filter((item):item is HTMLElement=>item!==null);
+  background.forEach(item=>item.inert=true);
+  close.current?.focus();
+  const handler=(event:KeyboardEvent)=>{
+    if(event.key==="Escape"){event.preventDefault();setOpen(false);trigger.current?.focus();return;}
+    if(event.key!=="Tab"||!panel.current)return;
+    const focusable=[...panel.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    if(!focusable.length){event.preventDefault();return;}
+    const first=focusable[0],last=focusable.at(-1)!;
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+  };
+  document.addEventListener("keydown",handler);
+  return()=>{background.forEach(item=>item.inert=false);document.removeEventListener("keydown",handler);if(panel.current?.contains(document.activeElement))trigger.current?.focus();};
+}
 
-function FutureWorkspace({destination,activeRuns}:{destination:Destination;activeRuns:readonly BackgroundRunRecord[]}) { const labels={opportunities:["Opportunity Explorer","Retained action-search discovery."],trades:["Trade Lab","Manual final-state scenario analysis."],simulation:["Simulation Center","Run submission and progressive results arrive in M7.5."],insights:["League Insights","A future analytical workspace; no capability is implied yet."],league:["League Overview",""]} as const;const[title,copy]=labels[destination];return <div className="surface"><section className="hero"><div><span className="eyebrow">Application shell · future workspace</span><h1>{title}</h1><p>{copy}</p></div></section><article className="card placeholder"><div className="placeholder-orbit"><Activity/></div><h2>Foundation connected</h2><p>This destination is intentionally non-operational. No analytical capability is implied by this shell.</p><div className="placeholder-status"><span>{activeRuns.length}</span> active backend runs visible</div></article></div>; }
+function FutureWorkspace({activeRuns}:{activeRuns:readonly BackgroundRunRecord[]}) { return <div className="surface"><section className="hero"><div><span className="eyebrow">Application shell · future workspace</span><h1>League Insights</h1><p>A future analytical workspace; no capability is implied yet.</p></div></section><article className="card placeholder"><div className="placeholder-orbit"><Activity/></div><h2>Foundation connected</h2><p>This destination is intentionally non-operational. No analytical capability is implied by this shell.</p><div className="placeholder-status"><span>{activeRuns.length}</span> active backend runs visible</div></article></div>; }
 function FailureState({error,retry}:{error:ApiError;retry:()=>void}) { const disconnected=error.status===0;return <div className="state-card" role="alert"><div className="state-icon">{disconnected?<Database/>:<ShieldCheck/>}</div><span className="eyebrow">{disconnected?"Local service disconnected":"Request failed"}</span><h1>{disconnected?"Reconnect the decision engine":"The War Room could not load"}</h1><p>{error.message}</p><button className="primary-button" onClick={retry}><RefreshCw/>Try again</button></div>; }
 function EmptyState(){return <div className="state-card"><div className="state-icon"><Database/></div><span className="eyebrow">Snapshot library</span><h1>No canonical snapshots yet</h1><p>Retrieve and persist a league snapshot through the accepted backend workflow, then return here.</p></div>;}
 function LoadingState(){return <div className="surface" aria-busy="true" aria-label="Loading War Room"><div className="skeleton hero-skeleton"/><div className="league-grid"><div className="skeleton card"/><div className="skeleton card"/></div></div>;}
