@@ -2,26 +2,31 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import logging
 import os
-from pathlib import Path
 import tempfile
+from contextlib import asynccontextmanager
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from fantasy_football.app.background import (
+    BackgroundRunCoordinator,
+    BackgroundRunPolicy,
+    BackgroundRunStore,
+)
 from fantasy_football.app.contracts import (
+    API_SCHEMA_VERSION,
     ActionSearchRequest,
     ActionSearchResult,
     BackgroundProgress,
     BackgroundResultSummary,
     BackgroundRunRecord,
     BackgroundRunSubmission,
-    API_SCHEMA_VERSION,
     BaselineAnalysisRequest,
     BaselineAnalysisResult,
     CandidateDetail,
@@ -36,11 +41,6 @@ from fantasy_football.app.contracts import (
     SnapshotSelector,
     SnapshotSummary,
 )
-from fantasy_football.app.background import (
-    BackgroundRunCoordinator,
-    BackgroundRunPolicy,
-    BackgroundRunStore,
-)
 from fantasy_football.app.service import (
     ApplicationDependencies,
     ApplicationService,
@@ -51,9 +51,12 @@ from fantasy_football.monte_carlo import MonteCarloError
 from fantasy_football.monte_carlo_precision import PrecisionError
 from fantasy_football.scenario_evaluator import ScenarioEvaluationError
 from fantasy_football.search_orchestration import SearchOrchestrationError
-from fantasy_football.snapshot_store import SnapshotIntegrityError, SnapshotStore, SnapshotStoreError
+from fantasy_football.snapshot_store import (
+    SnapshotIntegrityError,
+    SnapshotStore,
+    SnapshotStoreError,
+)
 from fantasy_football.unified_actions import UnifiedActionError
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,8 +73,25 @@ def create_app(
     *,
     database_path: str | Path = "outputs/fantasy_football.sqlite3",
     background_coordinator: BackgroundRunCoordinator | None = None,
+    frontend_directory: str | Path | None = None,
 ) -> FastAPI:
     """Construct the credential-free local API with injectable storage/services."""
+
+    frontend_root: Path | None = None
+    if frontend_directory is not None:
+        frontend_root = Path(frontend_directory).resolve()
+        index_path = (frontend_root / "index.html").resolve()
+        assets_path = (frontend_root / "assets").resolve()
+        if (
+            not index_path.is_relative_to(frontend_root)
+            or not index_path.is_file()
+            or not assets_path.is_relative_to(frontend_root)
+            or not assets_path.is_dir()
+        ):
+            raise ValueError(
+                f"Production frontend build is incomplete at {frontend_root}; "
+                "run scripts/setup-local.ps1 to rebuild it."
+            )
 
     application_service = service or ApplicationService(
         ApplicationDependencies(SnapshotStore(database_path))
@@ -111,6 +131,7 @@ def create_app(
     app.state.application_service = application_service
     app.state.background_coordinator = background_coordinator
     app.state.temporary_run_store = temporary_run_store
+    app.state.frontend_root = frontend_root
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["127.0.0.1", "localhost", "testserver", "[::1]"],
@@ -334,5 +355,34 @@ def create_app(
     ) -> Response:
         coordinator.store.delete(run_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    if frontend_root is not None:
+
+        @app.get("/assets/{asset_path:path}", include_in_schema=False)
+        def frontend_asset(asset_path: str) -> FileResponse:
+            assets_root = (frontend_root / "assets").resolve()
+            requested = (assets_root / asset_path).resolve()
+            if not requested.is_relative_to(assets_root) or not requested.is_file():
+                raise ApplicationServiceError(
+                    "frontend_asset_not_found", "not_found",
+                    "The requested frontend asset does not exist.",
+                )
+            return FileResponse(requested)
+
+        @app.get("/{frontend_path:path}", include_in_schema=False)
+        def frontend_navigation(frontend_path: str) -> FileResponse:
+            # Vite emits all files beneath /assets. Other extension-bearing paths are
+            # missing resources, not client-side routes, and must not receive the SPA.
+            if frontend_path == "api" or frontend_path.startswith("api/"):
+                raise ApplicationServiceError(
+                    "api_route_not_found", "not_found",
+                    "The requested API route does not exist.",
+                )
+            if frontend_path and Path(frontend_path).suffix:
+                raise ApplicationServiceError(
+                    "frontend_resource_not_found", "not_found",
+                    "The requested frontend resource does not exist.",
+                )
+            return FileResponse(frontend_root / "index.html")
 
     return app

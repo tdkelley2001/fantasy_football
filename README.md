@@ -4,7 +4,7 @@ This repository is being reset for a clean-sheet rebuild of a league-wide decisi
 
 ## Current status
 
-M0–M6.4, the pre-M7 consolidation checkpoint, and M7.1–M7.5 are **COMPLETE AND ACCEPTED**. The post-M7 consolidation checkpoint is **IMPLEMENTED — REVIEW PENDING**; M8 is not started. The deterministic analytical engine, local application service, analytical workspaces, and integrated Simulation Center are implemented.
+M0–M6.4, the pre-M7 consolidation checkpoint, M7.1–M7.5, and the post-M7 consolidation checkpoint are **COMPLETE AND ACCEPTED**. M8.1 local installation is **IMPLEMENTED — REVIEW PENDING**; M8.2–M8.4 are not started. The deterministic analytical engine, local application service, analytical workspaces, and integrated Simulation Center are implemented.
 
 V1 is a local web application restricted to localhost. The accepted React/TypeScript shell, League Overview, Opportunity Explorer, Trade Lab, and Simulation Center talk to FastAPI, which delegates all league rules and analytics to the accepted Python engine and uses SQLite-backed persistence/results. League Insights remains deferred, and M8 owns installation, real-league workflow validation, and release acceptance; focused CLIs remain developer diagnostics.
 
@@ -45,6 +45,7 @@ V1 is a local web application restricted to localhost. The accepted React/TypeSc
 - [M7.4 Trade Lab](docs/M7_4_TRADE_LAB.md) — visual final-state scenario construction, explicit matched-path evaluation, roster completion, and weekly lineup consequences.
 - [M7.5 Simulation Center](docs/M7_5_SIMULATION_CENTER.md) — explicit configuration, source-backed monitoring, cooperative cancellation, retained history, result navigation, and scoped export.
 - [Post-M7 consolidation audit](docs/POST_M7_CONSOLIDATION_AUDIT.md) — integrated contract, workflow, accessibility, configuration, and repository-quality evidence before M8.
+- [M8.1 local installation](docs/M8_1_LOCAL_INSTALLATION.md) — reproducible Windows setup, production-local startup, shutdown, persistence, configuration, and troubleshooting.
 - [Archived M7.1 visual exploration](docs/M7_1_VISUAL_DIRECTION_REVIEW.md) — superseded three-concept comparison retained as historical evidence.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) — M4 explicit roster changes, deterministic completion, matched paths, and paired uncertainty.
 - [Multi-trade chains](docs/MULTI_TRADE_CHAINS.md) — M5.6 ordered immediate-chain enumeration, vacancy chronology, and once-only completion.
@@ -57,6 +58,19 @@ V1 is a local web application restricted to localhost. The accepted React/TypeSc
 The master specification is authoritative. If another document or future implementation conflicts with it, stop and resolve the conflict explicitly rather than silently changing the model.
 
 ## Development setup
+
+For ordinary Windows-local use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-local.ps1
+.\scripts\start-local.ps1
+# later
+.\scripts\stop-local.ps1
+```
+
+No ESPN credentials are required. See [M8.1 local installation](docs/M8_1_LOCAL_INSTALLATION.md).
+
+### Contributor environment
 
 Python 3.12 is required. From a clean checkout:
 

@@ -534,11 +534,21 @@ def test_direct_m58_resource_contract_is_not_restricted_by_application_policy() 
 def test_local_server_entry_point_has_no_public_bind_option(monkeypatch) -> None:
     observed = {}
 
-    def run(_app, **values):
-        observed.update(values)
+    class Server:
+        should_exit = False
 
-    monkeypatch.setattr("uvicorn.run", run)
-    assert server_main(("--database", "unused.sqlite3", "--port", "8765")) == 0
+        def __init__(self, configuration):
+            observed.update(host=configuration.host, port=configuration.port)
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("uvicorn.Server", Server)
+    monkeypatch.setattr("fantasy_football.app.http.create_app", lambda **_values: object())
+    assert server_main((
+        "--database", "unused.sqlite3", "--frontend", "unused-frontend",
+        "--port", "8765",
+    )) == 0
     assert observed == {"host": LOOPBACK_HOST, "port": 8765}
     with pytest.raises(SystemExit):
         server_main(("--port", "70000"))
