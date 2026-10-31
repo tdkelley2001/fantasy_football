@@ -6,6 +6,7 @@ import type {
   BackgroundActionSearchResultSummary, CandidateDetail, CandidateQueryPage, CompletedStateDetail,
   HealthResponse,
   SnapshotSummary,
+  BackgroundProgress, BaselineAnalysisRequest, ActionSearchRequest,
 } from "../types/api";
 
 export class ApiError extends Error {
@@ -43,6 +44,7 @@ async function postJson<T>(path:string,body:unknown,signal?:AbortSignal):Promise
   let response:Response;try{response=await fetch(path,{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},body:JSON.stringify(body),signal})}catch(error){if(error instanceof DOMException&&error.name==="AbortError")throw error;throw new ApiError("The local decision engine is not reachable.",0)}
   if(!response.ok){let payload:ApiErrorEnvelope|undefined;try{payload=await response.json() as ApiErrorEnvelope}catch{/* typed fallback */}throw new ApiError(payload?.error.message??`Request failed (${response.status}).`,response.status,payload?.error.code)}return await response.json() as T;
 }
+async function deleteRequest(path:string,signal?:AbortSignal):Promise<void>{const response=await fetch(path,{method:"DELETE",signal});if(!response.ok){let payload:ApiErrorEnvelope|undefined;try{payload=await response.json() as ApiErrorEnvelope}catch{/* typed fallback */}throw new ApiError(payload?.error.message??`Request failed (${response.status}).`,response.status,payload?.error.code)}}
 
 export const api = {
   health: (signal?: AbortSignal) => getJson<HealthResponse>("/api/v1/health", signal),
@@ -50,6 +52,11 @@ export const api = {
   snapshot: (snapshotId: string, signal?: AbortSignal) =>
     getJson<SnapshotSummary>(`/api/v1/snapshots/${encodeURIComponent(snapshotId)}`, signal),
   runs: (signal?: AbortSignal) => getJson<readonly BackgroundRunRecord[]>("/api/v1/runs?limit=50", signal),
+  submitBaseline:(request:BaselineAnalysisRequest,signal?:AbortSignal)=>postJson<BackgroundRunSubmission>("/api/v1/runs/baseline",request,signal),
+  submitActionSearch:(request:ActionSearchRequest,signal?:AbortSignal)=>postJson<BackgroundRunSubmission>("/api/v1/runs/action-search",request,signal),
+  progress:(runId:string,signal?:AbortSignal)=>getJson<BackgroundProgress>(`/api/v1/runs/${encodeURIComponent(runId)}/progress`,signal),
+  cancelRun:(runId:string,signal?:AbortSignal)=>postJson<BackgroundRunRecord>(`/api/v1/runs/${encodeURIComponent(runId)}/cancel`,{},signal),
+  deleteRun:(runId:string,signal?:AbortSignal)=>deleteRequest(`/api/v1/runs/${encodeURIComponent(runId)}`,signal),
   runResult: (runId: string, signal?: AbortSignal) =>
     getJson<BackgroundBaselineResultSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/result`, signal),
   actionResult: (runId:string,signal?:AbortSignal)=>getJson<BackgroundActionSearchResultSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/result`,signal),

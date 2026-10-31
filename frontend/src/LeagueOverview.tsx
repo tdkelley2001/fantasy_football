@@ -3,13 +3,14 @@ import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } fro
 import { api, ApiError } from "./lib/api";
 import type { BackgroundBaselineResultSummary, BackgroundRunRecord, ProbabilityValue, SnapshotSummary, TeamProbabilityResult, TeamSummary } from "./types/api";
 
-type Props={readonly snapshot:SnapshotSummary;readonly runs:readonly BackgroundRunRecord[]};
-export function LeagueOverview({snapshot,runs}:Props) {
+type Props={readonly snapshot:SnapshotSummary;readonly runs:readonly BackgroundRunRecord[];readonly preferredRunId?:string|null};
+export function LeagueOverview({snapshot,runs,preferredRunId}:Props) {
   const completed=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline"&&run.status==="completed"&&run.result_available).sort((a,b)=>dateKey(b).localeCompare(dateKey(a))||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
   const [selectedRun,setSelectedRun]=useState<string|null>(completed[0]?.run_id??null);
   const [summary,setSummary]=useState<BackgroundBaselineResultSummary|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
   const version=useRef(0);
   useEffect(()=>setSelectedRun(current=>completed.some(run=>run.run_id===current)?current:completed[0]?.run_id??null),[completed]);
+  useEffect(()=>{if(preferredRunId&&completed.some(run=>run.run_id===preferredRunId))setSelectedRun(preferredRunId)},[preferredRunId,completed]);
   useEffect(()=>{setSummary(null);setError(null);if(!selectedRun)return;const request=++version.current,controller=new AbortController();setLoading(true);api.runResult(selectedRun,controller.signal).then(value=>{if(request!==version.current)return;const problem=validateResult(value,snapshot,selectedRun);if(problem)setError(problem);else setSummary(value)}).catch(reason=>{if(request===version.current&&!(reason instanceof DOMException&&reason.name==="AbortError"))setError(reason instanceof ApiError?reason.message:"The retained result could not be read.")}).finally(()=>{if(request===version.current)setLoading(false)});return()=>controller.abort()},[selectedRun,snapshot]);
   const matching=runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline");
   return <div className="overview analytics-overview"><header className="overview-masthead"><div><span className="overline">League intelligence · retained simulation evidence</span><h1>{snapshot.league_name??`League ${snapshot.league_id}`}</h1><p>{snapshot.season} season · {snapshot.teams.length} teams · weeks {snapshot.first_simulation_week}–{snapshot.final_simulation_week}</p></div><div className="snapshot-stamp"><Database/><span><strong>Canonical snapshot</strong>{formatDate(snapshot.published_at_utc)}</span></div></header><RunContext completed={completed} selected={selectedRun} onChange={setSelectedRun}/>{loading?<AnalyticsState icon={<Activity/>} title="Loading retained analysis" body="Reading the selected completed run without starting new simulation work."/>:error?<AnalyticsState icon={<AlertTriangle/>} title="Result unavailable" body={error}/>:summary?<AnalyticsDashboard snapshot={snapshot} summary={summary}/>:<NoAnalysis snapshot={snapshot} runs={matching}/>}</div>;
