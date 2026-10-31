@@ -7,7 +7,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-
 API_SCHEMA_VERSION = "1.0"
 
 
@@ -453,6 +452,8 @@ class HealthResponse(ContractModel):
     revision_status: Literal["explicit", "unknown"]
     execution_mode: Literal["local_background_m6_2"] = "local_background_m6_2"
     local_only: Literal[True] = True
+    process_id: int = Field(gt=0)
+    launcher_run_id: str | None = None
 
 
 RunType = Literal["baseline", "manual_scenario", "action_search"]

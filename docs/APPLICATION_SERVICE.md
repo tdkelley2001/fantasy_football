@@ -31,7 +31,11 @@ explicit evidence-selection DTO; an unknown model discriminator is rejected.
 
 | Method | Route | Contract |
 |---|---|---|
-| GET | `/api/v1/health` | Service/schema/build metadata; no snapshot or credentials required. |
+| GET | `/api/v1/health` | Service/schema/build metadata plus local process and optional launcher-run identity; no snapshot or credentials required. |
+
+The additive M8.1 `process_id` and nullable `launcher_run_id` fields bind the
+loopback launcher to the actual Uvicorn process. They are local operational
+identity, not simulation provenance or an authorization secret.
 | GET | `/api/v1/snapshots` | Compact persisted snapshots with optional league/season filters. `team_count` is null because compact store metadata does not load the canonical document. |
 | GET | `/api/v1/snapshots/{snapshot_id}` | Canonical league/team/player/roster/schedule summary plus unresolved rule capabilities. |
 | POST | `/api/v1/analyses/baseline` | Synchronous accepted M3.4 precision execution. |

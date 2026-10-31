@@ -74,6 +74,7 @@ def create_app(
     database_path: str | Path = "outputs/fantasy_football.sqlite3",
     background_coordinator: BackgroundRunCoordinator | None = None,
     frontend_directory: str | Path | None = None,
+    launcher_run_id: str | None = None,
 ) -> FastAPI:
     """Construct the credential-free local API with injectable storage/services."""
 
@@ -207,6 +208,8 @@ def create_app(
             package_version=current.build.package_version,
             build_revision=current.build.build_revision,
             revision_status=current.build.revision_status,
+            process_id=os.getpid(),
+            launcher_run_id=launcher_run_id,
         )
 
     @app.get("/api/v1/snapshots", response_model=tuple[SnapshotSummary, ...])
@@ -378,7 +381,11 @@ def create_app(
                     "api_route_not_found", "not_found",
                     "The requested API route does not exist.",
                 )
-            if frontend_path and Path(frontend_path).suffix:
+            path_parts = Path(frontend_path).parts
+            if (
+                frontend_path
+                and (Path(frontend_path).suffix or any(part.startswith(".") for part in path_parts))
+            ):
                 raise ApplicationServiceError(
                     "frontend_resource_not_found", "not_found",
                     "The requested frontend resource does not exist.",

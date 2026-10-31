@@ -1,6 +1,6 @@
 import type { BackgroundRunRecord, HealthResponse, SnapshotSummary } from "../types/api";
 
-export const health: HealthResponse = { api_schema_version:"1.0", service:"fantasy-football-application", package_version:"0.9.0", build_revision:"test-revision", revision_status:"explicit", execution_mode:"local_background_m6_2", local_only:true };
+export const health: HealthResponse = { api_schema_version:"1.0", service:"fantasy-football-application", package_version:"0.9.0", build_revision:"test-revision", revision_status:"explicit", execution_mode:"local_background_m6_2", local_only:true, process_id:1234, launcher_run_id:null };
 export const snapshot: SnapshotSummary = {
   api_schema_version:"1.0", snapshot_id:"snapshot-alpha", league_id:42, league_name:"Sanitized Gridiron League", season:2026, canonical_schema_version:3,
   canonical_sha256:"a".repeat(64), source_count:3, source_ids:["source-a","source-b","source-c"], published_at_utc:"2026-10-20T12:00:00Z", retrieval_finished_at_utc:"2026-10-20T12:01:00Z", first_simulation_week:8, final_simulation_week:17, team_count:4,

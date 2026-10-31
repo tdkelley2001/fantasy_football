@@ -39,7 +39,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from fantasy_football.app.http import create_app
 
-    app = create_app(database_path=args.database, frontend_directory=args.frontend)
+    app = create_app(
+        database_path=args.database,
+        frontend_directory=args.frontend,
+        launcher_run_id=args.run_id,
+    )
     configuration = uvicorn.Config(app, host=LOOPBACK_HOST, port=args.port)
     server = uvicorn.Server(configuration)
     watcher_stop = Event()

@@ -34,16 +34,24 @@ loopback process, waits for `/api/v1/health`, then opens
 `http://127.0.0.1:8000/`. `-NoBrowser` suppresses browser launch. A browser
 failure leaves the healthy service available at the printed URL.
 
-Stop validates the launcher-owned PID and process start time, then writes a
-run-specific cooperative shutdown request. Uvicorn completes its lifespan so
-the background coordinator releases its SQLite lease. Active analyses do not
+Stop validates the launcher-owned PID, process creation time, exact loopback
+listener ownership, random launcher run identity, and API 1.0 health identity,
+then writes a run-specific cooperative shutdown request. Uvicorn completes its
+lifespan so the background coordinator releases its SQLite lease. Active
+analyses do not
 continue after process shutdown; durable metadata classifies interruption on
 the next start. A timeout leaves the process untouched for diagnosis. No
 unrelated port owner is terminated.
 
 Launcher metadata lives at `outputs/runtime/war-room-server.json`; it contains
-no credentials. Dead-PID metadata is removed as stale. A live unhealthy record
-fails closed. A second start returns the healthy existing URL.
+no credentials. Startup initially records the spawned process, then replaces it
+with the actual health-reported server PID and independently observed process
+creation time after that PID is proven to own the configured `127.0.0.1`
+listener. A reused PID, foreign listener, mismatched run identity, unexpected
+health payload, or ambiguous process fails closed. Dead-PID metadata is removed
+as stale. A second start returns the existing URL only when the PID, timestamp,
+port, database, frontend, listener owner, run identity, and health identity all
+match.
 
 ## Configuration and persistence
 
@@ -55,6 +63,7 @@ Parameters override environment variables, which override these defaults:
 | snapshot database | `WAR_ROOM_DATABASE` | `outputs/fantasy_football.sqlite3` |
 | frontend build | `WAR_ROOM_FRONTEND` | `frontend/dist` |
 | logs | `WAR_ROOM_LOG_DIRECTORY` | `outputs/logs` |
+| launcher metadata/control | `WAR_ROOM_RUNTIME_DIRECTORY` | `outputs/runtime` |
 
 ```powershell
 $env:WAR_ROOM_PORT = "8123"
@@ -90,10 +99,17 @@ logs never dump environment values or ESPN payloads.
   not require Vite.
 - M8.1 introduces no database migration.
 
-Credential-free verification covers route isolation, missing assets/builds,
-loopback binding, actual health, duplicate starts, port conflicts, cooperative
-stop/restart, spaced paths, and persistence. Full Python and frontend suites,
-production build, static checks, dependency consistency, documentation links,
+Credential-free verification covers route isolation (including `.env`, source,
+and SQLite-shaped paths), missing assets/builds, loopback binding, actual health,
+duplicate starts, malformed and stale metadata, PID reuse, foreign health
+servers, port conflicts, readiness failure, interrupted shutdown, cooperative
+stop/restart, spaced paths, and repeated setup verification. The restart test
+publishes a sanitized canonical snapshot through `SnapshotStore`, reads it over
+API 1.0, stops, restarts against the same database, and verifies the identical
+snapshot ID, canonical SHA-256, canonical bytes, and adjacent `.runs.sqlite3`
+schema. A marker file is not used as persistence evidence. Full Python and
+frontend suites, production build, static checks, dependency consistency,
+documentation links,
 and a production-origin browser smoke capture form the review evidence. The
 [M8.1 production-local capture](images/m8-1/production-local-sanitized-1440x1000.png)
 shows the actual FastAPI-served build connected to API 1.0, a selected persisted

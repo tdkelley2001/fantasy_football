@@ -4,6 +4,7 @@ param(
     [string]$Database = $(if ($env:WAR_ROOM_DATABASE) { $env:WAR_ROOM_DATABASE } else { "outputs\fantasy_football.sqlite3" }),
     [string]$Frontend = $(if ($env:WAR_ROOM_FRONTEND) { $env:WAR_ROOM_FRONTEND } else { "frontend\dist" }),
     [string]$LogDirectory = $(if ($env:WAR_ROOM_LOG_DIRECTORY) { $env:WAR_ROOM_LOG_DIRECTORY } else { "outputs\logs" }),
+    [string]$RuntimeDirectory = $(if ($env:WAR_ROOM_RUNTIME_DIRECTORY) { $env:WAR_ROOM_RUNTIME_DIRECTORY } else { "outputs\runtime" }),
     [string]$PythonExecutable = ".venv\Scripts\python.exe",
     [switch]$NoBrowser,
     [int]$ReadinessTimeoutSeconds = 30
@@ -11,6 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "local-runtime.ps1")
 function Resolve-RepoPath([string]$Value) {
     if ([IO.Path]::IsPathRooted($Value)) { return [IO.Path]::GetFullPath($Value) }
     return [IO.Path]::GetFullPath((Join-Path $repo $Value))
@@ -25,10 +27,9 @@ $python = Resolve-RepoPath $PythonExecutable
 $databasePath = Resolve-RepoPath $Database
 $frontendPath = Resolve-RepoPath $Frontend
 $logPath = Resolve-RepoPath $LogDirectory
-$runtimePath = Join-Path $repo "outputs\runtime"
+$runtimePath = Resolve-RepoPath $RuntimeDirectory
 $metadataPath = Join-Path $runtimePath "war-room-server.json"
 $shutdownPath = Join-Path $runtimePath "war-room-shutdown.txt"
-$healthUrl = "http://127.0.0.1:$Port/api/v1/health"
 $appUrl = "http://127.0.0.1:$Port/"
 
 if (-not (Test-Path $python -PathType Leaf)) { throw "Prepared Python executable is missing at '$python'. Run .\scripts\setup-local.ps1 first." }
@@ -36,22 +37,22 @@ if (-not (Test-Path (Join-Path $frontendPath "index.html") -PathType Leaf)) { th
 New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($databasePath)), $logPath, $runtimePath | Out-Null
 
 if (Test-Path $metadataPath) {
-    try {
-        $existing = Get-Content $metadataPath -Raw | ConvertFrom-Json
-        $process = Get-Process -Id ([int]$existing.pid) -ErrorAction SilentlyContinue
-        if ($process) {
-            if ([int]$existing.port -ne $Port) {
-                throw "War Room is already launcher-owned on port $($existing.port). Stop it before starting a different port."
-            }
-            if ([string]$existing.database -ne $databasePath -or [string]$existing.frontend -ne $frontendPath) {
-                throw "War Room is already running with different database or frontend paths. Stop it before changing configuration."
-            }
-            try { $null = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2; Write-Host "War Room is already running at $appUrl"; if (-not $NoBrowser) { Start-Process $appUrl }; return }
-            catch { throw "Launcher metadata identifies process $($existing.pid), but its health endpoint is unavailable. Stop it with stop-local.ps1 before retrying." }
+    $existing = Read-WarRoomMetadata $metadataPath
+    $process = Get-WarRoomOwnedProcess $existing
+    if ($process) {
+        if ([int]$existing.port -ne $Port) {
+            throw "War Room is already launcher-owned on port $($existing.port). Stop it before starting a different port."
         }
-        if (-not $process) { Remove-Item -LiteralPath $metadataPath -Force }
-    } catch [System.Management.Automation.RuntimeException] { throw }
-    catch { throw "Launcher metadata at '$metadataPath' is invalid. Remove it only after confirming no War Room process is running." }
+        if ([string]$existing.database -ne $databasePath -or [string]$existing.frontend -ne $frontendPath) {
+            throw "War Room is already running with different database or frontend paths. Stop it before changing configuration."
+        }
+        Assert-WarRoomPortOwner -Port $Port -ProcessId $process.Id
+        $null = Assert-WarRoomHealthIdentity -Port $Port -ExpectedRunId ([string]$existing.run_id) -ExpectedProcessId $process.Id
+        Write-Host "War Room is already running at $appUrl"
+        if (-not $NoBrowser) { Start-Process $appUrl }
+        return
+    }
+    Remove-Item -LiteralPath $metadataPath -Force
 }
 if (Test-Port $Port) { throw "Port $Port is occupied by a process not owned by this launcher. Choose -Port or set WAR_ROOM_PORT; no process was terminated." }
 
@@ -78,13 +79,24 @@ Move-Item -LiteralPath $temporaryMetadata -Destination $metadataPath -Force
 $deadline = [DateTime]::UtcNow.AddSeconds($ReadinessTimeoutSeconds)
 $ready = $false
 while ([DateTime]::UtcNow -lt $deadline) {
-    if ($process.HasExited) { break }
-    try { $null = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2; $ready = $true; break } catch { Start-Sleep -Milliseconds 200 }
+    try {
+        $health = Assert-WarRoomHealthIdentity -Port $Port -ExpectedRunId $runId
+        $serverProcess = Get-Process -Id ([int]$health.process_id) -ErrorAction Stop
+        Assert-WarRoomPortOwner -Port $Port -ProcessId $serverProcess.Id
+        $metadata.pid = $serverProcess.Id
+        $metadata.process_started_at_utc = $serverProcess.StartTime.ToUniversalTime().ToString("o")
+        $metadata | ConvertTo-Json | Set-Content -LiteralPath $temporaryMetadata -Encoding UTF8
+        Move-Item -LiteralPath $temporaryMetadata -Destination $metadataPath -Force
+        $process = $serverProcess
+        $ready = $true
+        break
+    } catch { Start-Sleep -Milliseconds 200 }
 }
 if (-not $ready) {
     $runId | Set-Content -LiteralPath $shutdownPath -Encoding ASCII
     try { Wait-Process -Id $process.Id -Timeout 5 -ErrorAction SilentlyContinue } catch { }
-    if ($process.HasExited) { Remove-Item -LiteralPath $metadataPath -Force -ErrorAction SilentlyContinue }
+    $remaining = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+    if (-not $remaining) { Remove-Item -LiteralPath $metadataPath -Force -ErrorAction SilentlyContinue }
     throw "War Room did not become healthy within $ReadinessTimeoutSeconds seconds. Review '$stderr' and '$stdout'."
 }
 Write-Host "War Room is healthy at $appUrl"
