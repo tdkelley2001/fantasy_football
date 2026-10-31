@@ -1,6 +1,6 @@
 # UI design vision: premium football analytics
 
-Status: **APPROVED M7 DESIGN NORTH STAR**. M7.1–M7.2 are **COMPLETE AND ACCEPTED** and M7.3 is **IMPLEMENTED — REVIEW PENDING**. The earlier Integrated War Room spatial exploration is preserved as [archived design evidence](M7_1_VISUAL_DIRECTION_REVIEW.md), but no longer defines the product architecture.
+Status: **APPROVED M7 DESIGN NORTH STAR**. M7.1–M7.3 are **COMPLETE AND ACCEPTED** and M7.4 is **IMPLEMENTED — REVIEW PENDING**. The earlier Integrated War Room spatial exploration is preserved as [archived design evidence](M7_1_VISUAL_DIRECTION_REVIEW.md), but no longer defines the product architecture.
 
 ## Direction
 
