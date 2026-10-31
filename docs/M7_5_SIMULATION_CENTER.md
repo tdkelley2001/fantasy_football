@@ -1,6 +1,6 @@
 # M7.5 Simulation Center
 
-Status: **IMPLEMENTED — REVIEW PENDING** (31 October 2026). Governing contracts: `MASTER_SPEC.md` M7.5, API schema 1.0, `RUN_MANAGEMENT.md`, and the visual-first standard in `UI_DESIGN_VISION.md`.
+Status: **COMPLETE AND ACCEPTED** (31 October 2026). Governing contracts: `MASTER_SPEC.md` M7.5, API schema 1.0, `RUN_MANAGEMENT.md`, and the visual-first standard in `UI_DESIGN_VISION.md`.
 
 ## Contract and output
 
@@ -41,4 +41,4 @@ Focused tests cover precision-unit serialization and display, DTO construction, 
 
 Known limitations: run history is bounded to 50 records; baseline/manual progress is coarse; expiration has no separate status enum; export covers metadata rather than full candidate/state universes; retained manual results cannot reconstruct historical transaction drafts.
 
-M7.5 remains pending independent review. M8 has not started.
+M7.5 passed independent review. M8 has not started.

@@ -54,7 +54,8 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "M7.2 [COMPLETE AND ACCEPTED" in roadmap
     assert "M7.3 [COMPLETE AND ACCEPTED" in roadmap
     assert "M7.4 [COMPLETE AND ACCEPTED" in roadmap
-    assert "M7.5 [IMPLEMENTED — REVIEW PENDING" in roadmap
+    assert "M7.5 [COMPLETE AND ACCEPTED" in roadmap
+    assert "Post-M7 consolidation [IMPLEMENTED — REVIEW PENDING" in roadmap
     assert "analytics-first" in roadmap.casefold()
     assert "BACKEND_READINESS.md" in roadmap
     assert "docs/BACKEND_READINESS.md" in readme
@@ -64,10 +65,33 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "docs/M7_3_OPPORTUNITY_EXPLORER.md" in readme
     assert "docs/M7_4_TRADE_LAB.md" in readme
     assert "docs/M7_5_SIMULATION_CENTER.md" in readme
+    assert "docs/POST_M7_CONSOLIDATION_AUDIT.md" in readme
     assert "docs/M7_1_VISUAL_DIRECTION_REVIEW.md" in readme
     assert "M8 — Local V1 release" in roadmap
     assert "Integrated CLI V1" not in master_spec
     assert "Optional visual dashboard" not in master_spec
+
+
+def test_current_m7_parent_and_m8_status_are_aligned() -> None:
+    documents = {
+        name: (REPOSITORY_ROOT / path).read_text(encoding="utf-8")
+        for name, path in (
+            ("README.md", "README.md"),
+            ("MASTER_SPEC.md", "docs/MASTER_SPEC.md"),
+            ("ROADMAP.md", "docs/ROADMAP.md"),
+        )
+    }
+    heading = re.compile(r"^#### M7 — .*?$", re.MULTILINE)
+    for name in ("MASTER_SPEC.md", "ROADMAP.md"):
+        parent = heading.search(documents[name])
+        assert parent is not None, f"{name} has no current M7 parent summary"
+        summary = parent.group(0)
+        assert "[COMPLETE AND ACCEPTED]" in summary
+        assert "IN PROGRESS" not in summary
+        assert "REVIEW PENDING" not in summary
+    for document in documents.values():
+        assert "M7.1–M7.5" in document
+        assert "M8 is not started" in document
 
 
 def test_current_m5_parent_status_and_ui_vision_are_aligned() -> None:
