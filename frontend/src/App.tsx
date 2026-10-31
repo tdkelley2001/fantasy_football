@@ -5,6 +5,7 @@ import type { BackgroundRunRecord, HealthResponse, SnapshotSummary } from "./typ
 import { LeagueOverview } from "./LeagueOverview";
 import { OpportunityExplorer } from "./OpportunityExplorer";
 import { TradeLab } from "./TradeLab";
+import { SimulationCenter } from "./SimulationCenter";
 
 type Destination = "league" | "opportunities" | "trades" | "simulation" | "insights";
 type Theme = "dark" | "light";
@@ -33,6 +34,7 @@ export function App() {
   const [error, setError] = useState<ApiError>();
   const [contextOpen, setContextOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [preferredRun,setPreferredRun]=useState<string|null>(null);
   const requestVersion=useRef(0);
   const activeController=useRef<AbortController|undefined>(undefined);
   const contextTrigger=useRef<HTMLButtonElement>(null);
@@ -73,7 +75,8 @@ export function App() {
     catch(cause){if(!(cause instanceof DOMException&&cause.name==="AbortError")&&version===requestVersion.current)setError(cause instanceof ApiError?cause:new ApiError("Snapshot could not be loaded.",-1));}
     finally{if(!controller.signal.aborted&&version===requestVersion.current)setLoading(false);}
   };
-  const navigate=(id:Destination)=>{setDestination(id);setMenuOpen(false);};
+  const navigate=(id:Destination)=>{setDestination(id);setMenuOpen(false);if(id!=="league"&&id!=="opportunities")setPreferredRun(null);};
+  const openRun=(run:BackgroundRunRecord)=>{if(run.snapshot_id!==selected?.snapshot_id)return;setPreferredRun(run.run_id);setDestination(run.run_type==="baseline"?"league":run.run_type==="action_search"?"opportunities":"trades");};
   const retry=()=>{activeController.current?.abort();const controller=new AbortController();activeController.current=controller;void load(controller.signal);};
   const activeRuns=runs.filter(run=>["queued","running","cancel_requested"].includes(run.status));
 
@@ -91,7 +94,7 @@ export function App() {
         <button ref={menuTrigger} className="icon-button menu-trigger" aria-label="Open navigation" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu/></button>
       </div>
     </header>
-    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs}/>:destination==="trades"?<TradeLab snapshot={selected}/>:<FutureWorkspace destination={destination} activeRuns={activeRuns}/>}</main>
+    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace destination={destination} activeRuns={activeRuns}/>}</main>
     {(menuOpen||contextOpen)&&<button className="scrim" aria-label="Dismiss overlay" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
     {menuOpen&&<aside className="mobile-menu open" aria-label="Mobile primary navigation">
       <div className="drawer-head"><div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Navigation</span></div></div><button ref={menuClose} disabled={!menuOpen} className="icon-button" aria-label="Close navigation" onClick={()=>{setMenuOpen(false);menuTrigger.current?.focus();}}><X/></button></div>
