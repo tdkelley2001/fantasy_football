@@ -1,6 +1,6 @@
 # Post-M7 Integrated Application Consolidation Audit
 
-Status: **IMPLEMENTED — REVIEW PENDING** (31 October 2026). M7.1–M7.5 are independently accepted; M8 is not started.
+Status: **COMPLETE AND ACCEPTED** (31 October 2026). M7.1–M7.5 are independently accepted; M8.1 follows separately.
 
 ## 1. Reviewed baseline and scope
 

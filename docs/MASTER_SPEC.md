@@ -386,7 +386,7 @@ Potential later modules include player/game performance dependence, stochastic f
 
 #### M7 — Analytics-first interactive application [COMPLETE AND ACCEPTED]. The accepted shell presents retained baseline analytics, action-search discovery, the Trade Lab, and the Simulation Center with explicit background configuration, monitoring, cancellation, history, and result navigation. M8 remains deferred. All frontend data flows through accepted versioned backend contracts and follows `UI_DESIGN_VISION.md`. PASS: principal workflows are accessible and responsive, and every numerical or legality claim reconciles with the engine.
 
-#### M8 — Local V1 release [NOT STARTED]. Complete local installation/startup, end-to-end real-league validation, resource/interruption/recovery verification, security review, known limitations, and final acceptance. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
+#### M8 — Local V1 release [IN PROGRESS — M8.1 REVIEW PENDING]. Reproducible Windows installation and single-process loopback startup are implemented. Real-league validation, resource/recovery verification, security review, known limitations, and final acceptance remain deferred. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
 ### 12.1A Detailed milestone work packages and verification gates
 
@@ -514,13 +514,13 @@ M7.4 [COMPLETE AND ACCEPTED, 30 October 2026] Build the Trade Lab over API 1.0 m
 
 M7.5 [COMPLETE AND ACCEPTED, 31 October 2026] Provide the integrated Simulation Center over accepted API 1.0 background contracts. Explicit baseline/action-search configuration preserves distinct probability and probability-point precision units; transparent runtime presets and effective-request review distinguish selected, derived, and backend-enforced settings. Identity-versioned polling monitors all active snapshot work, isolates late responses and snapshot changes, and retains source-backed lifecycle/counter/coverage semantics. Cooperative cancellation, bounded resource settings, snapshot-scoped retained history, identity-safe result navigation, and scoped provenance export remain separate from engine mechanics. Trade Lab owns manual construction and unique submission identities. See `docs/M7_5_SIMULATION_CENTER.md`. GATE: PASSED after independent review; principal workflows require no low-level Python commands.
 
-Post-M7 consolidation [IMPLEMENTED — REVIEW PENDING, 31 October 2026] Audit the complete accepted application for API parity, stale asynchronous state, league-rule hardcoding, accessibility, visual consistency, dependency/build hygiene, and end-to-end integration. Correct only demonstrated defects and retain M8 as not started. See `docs/POST_M7_CONSOLIDATION_AUDIT.md`.
+Post-M7 consolidation [COMPLETE AND ACCEPTED, 31 October 2026] Audited the complete accepted application for API parity, stale asynchronous state, league-rule hardcoding, accessibility, visual consistency, dependency/build hygiene, and end-to-end integration. See `docs/POST_M7_CONSOLIDATION_AUDIT.md`.
 
 UI prototypes may use clearly labeled representative data during M6, but production numerical displays must consume accepted backend contracts.
 
 #### M8 — Local V1 release
 
-M8.1 Complete local startup, configuration, installation, and dependency management.
+M8.1 [IMPLEMENTED — REVIEW PENDING, 31 October 2026] Install locked Python/frontend dependencies, build React, and run API 1.0 plus validated static assets from one loopback-only FastAPI/Uvicorn process. Startup is health-gated; shutdown is launcher-owned and cooperative; databases persist; no ESPN credentials are required. See `docs/M8_1_LOCAL_INSTALLATION.md`.
 
 M8.2 Complete end-to-end workflow and representative real-league validation.
 
@@ -528,7 +528,7 @@ M8.3 Validate runtime, resources, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4, the pre-M7 checkpoint, and M7.1–M7.5 are complete and accepted; the post-M7 checkpoint is implemented for review; M8 is not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update this master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4, the pre-M7 checkpoint, M7.1–M7.5, and the post-M7 checkpoint are complete and accepted; M8.1 is implemented for review; M8.2–M8.4 are not started.
 
 ### 12.2 Practical development method
 

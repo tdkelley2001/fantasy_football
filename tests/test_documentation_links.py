@@ -55,7 +55,7 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "M7.3 [COMPLETE AND ACCEPTED" in roadmap
     assert "M7.4 [COMPLETE AND ACCEPTED" in roadmap
     assert "M7.5 [COMPLETE AND ACCEPTED" in roadmap
-    assert "Post-M7 consolidation [IMPLEMENTED — REVIEW PENDING" in roadmap
+    assert "Post-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
     assert "analytics-first" in roadmap.casefold()
     assert "BACKEND_READINESS.md" in roadmap
     assert "docs/BACKEND_READINESS.md" in readme
@@ -66,6 +66,7 @@ def test_authoritative_documents_share_current_product_direction() -> None:
     assert "docs/M7_4_TRADE_LAB.md" in readme
     assert "docs/M7_5_SIMULATION_CENTER.md" in readme
     assert "docs/POST_M7_CONSOLIDATION_AUDIT.md" in readme
+    assert "docs/M8_1_LOCAL_INSTALLATION.md" in readme
     assert "docs/M7_1_VISUAL_DIRECTION_REVIEW.md" in readme
     assert "M8 — Local V1 release" in roadmap
     assert "Integrated CLI V1" not in master_spec
@@ -91,7 +92,8 @@ def test_current_m7_parent_and_m8_status_are_aligned() -> None:
         assert "REVIEW PENDING" not in summary
     for document in documents.values():
         assert "M7.1–M7.5" in document
-        assert "M8 is not started" in document
+        assert "M8.1" in document
+        assert "M8.2–M8.4 are not started" in document
 
 
 def test_current_m5_parent_status_and_ui_vision_are_aligned() -> None:
