@@ -25,7 +25,7 @@ async function capture(name,viewport,{light=false,expectImpact=true,setup=async(
 await capture("opportunity-default-dark-1440x1100",{width:1440,height:1100});
 await capture("opportunity-selected-detail-dark-1440x1100",{width:1440,height:1100});
 await capture("opportunity-league-impact-dark-1280x900",{width:1280,height:900});
-await capture("opportunity-comparison-dark-1440x1100",{width:1440,height:1100},{after:async page=>{const buttons=page.getByRole("button",{name:"Add to comparison"});await buttons.nth(0).click();await buttons.nth(3).click();}});
+await capture("opportunity-comparison-dark-1440x1100",{width:1440,height:1100},{after:async page=>{const buttons=page.getByRole("button",{name:"Add to comparison"});await buttons.nth(0).click();await buttons.nth(2).click();}});
 await capture("opportunity-light-1440x1100",{width:1440,height:1100},{light:true});
 await capture("opportunity-laptop-1280x800",{width:1280,height:800});
 await capture("opportunity-mobile-390x844",{width:390,height:844});
