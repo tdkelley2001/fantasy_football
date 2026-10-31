@@ -71,7 +71,7 @@ export function App() {
   const chooseSnapshot=async(id:string)=>{
     activeController.current?.abort();const controller=new AbortController();activeController.current=controller;const version=++requestVersion.current;
     setLoading(true);setError(undefined);
-    try{const detail=await api.snapshot(id,controller.signal);if(controller.signal.aborted||version!==requestVersion.current)return;setSelected(detail);localStorage.setItem("war-room-snapshot",id);}
+    try{const detail=await api.snapshot(id,controller.signal);if(controller.signal.aborted||version!==requestVersion.current)return;setPreferredRun(null);setSelected(detail);localStorage.setItem("war-room-snapshot",id);}
     catch(cause){if(!(cause instanceof DOMException&&cause.name==="AbortError")&&version===requestVersion.current)setError(cause instanceof ApiError?cause:new ApiError("Snapshot could not be loaded.",-1));}
     finally{if(!controller.signal.aborted&&version===requestVersion.current)setLoading(false);}
   };

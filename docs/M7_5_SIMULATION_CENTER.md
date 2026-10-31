@@ -6,19 +6,22 @@ Status: **IMPLEMENTED — REVIEW PENDING** (31 October 2026). Governing contract
 
 The Simulation Center is an integrated Configure → Monitor → History surface. It submits accepted API 1.0 baseline and action-search requests, monitors retained run and progress records, and delegates completed-result rendering to League Overview, Opportunity Explorer, or Trade Lab. It does not implement analytical estimators, legality, roster completion, or candidate generation in TypeScript.
 
-Quick, Balanced, and High Precision are transparent runtime presets. Selecting one writes visible path, confidence, precision, and checkpoint fields; all effective fields remain inspectable and editable. Action-search configuration exposes requesting team, families, orderings, counterparties, player restrictions, trade shape, chain/action bounds, fixed/progressive evaluation, sampling, candidate/evaluation limits, wall-clock budget, workers, and response rows. Backend validation and admission policy remain authoritative.
+Quick, Balanced, and High Precision are transparent runtime presets. Baseline and action-search precision are deliberately separate: baseline `target_half_width_probability` is submitted as a probability and displayed after conversion to probability points, while action-search `target_paired_half_width_probability_points` is submitted and displayed directly in probability points. The effective-request review identifies preset-provided or user-customized values, explicit submitted values and units, derived worker/path budgets, and the separate backend admission boundary.
+
+Action-search configuration exposes requesting team, compatible families and orderings, explicit counterparties and player universes, trade shape, chain/action bounds, fixed/progressive evaluation, sampling relationships, candidate/evaluation limits, wall-clock budget, workers, and response rows. Frontend preflight mirrors the API and engine's structural request invariants; backend validation and admission policy remain authoritative.
 
 ## Lifecycle semantics
 
 - Submission requires deliberate action and is guarded against duplicate in-flight submission. Ambiguous transport failures are not retried.
-- Active polling aborts on unmount, remains scoped to run/snapshot identity, and stops at terminal state.
+- Active polling aborts on unmount, remains scoped to explicit run/snapshot identity, and continues discovery while any run for the active snapshot remains nonterminal. A selected terminal run cannot hide another active run. Run selection clears prior progress, late progress is identity-checked, and transient failures back off and recover without claiming that backend work stopped.
+- A snapshot switch clears snapshot-specific teams, counterparties, player restrictions, selected progress, local notices, and submission state. It aborts local observation only; an already accepted backend job may continue and is never described as cancelled.
 - The UI shows actual stages, counters, coverage, precision, ranking resolution, elapsed time, and stop reason. It never derives an overall percentage or ETA. Baseline/manual work is explicitly described as coarse progress.
 - Cancellation is cooperative. `cancel_requested` is distinct from `cancelled`, and completion can win the race before cancellation takes effect.
 - Terminal deletion is explicit, confirms the run identity, and is visually separate from cancellation.
 
 ## History, navigation, identity, and export
 
-History is snapshot-scoped and searchable/filterable. API 1.0 currently exposes a newest-first bounded list of at most 50 records and no request-body retrieval; the UI does not claim complete lifetime history or recreate historical configuration.
+History is snapshot-scoped and searchable/filterable, and displays the retained record's expiration time. API 1.0 currently exposes a newest-first bounded list of at most 50 records and no request-body retrieval; the UI does not claim complete lifetime history or recreate historical configuration. Expired or deleted results remain unavailable rather than being reconstructed.
 
 Completed baseline and action-search runs reopen in their established workspaces with an explicit preferred run ID. Snapshot mismatch is rejected by navigation and independently validated by each result viewer. Manual results reopen Trade Lab, but their historical draft is not reconstructed because the retained contract does not contain it.
 
@@ -33,7 +36,7 @@ Trade Lab submissions now receive unique user-facing scenario IDs (`trade-lab-<s
 
 ## Verification and limitations
 
-Focused tests cover DTO construction, presets, invalid settings/membership, deliberate submission, progress semantics, cancellation acknowledgement, filtering/navigation, bounded-history disclosure, and axe accessibility. Existing frontend suites cover stale responses, snapshot isolation, result provenance, responsive navigation, and analytical workspaces. Actual captures live under `docs/images/m7-5/`.
+Focused tests cover precision-unit serialization and display, DTO construction, family/ordering and resource validation, deliberate submission, duplicate protection, multiple active runs, terminal reconciliation, rapid selection with late progress, transient lifecycle identity, snapshot changes during submission, cancellation acknowledgement, filtering/navigation, bounded-history disclosure, and axe accessibility. Retained-viewer suites validate baseline, action-search, and manual-result loading; App integration preserves preferred-run and snapshot isolation. Actual captures live under `docs/images/m7-5/`.
 
 Known limitations: run history is bounded to 50 records; baseline/manual progress is coarse; expiration has no separate status enum; export covers metadata rather than full candidate/state universes; retained manual results cannot reconstruct historical transaction drafts.
 
