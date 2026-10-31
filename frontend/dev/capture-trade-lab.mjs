@@ -10,6 +10,7 @@ await shot("trade-lab-empty-dark-1440x1100",{width:1440,height:1100});
 await shot("trade-lab-builder-dark-1440x1100",{width:1440,height:1100},{},async page=>{await select(page,1);await select(page,9);await select(page,2)});
 await shot("trade-lab-one-for-one-dark-1440x1100",{width:1440,height:1100},{},oneForOne);
 await shot("trade-lab-multistep-dark-1440x1200",{width:1440,height:1200},{},async page=>{await oneForOne(page);await select(page,9);await select(page,10);await page.getByRole("button",{name:"Add transaction step"}).click()});
+await shot("trade-lab-edit-in-place-dark-1440x1200",{width:1440,height:1200},{},async page=>{await oneForOne(page);await select(page,9);await select(page,10);await page.getByRole("button",{name:"Add transaction step"}).click();await page.getByRole("button",{name:"Edit step 1"}).click()});
 await shot("trade-lab-evaluated-dark-1440x1500",{width:1440,height:1100},{},async page=>{await oneForOne(page);await page.getByRole("button",{name:/Evaluate final state/}).click();await page.getByRole("heading",{name:"League-wide paired impact"}).waitFor()});
 await shot("trade-lab-lineup-dark-1280x1500",{width:1280,height:900},{},async page=>{await oneForOne(page);await page.getByRole("button",{name:/Evaluate final state/}).click();await page.getByText("Projected lineup consequences").waitFor()});
 await shot("trade-lab-light-1440x1100",{width:1440,height:1100},{light:true},oneForOne);
