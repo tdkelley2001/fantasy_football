@@ -2,6 +2,7 @@ import type {
   ApiErrorEnvelope,
   BackgroundRunRecord,
   BackgroundBaselineResultSummary,
+  BackgroundActionSearchResultSummary, CandidateDetail, CandidateQueryPage, CompletedStateDetail,
   HealthResponse,
   SnapshotSummary,
 } from "../types/api";
@@ -45,4 +46,8 @@ export const api = {
   runs: (signal?: AbortSignal) => getJson<readonly BackgroundRunRecord[]>("/api/v1/runs?limit=50", signal),
   runResult: (runId: string, signal?: AbortSignal) =>
     getJson<BackgroundBaselineResultSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/result`, signal),
+  actionResult: (runId:string,signal?:AbortSignal)=>getJson<BackgroundActionSearchResultSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/result`,signal),
+  candidates: (runId:string,query:string,signal?:AbortSignal)=>getJson<CandidateQueryPage>(`/api/v1/runs/${encodeURIComponent(runId)}/candidates?${query}`,signal),
+  candidate: (runId:string,candidateId:string,signal?:AbortSignal)=>getJson<CandidateDetail>(`/api/v1/runs/${encodeURIComponent(runId)}/candidates/${encodeURIComponent(candidateId)}`,signal),
+  completedState: (runId:string,stateId:string,signal?:AbortSignal)=>getJson<CompletedStateDetail>(`/api/v1/runs/${encodeURIComponent(runId)}/states/${encodeURIComponent(stateId)}`,signal),
 };
