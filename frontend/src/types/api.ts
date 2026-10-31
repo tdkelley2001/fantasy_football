@@ -15,6 +15,8 @@ export interface HealthResponse {
   readonly revision_status: "explicit" | "unknown";
   readonly execution_mode: "local_background_m6_2";
   readonly local_only: true;
+  readonly process_id: number;
+  readonly launcher_run_id: string | null;
 }
 
 export interface TeamSummary {
