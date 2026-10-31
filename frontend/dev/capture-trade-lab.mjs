@@ -1,0 +1,19 @@
+import {chromium} from "playwright-core";
+import {mkdir} from "node:fs/promises";
+import {resolve} from "node:path";
+const output=resolve("../docs/images/m7-4");await mkdir(output,{recursive:true});const browser=await chromium.launch({executablePath:"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+async function open(viewport,{light=false,setup=async()=>{}}={}){const context=await browser.newContext({viewport,colorScheme:light?"light":"dark"});const page=await context.newPage();if(light)await page.addInitScript(()=>localStorage.setItem("war-room-theme","light"));await setup(page);await page.goto("http://127.0.0.1:5173",{waitUntil:"networkidle"});if(viewport.width<760)await page.getByRole("button",{name:"Open navigation"}).click();await page.getByRole("button",{name:"Trade Lab"}).last().click();await page.getByRole("heading",{name:/Build the exchange/}).waitFor();return {context,page}}
+async function shot(name,viewport,options={},action=async()=>{}){const {context,page}=await open(viewport,options);await action(page);await page.evaluate(()=>{window.scrollTo(0,0);(document.activeElement instanceof HTMLElement)&&document.activeElement.blur()});await page.screenshot({path:resolve(output,`${name}.png`),fullPage:true});await context.close()}
+const select=async(page,id)=>page.getByRole("button",{name:new RegExp(`Sanitized Player ${id} RB / FLEX Select$`)}).click();
+const oneForOne=async page=>{await select(page,1);await select(page,2);await page.getByRole("button",{name:"Add transaction step"}).click()};
+await shot("trade-lab-empty-dark-1440x1100",{width:1440,height:1100});
+await shot("trade-lab-builder-dark-1440x1100",{width:1440,height:1100},{},async page=>{await select(page,1);await select(page,9);await select(page,2)});
+await shot("trade-lab-one-for-one-dark-1440x1100",{width:1440,height:1100},{},oneForOne);
+await shot("trade-lab-multistep-dark-1440x1200",{width:1440,height:1200},{},async page=>{await oneForOne(page);await select(page,9);await select(page,10);await page.getByRole("button",{name:"Add transaction step"}).click()});
+await shot("trade-lab-evaluated-dark-1440x1500",{width:1440,height:1100},{},async page=>{await oneForOne(page);await page.getByRole("button",{name:/Evaluate final state/}).click();await page.getByRole("heading",{name:"League-wide paired impact"}).waitFor()});
+await shot("trade-lab-lineup-dark-1280x1500",{width:1280,height:900},{},async page=>{await oneForOne(page);await page.getByRole("button",{name:/Evaluate final state/}).click();await page.getByText("Projected lineup consequences").waitFor()});
+await shot("trade-lab-light-1440x1100",{width:1440,height:1100},{light:true},oneForOne);
+await shot("trade-lab-laptop-1280x800",{width:1280,height:800},{},oneForOne);
+await shot("trade-lab-mobile-390x844",{width:390,height:844},{},oneForOne);
+await shot("trade-lab-invalid-1280x800",{width:1280,height:800},{setup:async page=>page.route("**/api/v1/runs/manual-scenario",route=>route.fulfill({status:422,json:{api_schema_version:"1.0",error:{code:"invalid_scenario",message:"Sanitized fixture: final ownership is structurally unsupported.",category:"invalid_scenario",context:{}}}}))},async page=>{await oneForOne(page);await page.getByRole("button",{name:/Evaluate final state/}).click();await page.getByText(/structurally unsupported/).waitFor()});
+await browser.close();

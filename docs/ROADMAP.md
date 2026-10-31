@@ -4,7 +4,7 @@ Source: extracted from sections 12 through 12.5 of the approved `Fantasy Footbal
 
 ## Status policy
 
-M0–M6.4, the pre-M7 consolidation checkpoint, and M7.1–M7.2 are **COMPLETE AND ACCEPTED**. M7.3 is **IMPLEMENTED — REVIEW PENDING**; M7.4–M8 are not started. No legacy implementation is credited toward these statuses.
+M0–M6.4, the pre-M7 consolidation checkpoint, and M7.1–M7.3 are **COMPLETE AND ACCEPTED**. M7.4 is **IMPLEMENTED — REVIEW PENDING**; M7.5–M8 are not started. No legacy implementation is credited toward these statuses.
 
 Dependencies are sequential within each milestone and across the M0 → M8 milestone order unless the source explicitly identifies independent work with verified shared interfaces. A work package cannot be complete until its stated gate passes.
 
@@ -30,7 +30,7 @@ Dependencies are sequential within each milestone and across the M0 → M8 miles
 
 #### Post-V1 research backlog — Player-specific volatility and bias: evaluate regularized, data-sufficient player-level departures from shared position/projection-level distributions only after M3 calibration and sufficient as-of history have been collected. Compare temporally held-out calibration and resulting decision quality, with hierarchical shrinkage/fallback to group estimates; do not include player-specific residual parameters in V1 or presume they improve outcomes. Also revisit forecast-horizon variance only when genuine earlier as-of snapshots exist.
 
-#### M7 — Analytics-first interactive application [IN PROGRESS — M7.3 REVIEW PENDING]. The accepted shell presents retained baseline league analytics, and the implemented Opportunity Explorer adds bounded retained action-search discovery with explicit coverage, authorization, and paired-impact semantics; later workspaces remain staged, guided by the [premium football analytics design vision](UI_DESIGN_VISION.md). PASS: principal workflows are navigable without low-level Python commands and every analytical claim reconciles with the backend.
+#### M7 — Analytics-first interactive application [IN PROGRESS — M7.4 REVIEW PENDING]. The accepted shell presents baseline league analytics and retained action-search discovery; the implemented Trade Lab adds explicit final-state scenario construction and paired evaluation through API 1.0. Later workspaces remain staged, guided by the [premium football analytics design vision](UI_DESIGN_VISION.md). PASS: principal workflows are navigable without low-level Python commands and every analytical claim reconciles with the backend.
 
 #### M8 — Local V1 release [NOT STARTED]. Local startup/install, end-to-end real-league workflow validation, runtime/interruption/recovery verification, security review, and final acceptance. PASS: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
@@ -156,9 +156,9 @@ M7.1 [COMPLETE AND ACCEPTED, 29 October 2026] Build the accessible analytics-fir
 
 M7.2 [COMPLETE AND ACCEPTED, 29 October 2026] Present retained baseline championship, playoff, and final-placement probabilities; linked team context; supplied confidence intervals; run selection; precision, stop reason, provenance, limitations; and explicit empty, active, unavailable, mismatched, and incomplete states. No analysis is launched and null estimates remain unavailable. GATE: every displayed number reconciles with the accepted engine. See `M7_2_LEAGUE_ANALYTICS.md`.
 
-M7.3 [IMPLEMENTED — REVIEW PENDING, 30 October 2026] Explore retained completed trade, acquisition, combined-action, and chain searches through bounded server pagination/filtering/sorting, signed probability-point rankings, chronological action flows, shared completed-state identity, engine-supplied paired all-team impacts, and bounded local comparison. Candidate/evaluation coverage, precision, ranking resolution, provenance, structural authorization, conditional claims, null values, and stop reasons remain explicit. No analysis is launched and no transaction success probability is invented. GATE: representative large searches remain accurate and navigable. See `M7_3_OPPORTUNITY_EXPLORER.md`.
+M7.3 [COMPLETE AND ACCEPTED, 30 October 2026] Explore retained completed trade, acquisition, combined-action, and chain searches through bounded server pagination/filtering/sorting, signed probability-point rankings, chronological action flows, shared completed-state identity, engine-supplied paired all-team impacts, and bounded local comparison. Candidate/evaluation coverage, precision, ranking resolution, provenance, structural authorization, conditional claims, null values, and stop reasons remain explicit. No analysis is launched and no transaction success probability is invented. GATE: representative large searches remain accurate and navigable. See `M7_3_OPPORTUNITY_EXPLORER.md`.
 
-M7.4 Build the Trade Lab for legal and structural scenario construction, multi-step transaction paths, roster effects, caveats, and baseline comparison. GATE: visual actions map exactly to the accepted scenario engine.
+M7.4 [IMPLEMENTED — REVIEW PENDING, 30 October 2026] Build the visual-first Trade Lab for canonical two-team roster exploration, uneven and multi-player exchanges, protected pins, chronological structural draft steps, explicit API 1.0 background manual-scenario evaluation, signed paired league impacts, engine roster completion, and weekly lineup explanations. Ordered steps are retained for inspection while evaluation is honestly limited to aggregate final ownership. GATE: visual actions map exactly to the accepted scenario engine. See `M7_4_TRADE_LAB.md`.
 
 M7.5 Build the Simulation Control Center and integrated polish for presets, progress, cancellation, diagnostics, uncertainty, completion states, exports, keyboard navigation, reduced motion, usability, and accessibility. GATE: principal workflows require no low-level Python commands.
 
@@ -174,7 +174,7 @@ M8.3 Validate runtime, resource use, interruption, and recovery.
 
 M8.4 Complete release documentation, known limitations, localhost security review, and final acceptance checklist. GATE: a clean local installation supports ESPN refresh → season outlook → action analysis → result exploration without notebooks or spreadsheets.
 
-Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4, the pre-M7 checkpoint, and M7.1–M7.2 are complete and accepted; M7.3 is implemented for review; M7.4–M8 are not started.
+Cross-milestone release discipline: Every task must state its input contract, output artifact, tests and expected behavior on invalid input. Run a minimal end-to-end smoke path after each relevant change, and update the master specification with actual implemented behavior. Benchmark before adopting complex optimization; any optimization must match reference feasible sequences, final states and path-indexed outputs. M0–M6.4, the pre-M7 checkpoint, and M7.1–M7.3 are complete and accepted; M7.4 is implemented for review; M7.5–M8 are not started.
 
 ### 12.2 Practical development method
 
