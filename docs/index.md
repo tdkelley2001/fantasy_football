@@ -76,7 +76,7 @@ These references contain implementation layers and historical amendments. The st
 
 ## Current status and outstanding work
 
-The [R2.7 consolidation decision plan](development/documentation-consolidation.md) proposes current functional references, fewer duplicated explanations and removal of obsolete reports after reviewed content disposition. It is In Review; no consolidation/deletion is authorized. The accepted [R2.6 inventory](R26_DOCUMENTATION_MIGRATION_PLAN.md) remains discovery evidence, but its 23-package archive strategy is superseded. Use the backlog for approval/status rather than treating either plan as a second work queue.
+The [revised R2.7 plan](development/documentation-consolidation.md), in existing [PR #121](https://github.com/tdkelley2001/fantasy_football/pull/121), proposes a conditional 17-document architecture: domain documents own current contracts, BACKLOG owns exact future requirements/approval/delivery, and Git/PRs own ordinary history. It replaces the initial 40-document proposal and proposes retiring MASTER_SPEC after reviewed requirement transfer, with no replacement master. D1 combines API/execution documentation first. This remains In Review; current authorities below still apply and no consolidation/deletion is authorized. The [R2.6 inventory](R26_DOCUMENTATION_MIGRATION_PLAN.md) is discovery evidence, not an active archive plan. Use BACKLOG for work status, not either plan as a second queue.
 
 | Document | Authority |
 |---|---|
