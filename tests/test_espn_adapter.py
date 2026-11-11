@@ -230,6 +230,14 @@ def test_live_scoring_diagnostic_reports_sanitized_mixed_actual_coverage() -> No
     assert report.observed_game_status_tokens == (
         ("STATUS_FINAL", 16), ("STATUS_SCHEDULED", 31),
     )
+    assert report.current_matchup_record_count == 2
+    assert report.current_matchup_record_structure
+    assert report.roster_entry_record_structure
+    assert report.player_wrapper_record_structure
+    assert sum(count for _, count in report.current_lineup_slot_counts) == 4
+    assert report.lock_field_boolean_counts
+    assert report.matchup_score_field_counts
+    assert report.matchup_projection_equality_counts
     assert all("Sanitized Player" not in item for item in report.limitations)
 
 

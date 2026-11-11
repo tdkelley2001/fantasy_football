@@ -223,6 +223,14 @@ class LiveScoringEvidenceReport:
     previous_configured_period: int | None = None
     previous_period_actual_record_count: int = 0
     previous_period_explicit_zero_actual_count: int = 0
+    current_matchup_record_structure: tuple[tuple[str, tuple[str, ...], int], ...] = ()
+    roster_entry_record_structure: tuple[tuple[str, tuple[str, ...], int], ...] = ()
+    player_wrapper_record_structure: tuple[tuple[str, tuple[str, ...], int], ...] = ()
+    current_lineup_slot_counts: tuple[tuple[int, int], ...] = ()
+    current_matchup_record_count: int = 0
+    lock_field_boolean_counts: tuple[tuple[str, str, int, int, int], ...] = ()
+    matchup_score_field_counts: tuple[tuple[str, int, int, int], ...] = ()
+    matchup_projection_equality_counts: tuple[tuple[str, int, int], ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -234,6 +242,13 @@ def _sanitized_field_structure(
     """Describe field names, types, and presence without retaining field values."""
 
     observed: dict[str, tuple[set[str], int]] = {}
+    opaque_dynamic_maps = {
+        "draftRanksByRankType",
+        "outlooksByWeek",
+        "rankings",
+        "scoreByStat",
+        "stats",
+    }
 
     def visit(value: Any, path: str) -> None:
         if isinstance(value, Mapping):
@@ -242,7 +257,7 @@ def _sanitized_field_structure(
                 types, count = observed.get(child_path, (set(), 0))
                 types.add(type(child).__name__)
                 observed[child_path] = (types, count + 1)
-                if isinstance(child, Mapping):
+                if isinstance(child, Mapping) and str(key) not in opaque_dynamic_maps:
                     visit(child, child_path)
             return
 
@@ -1656,6 +1671,29 @@ def build_live_scoring_evidence_report(
     )
     period_rows = tuple(period_map.values())
     all_weeks = tuple(sorted(week for period in period_rows for week in period))
+    current_period_ids = tuple(
+        period_id for period_id, weeks in period_map.items() if current_week in weeks
+    )
+    if len(current_period_ids) != 1:
+        raise EspnAdapterError(
+            f"current scoring period {current_week} must belong to exactly one matchup period"
+        )
+    current_matchup_rows = tuple(
+        _mapping(value, "league schedule matchup")
+        for value in _list(initial.get("schedule"), "league.schedule")
+        if _mapping(value, "league schedule matchup").get("matchupPeriodId")
+        == current_period_ids[0]
+    )
+    roster_entry_rows: list[Mapping[str, Any]] = []
+    lineup_slot_counts: dict[int, int] = {}
+    for team_value in _list(initial.get("teams"), "league.teams"):
+        team = _mapping(team_value, "league team")
+        roster = _mapping(team.get("roster"), "league team.roster")
+        for entry_value in _list(roster.get("entries"), "league team.roster.entries"):
+            entry = _mapping(entry_value, "league roster entry")
+            roster_entry_rows.append(entry)
+            slot_id = _int(entry.get("lineupSlotId"), "league roster entry", "lineupSlotId", minimum=0)
+            lineup_slot_counts[slot_id] = lineup_slot_counts.get(slot_id, 0) + 1
 
     pro_settings = _mapping(pro_schedule.payload.get("settings"), "nfl schedule.settings")
     raw_tokens_by_game: dict[str, str] = {}
@@ -1726,6 +1764,57 @@ def build_live_scoring_evidence_report(
         })
 
     current, _ = _parse_pool_pages(current_player_pages, label="current player pool")
+    lock_counts: list[tuple[str, str, int, int, int]] = []
+    for scope, rows, paths in (
+        ("player_pool", tuple(current.values()), ("lineupLocked", "rosterLocked", "tradeLocked")),
+        (
+            "roster_entry",
+            tuple(roster_entry_rows),
+            (
+                "playerPoolEntry.lineupLocked",
+                "playerPoolEntry.rosterLocked",
+                "playerPoolEntry.tradeLocked",
+            ),
+        ),
+    ):
+        for path in paths:
+            parts = path.split(".")
+            values: list[Any] = []
+            for row in rows:
+                value: Any = row
+                for part in parts:
+                    value = value.get(part) if isinstance(value, Mapping) else None
+                values.append(value)
+            lock_counts.append((
+                scope,
+                path,
+                sum(value is True for value in values),
+                sum(value is False for value in values),
+                sum(not isinstance(value, bool) for value in values),
+            ))
+    matchup_score_counts: list[tuple[str, int, int, int]] = []
+    projection_equality_counts: list[tuple[str, int, int]] = []
+    for side in ("home", "away"):
+        sides = tuple(
+            _mapping(row.get(side), f"current matchup.{side}")
+            for row in current_matchup_rows
+        )
+        for field in ("totalPoints", "totalProjectedPoints", "totalProjectedPointsLive"):
+            values = tuple(row.get(field) for row in sides)
+            matchup_score_counts.append((
+                f"{side}.{field}",
+                sum(isinstance(value, Real) and not isinstance(value, bool) for value in values),
+                sum(isinstance(value, Real) and not isinstance(value, bool) and float(value) == 0.0 for value in values),
+                sum(value is None for value in values),
+            ))
+        projection_equality_counts.append((
+            side,
+            sum(
+                row.get("totalProjectedPoints") == row.get("totalProjectedPointsLive")
+                for row in sides
+            ),
+            len(sides),
+        ))
     actual_count = zero_count = rostered_actual = unrostered_actual = 0
     rostered_count = bye_count = bye_actual = 0
     observations = _translate_live_observations(
@@ -1864,6 +1953,14 @@ def build_live_scoring_evidence_report(
         previous_configured_period=previous_week,
         previous_period_actual_record_count=previous_actual_count,
         previous_period_explicit_zero_actual_count=previous_zero_count,
+        current_matchup_record_structure=_sanitized_field_structure(current_matchup_rows),
+        roster_entry_record_structure=_sanitized_field_structure(roster_entry_rows),
+        player_wrapper_record_structure=_sanitized_field_structure(tuple(current.values())),
+        current_lineup_slot_counts=tuple(sorted(lineup_slot_counts.items())),
+        current_matchup_record_count=len(current_matchup_rows),
+        lock_field_boolean_counts=tuple(lock_counts),
+        matchup_score_field_counts=tuple(matchup_score_counts),
+        matchup_projection_equality_counts=tuple(projection_equality_counts),
     )
 
 
