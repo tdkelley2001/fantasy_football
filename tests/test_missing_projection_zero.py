@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -11,6 +12,7 @@ from fantasy_football.canonical.serialization import snapshot_to_json
 from fantasy_football.lineup_optimizer import optimize_starting_lineup
 from fantasy_football.monte_carlo import (
     combine_monte_carlo_batches,
+    monte_carlo_run_identity,
     run_monte_carlo_batch,
     simulation_configuration_fingerprint,
 )
@@ -107,7 +109,12 @@ def test_missing_bypasses_normal_rng_and_ordinary_lineup_still_excludes_it(monke
 
 
 @pytest.mark.parametrize(
-    "version", ("provisional-independent-normal-v1", "caller-custom-v7")
+    "version",
+    (
+        "provisional-independent-normal-v1",
+        "caller-custom-v7",
+        "provisional-independent-normal-v1:missing-projection-zero-v1",
+    ),
 )
 def test_nonmissing_normal_draws_match_frozen_prior_implementation_exactly(version):
     snapshot = _classify(_snapshot(), -101, ProjectionClass.MISSING)
@@ -192,16 +199,31 @@ def test_missing_runs_match_across_batches_workers_and_checkpoint_resume(tmp_pat
         )
 
 
+@pytest.mark.parametrize("colliding_version", (False, True))
 def test_legacy_checkpoint_rejected_without_rewriting_and_new_identity_is_global(
     tmp_path,
+    colliding_version,
 ):
     snapshot, config, profile = _snapshot(), _config(0, 4), _profile()
-    old, new = LegacyNormalReference(2.0, 0.1), ProvisionalNormalModel(2.0, 0.1)
-    assert old.parameters == new.parameters
-    assert old.model_id != new.model_id
+    new = ProvisionalNormalModel(2.0, 0.1)
+    old = LegacyNormalReference(
+        2.0, 0.1, new.model_id if colliding_version else new.version
+    )
+    assert (old.model_id == new.model_id) is colliding_version
+    assert old.parameters == new.parameters[:-1]
+    assert json.loads(json.dumps(new.parameters)) == [
+        ["base_stddev", 2.0],
+        ["projection_scale", 0.1],
+        ["conditional_independence", True],
+        ["missing_projection_outcome", "deterministic-zero-v1"],
+    ]
+    assert json.dumps(old.parameters) != json.dumps(new.parameters)
     assert simulation_configuration_fingerprint(
         snapshot, config, old
     ) != simulation_configuration_fingerprint(snapshot, config, new)
+    assert monte_carlo_run_identity(snapshot, config, old) != monte_carlo_run_identity(
+        snapshot, config, new
+    )
     store = _store(tmp_path)
     execute_monte_carlo_profile(
         snapshot,
@@ -212,6 +234,9 @@ def test_legacy_checkpoint_rejected_without_rewriting_and_new_identity_is_global
         cancellation_requested=lambda: True,
     )
     before = store.path.read_bytes()
+    historical = json.loads(before)["checkpoint"]
+    assert historical["model_id"] == old.model_id
+    assert historical["model_parameters"] == json.loads(json.dumps(old.parameters))
     with pytest.raises(
         ExecutionRecoveryError,
         match="checkpoint simulation_config_sha256 does not match requested run",

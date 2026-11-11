@@ -367,6 +367,13 @@ class ProvisionalNormalModel:
 
     @property
     def parameters(self) -> tuple[tuple[str, str | int | float | bool], ...]:
+        return self._draw_parameters + (
+            ("missing_projection_outcome", "deterministic-zero-v1"),
+        )
+
+    @property
+    def _draw_parameters(self) -> tuple[tuple[str, str | int | float | bool], ...]:
+        """The three historical parameters; public policy must not alter draws."""
         return (
             ("base_stddev", float(self.base_stddev)),
             ("projection_scale", float(self.projection_scale)),
@@ -391,7 +398,7 @@ class ProvisionalNormalModel:
                 season,
                 scoring_week,
                 self.version,
-                self.parameters,
+                self._draw_parameters,
             ),
             separators=(",", ":"),
             ensure_ascii=True,

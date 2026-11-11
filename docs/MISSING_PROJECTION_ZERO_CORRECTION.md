@@ -12,12 +12,12 @@ Implementation: [player_outcomes.py](../src/fantasy_football/player_outcomes.py)
 
 ## Compatibility decision
 
-Changing Normal's model parameters or feeding a new public identity into its hash would change every valid-projection draw, which is explicitly forbidden. Reusing the original public identity would instead permit checkpoints/comparisons to alias changed score scenarios. The smallest change separates these roles within the existing model:
+Changing Normal's draw-key parameters or feeding a new public identity into its draw hash would change valid-projection outcomes, which is explicitly forbidden. Reusing historical public identity inputs would instead permit checkpoints/comparisons to alias different numerical behavior. The compatibility follow-up separates public policy parameters from historical draw parameters:
 
-- Public `model_id` is now `<version>:missing-projection-zero-v1`, including caller-supplied custom version strings. The original distribution `version` field and three ordered dispersion parameters remain unchanged.
-- The existing SHA-256/Box–Muller draw key uses the original `version` component, not the suffixed public model ID. All other key bytes are unchanged. Nonmissing outcomes are bit-identical to the pre-correction implementation; no shared RNG sequence is advanced for missing records.
+- Public `model_id` remains `<version>:missing-projection-zero-v1`. Public `parameters` appends `("missing_projection_outcome", "deterministic-zero-v1")` to the three historical entries. A historical caller could choose a `version` identical to the suffixed model ID, so the suffix alone was insufficient. Historical Normal parameters always have exactly three entries and cannot contain this discriminator for any supported custom version string.
+- Private `_draw_parameters` retains exactly `base_stddev`, `projection_scale`, `conditional_independence`, in their original order/types. The SHA-256/Box–Muller draw key uses the original `version` and this three-entry tuple, not the public model ID or four-entry public parameters. All draw-key bytes remain unchanged. Nonmissing outcomes are bit-identical to the historical implementation; no shared RNG sequence is advanced for missing records.
 - Generated score-scenario IDs incorporate the public model ID. Existing Monte Carlo configuration/run identities, worker binding, precision/checkpoint compatibility and numerical comparison/search evaluation identities include model identity; they now distinguish corrected Normal semantics without changing their algorithms or formats. Structural roster-state/candidate IDs need not change when the structural action is unchanged; their numerical evaluation identity remains separate.
-- This deliberately invalidates **all prior Normal checkpoints**, even if their snapshot had no missing records. A single unambiguous public policy identity is preferable to snapshot-dependent model identities. Existing checkpoint loading fails closed before writing or executing new paths. Empirical identities and outcomes remain unchanged.
+- This deliberately invalidates **all prior Normal checkpoints**, including earlier PR #117 checkpoints without the public parameter discriminator and snapshots with no missing records. Existing checkpoint loading compares configuration/run fingerprints and the serialized full public parameter list; it fails before writing or executing new paths. Empirical identities and outcomes remain unchanged. No checkpoint schema or fingerprint algorithm changes.
 - Retained snapshot/run/result rows, original IDs, checksums and old model metadata are never migrated or rewritten. Historical results remain inspectable as historical. Exact reproduction of old Normal runs requires the prior code/model implementation, not corrected code relabeled with an old identity. There is no production legacy-policy switch.
 
 ## Expected versus unexpected numerical changes
@@ -27,6 +27,8 @@ Expected: missing Normal player/week records become exact zero; corrected Normal
 The two accepted `432a85f` golden hashes in `test_partial_monte_carlo.py` are **not changed**. They are exercised using [a frozen pre-correction test oracle](../tests/legacy_normal_reference.py), captured from accepted `79033ae`'s draw formula. This test-only oracle is not a supported production family. New tests independently compare corrected nonmissing scores with that historical algorithm across seeds, paths, classifications and custom versions. Old/new identity differences are asserted explicitly instead of replacing golden values to make tests pass.
 
 ## Verification
+
+The following counts record the initial WR-022 implementation before its identity-collision follow-up. Follow-up verification is recorded separately below.
 
 Focused command: `.venv\Scripts\python.exe -m pytest tests/test_missing_projection_zero.py tests/test_partial_monte_carlo.py -q -p no:cacheprovider --tb=short` — **53 passed**, 9.89 s. Includes both families, large dispersion, exact zero across seeds/paths, skipped RNG for missing, unchanged explicit zero/positive/negative draws, canonical nonmutation, ordinary lineup exclusion, batch/order/worker/task parity, sequential/parallel checkpoint resume, old-checkpoint rejection without byte changes and matched hypothetical swaps. Old/new ordinary team/path outcomes agree for both all-present and missing-containing snapshots; their numerical policy identities intentionally differ. Empirical identity and explicit-zero behavior are checked separately.
 
@@ -39,3 +41,22 @@ Source comparisons confirm empirical class AST, ingestion, canonical/storage, li
 ## Changed files and review
 
 Production change is confined to `player_outcomes.py`. Focused tests are new `test_missing_projection_zero.py`, the frozen legacy oracle and the historical-golden call sites in `test_partial_monte_carlo.py`. Governing policy/specification and outcome/MC references explain the approved change; R23-06, current status and the stable [WR-022 backlog entry](BACKLOG.md#work-items) record its disposition. No canonical schema, snapshot serialization/storage or API contract changes. Implementation acceptance and its final review reference must be recorded only after independent review.
+
+## Identity-collision follow-up
+
+Before implementation, a read-only reproduction constructed `LegacyNormalReference(2.0, 0.1, corrected.model_id)`. Its serialized public identity, configuration fingerprint and seed-bearing run identity each equaled the original PR model's values. Source inspection confirmed fingerprints serialize the ordered parameter tuple as JSON arrays, and checkpoint validation compares both identities plus the full parameter list. The correction adds this fourth public array:
+
+```json
+["missing_projection_outcome", "deterministic-zero-v1"]
+```
+
+Draw hashing continues to serialize only the original three arrays. Regression coverage explicitly retains equal public model IDs for the adversarial historical/custom case, asserts unequal serialized public parameters and configuration/run fingerprints, and rejects its old checkpoint without modifying its bytes. Nonmissing draw comparisons include that custom version string. The frozen historical oracle and both golden constants are unchanged.
+
+This follow-up changes only the public Normal identity parameters, their separation from draw parameters, focused regression assertions and the identity documentation. Relative to the initial PR, the public model ID, generated scenario ID and score-content digest remain unchanged; configuration/run/evaluation fingerprints change because the serialized public parameter list now has four entries. The deterministic-zero policy and previously reviewed numerical behavior do not change. [PR #117](https://github.com/tdkelley2001/fantasy_football/pull/117) remains pending independent acceptance.
+
+Follow-up checks executed:
+
+- `.venv\Scripts\python.exe -m pytest tests/test_missing_projection_zero.py tests/test_partial_monte_carlo.py tests/test_player_outcomes.py tests/test_m33_player_outcomes.py -q -p no:cacheprovider --tb=short` — **75 passed**, 10.52 s. Includes adversarial equal-ID serialization/configuration/run identity, unchanged checkpoint bytes, custom-version exact draws, historical goldens, parallel/batched/resumed and matched-scenario cases.
+- `.venv\Scripts\python.exe -m pytest tests/test_monte_carlo.py tests/test_monte_carlo_parallel.py tests/test_monte_carlo_execution.py tests/test_monte_carlo_precision.py tests/test_scenario_evaluator.py tests/test_trade_search.py tests/test_unified_actions.py tests/test_app_service.py -q -p no:cacheprovider --tb=short` — **161 passed**, one existing Starlette/AnyIO warning, 38.71 s.
+- `.venv\Scripts\python.exe -m pytest tests/test_documentation_links.py tests/test_contributor_documentation.py tests/test_technical_documentation.py tests/test_repository_security.py -q -p no:cacheprovider --tb=short` — **120 passed**.
+- Full Ruff/format-check on the focused test module, narrow production Ruff gate (`--select E9,F63,F7,F82`) and `git diff --check` — passed. The frozen historical oracle and golden constants are unchanged. No new full-repository, live ESPN, private-store or real-process recovery run was performed for this follow-up.
