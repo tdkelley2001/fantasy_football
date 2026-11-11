@@ -2,6 +2,8 @@
 
 Source: extracted from sections 12 through 12.5 of the approved `Fantasy Football Decision Engine — Master Model Specification & Roadmap` (design baseline, 14 October 2026). The [master specification](MASTER_SPEC.md) remains authoritative.
 
+> **Historical record — retained at this path.** Under the approved R2.0 transition, [BACKLOG.md](BACKLOG.md) is authoritative for outstanding development work, [status.md](status.md) for current capability summaries and [MASTER_SPEC.md](MASTER_SPEC.md) for approved analytical requirements. Use [CONTRIBUTING.md](../CONTRIBUTING.md) for the current contributor workflow. The original body below, including delivery-time statuses, dependencies and acceptance evidence, is preserved; it is not a parallel source of current priorities. Do not append current-priority updates here: maintain work in the backlog and capability changes in the status summary. Applicable gates remain binding until an approved replacement explicitly supersedes them. A complete gate-by-gate migration remains unresolved under WR-002 in the backlog, so nothing is deleted or waived by this banner.
+
 ## Status policy
 
 M0–M8.3 and the associated consolidation checkpoints are **COMPLETE AND ACCEPTED**. M8.4 is **IMPLEMENTED — READY FOR INDEPENDENT REVIEW**; V1 is not declared released. No legacy implementation is credited toward these statuses.

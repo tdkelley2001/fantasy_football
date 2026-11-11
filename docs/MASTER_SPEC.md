@@ -2,7 +2,9 @@
 
 *Version: canonical schema v4 / SQLite schema v1 / historical research dataset schema v2 / application API schema 1.0 | 10 November 2026 | Status: M0–M8.3 and associated consolidation checkpoints are **COMPLETE AND ACCEPTED**; M8.4 and LW1 are implemented pending independent review and V1 is not declared released.*
 
-This is the single authoritative living specification, implementation guide, and milestone tracker. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Status labels and evidence statements distinguish implemented and verified behavior from planned or unresolved behavior; a prospective requirement is not evidence that an algorithm or ESPN field has been implemented or confirmed.
+This is the authoritative specification for approved analytical requirements and modeling contracts. It synthesizes the 76 agreed design decisions into a coherent description of the intended model; the older decision log is archived for historical reference only. Status labels and evidence statements distinguish implemented and verified behavior from planned or unresolved behavior; a prospective requirement is not evidence that an algorithm or ESPN field has been implemented or confirmed.
+
+R2.0 documentation governance: [BACKLOG.md](BACKLOG.md) is authoritative for outstanding development work and [status.md](status.md) for current capability summaries. [CONTRIBUTING.md](../CONTRIBUTING.md) defines the reviewed branch/fork workflow. The delivery sections here and [ROADMAP.md](ROADMAP.md) preserve historical milestones, dependencies and acceptance evidence rather than a second active work queue. No analytical requirement or applicable gate is removed by this navigation transition; gate extraction/reconciliation remains explicit pending work in WR-002. Summaries or backlog priorities cannot override this specification or approve a new model.
 
 ## 1. Purpose, outcomes, and product boundaries
 

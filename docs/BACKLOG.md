@@ -1,0 +1,96 @@
+# Development backlog
+
+This file is the authoritative source for **outstanding development work** in `tdkelley2001/fantasy_football`. It replaces active roadmap tracking and the R1 proposal for GitHub Issues/Projects/labels/templates. No external tracker is required. Use the [contributor workflow](../CONTRIBUTING.md) for work in either the original repository or the retained fork.
+
+[Current capabilities](status.md) summarize implemented behavior. [MASTER_SPEC.md](MASTER_SPEC.md) governs approved analytical requirements and modeling contracts. [ROADMAP.md](ROADMAP.md) remains the historical development/dependency/acceptance record at its original path. Listing work here or changing its priority does not supersede a specification or an applicable historical acceptance gate.
+
+## Maintaining this file
+
+- **Add:** propose a bounded item through a normal PR. Use the next unused `WR-NNN` ID; never renumber or reuse an ID, including a completed/declined one. If concurrent branches choose the same ID, resolve that collision during review. Give a short description, type/priority, status, scope/approval or evidence gate, dependencies and relevant source. Add a brief acceptance detail only where the row is insufficient.
+- **Claim:** agree ownership, add the contributor's name/handle and set In Progress only when scope is authorized and dependencies permit work. An unassigned item is valid; ownership is coordination, not exclusive module control. A small claim/status PR can precede implementation. Coordinate overlaps before both contributors edit the same boundary.
+- **Update:** keep scope, blockers and evidence truthful in the same ordinary PR as the work, or in a small coordination PR. Replace planned checks with actual results only after execution. Status changes alone never authorize a model or promote fixture evidence to live verification.
+- **Review/complete:** use In Review for a PR or reviewable artifact awaiting acceptance. Done requires the stated acceptance criteria, applicable gates, verification and reviewer acceptance. Move the row to a concise completed record **in this file**, retaining its ID and actual PR/decision reference; do not recreate completed milestones as new work. Close declined/duplicate proposals with a retained disposition/reference rather than calling the feature delivered.
+
+Types: Bug (confirmed failure), Documentation, Technical debt, Enhancement, Research. Priorities: **P0 critical**, **P1 high**, **P2 normal**, **P3 low**; priority is not approval or automatically a release blocker. No P0 is asserted by this inventory.
+
+Statuses: Backlog, Ready, In Progress, In Review, Blocked, Done. Ready requires explicit scope approval and satisfied dependencies. Use Blocked for authorized work that cannot proceed, recording the reason and unblocking step. Unapproved/evidence-dependent proposals normally stay in Backlog with their gate shown. Owner `—` means unassigned.
+
+**Approval distinction:** WR-001 is authorized by the R2.0 request; it awaits independent review. Subsequent R2 documentation work is planned but still needs its bounded package authorization. Confirmed bugs are distinguished below from enhancement proposals and evidence-gated research. No R1 future feature proposal is automatically an approved implementation task. When a future enhancement is explicitly approved, replace its approval gate with the reviewed scope/decision reference; do not infer approval from an accepted prerequisite or design north star.
+
+## Work items
+
+| ID | Short description | Type / priority | Status | Gate / dependencies | Owner |
+|---|---|---|---|---|---|
+| WR-001 | Establish simple fork/branch contribution, repository backlog, capability status and historical-roadmap navigation (R2.0). | Documentation / P1 | In Review | Authorized R2.0; acceptance checks below; reviewer decision pending. | — |
+| WR-002 | Consolidate current setup/configuration/contract guides and documentation navigation; migrate historical evidence in bounded later R2 packages. | Documentation / P1 | Backlog | Planned later R2; package approval and archive/link pilot; preserve unresolved gate migration below. [R1 D02–D12/map](R1_REPOSITORY_AUDIT.md). | — |
+| WR-003 | Align installer/documented Node support with the locked frontend/test dependency engines. | Bug / P1 | Backlog | Confirmed mismatch, fix scope approval needed. [R1 D01](R1_REPOSITORY_AUDIT.md); `scripts/setup-local.ps1`, frontend manifests. | — |
+| WR-004 | Agree reproducible contributor checks and, if separately authorized, credential-free CI. | Technical debt / P2 | Backlog | Proposal; permissions/runner/check policy and WR-003. No workflow creation in R2.0. [Release checks](RELEASE_CHECKLIST.md). | — |
+| WR-005 | Review scratch ignores, lint/style debt and unused-helper/selector candidates without deleting unproven consumers or compatibility. | Technical debt / P2 | Backlog | Proposal; bounded cleanup approval and consumer/visual evidence before removal. [R1 C02–C04/C09–C12](R1_REPOSITORY_AUDIT.md). | — |
+| WR-006 | Normalize malformed checksum-valid partial-companion inputs to precise domain errors. | Bug / P2 | Backlog | Confirmed error-taxonomy inconsistency; approve error contract/tests before change. [R1 C11](R1_REPOSITORY_AUDIT.md); `partial_week_serialization.py`. | — |
+| WR-007 | Reduce proven frontend helper/response-decoding duplication and strengthen Python/TypeScript DTO parity. | Technical debt / P2 | Backlog | Proposal; bounded extraction, race/accessibility and API compatibility tests. [R1 C07/C08](R1_REPOSITORY_AUDIT.md). | — |
+| WR-008 | Benchmark realistic credential-free pool/roster/horizon/transaction workloads before proposing shared execution preparation or caching. | Technical debt / P2 | Backlog | Proposal; measured benefit required for optimization. [Accepted baseline/performance limits](LW23A_PERFORMANCE_CHECKPOINT.md). | — |
+| WR-009 | Verify active-game actual/projection semantics and player-specific lineup locks with bounded authorized observations. | Research / P1 | Backlog | Evidence/access/game-window gate; no inferred permissions. [LW1 evidence](LIVE_WEEK_SCORING.md), [LW2 contract](LW2_PARTIAL_WEEK_CONTRACT.md). | — |
+| WR-010 | Establish independent fantasy standings cutoff, matchup carry-in, settlement and stat-correction authority. | Research / P1 | Backlog | Evidence gate; coordinate WR-009; final NFL games do not prove fantasy settlement. [LW2 reconciliation](LW2_PARTIAL_WEEK_CONTRACT.md). | — |
+| WR-011 | Agree the next bounded live-week milestone contract/gates (LW2.3B proposal), distinguishing fixed/completed from in-progress scope. | Documentation / P1 | Backlog | Scope approval/review dispositions; WR-009/010/015 only as required by selected scope. [Readiness limits](LW23A_PERFORMANCE_CHECKPOINT.md). | — |
+| WR-012 | Plan verified ESPN-to-companion translation and later additive application exposure of the supported subset. | Enhancement / P1 | Backlog | Proposed staged work: WR-009/010/011; API exposure also requires the approved engine capability. [LW2 contract](LW2_PARTIAL_WEEK_CONTRACT.md), [API](APPLICATION_SERVICE.md). | — |
+| WR-013 | Extend partial-week MC beyond fully unstarted players only under an approved supported-state contract. | Enhancement / P1 | Backlog | Proposal; WR-011 and relevant evidence; in-progress sampling additionally requires approved WR-015. [MC boundary](MONTE_CARLO.md). | — |
+| WR-014 | Scope later-round partial starts and multiweek regular-season history/accumulation cases that currently fail closed. | Enhancement / P2 | Backlog | Proposal; target league need, WR-010 and approved historical-state contract. [Season/LW2 limits](SEASON_SIMULATOR.md). | — |
+| WR-015 | Evaluate a temporally validated conditional remaining-performance method; do not infer one from live projections. | Research / P1 | Backlog | Evidence/model approval gate; WR-009 and immutable intragame vintages/final outcomes. [LW2 uncertainty contract](LW2_PARTIAL_WEEK_CONTRACT.md). | — |
+| WR-016 | Define Weekly Deep Dive user questions, data contract and supported visual/uncertainty scope before implementation. | Enhancement / P2 | Backlog | Exploratory product proposal; API/design approval and live evidence only where required. [Explicit deferral](LIVE_WEEK_SCORING.md), [UI principles](UI_DESIGN_VISION.md). | — |
+| WR-017 | Review visual refinements and Trade Lab/waiver-acquisition UX; select bounded, evidence-backed improvements. | Enhancement / P2 | Backlog | Exploratory usability/design work; no presumed defect or redesign mandate. [UI principles](UI_DESIGN_VISION.md), [Trade Lab](M7_4_TRADE_LAB.md), [Explorer](M7_3_OPPORTUNITY_EXPLORER.md). | — |
+| WR-018 | Triage unresolved waiver/strict-IR timing evidence and unsupported league/tie/placement formats for concrete target cases. | Research / P2 | Backlog | Evidence/league-demand gate; separate mechanics approval before implementation. [Configuration matrix](LEAGUE_CONFIGURATION_AUDIT.md). | — |
+| WR-019 | Acquire authenticated pregame evidence and evaluate provisional outcome-model calibration/limitations. | Research / P2 | Backlog | Trusted captures, scoring/temporal consistency and model approval; no implicit new probability model. [Dataset](HISTORICAL_RESEARCH_DATASET.md), [research](OUTCOME_DISTRIBUTION_RESEARCH.md). | — |
+| WR-020 | Assess resumable background analyses/search and cancellation responsiveness, separate from existing numerical checkpoint resume. | Enhancement / P2 | Backlog | Proposal; approved lifecycle/persistence/replay contract. [Run management](RUN_MANAGEMENT.md), [current limits](LOCAL_V1_USER_GUIDE.md). | — |
+| WR-021 | Complete outstanding release-readiness disposition and current clean-machine acceptance; do not reimplement accepted M0–M8 work. | Technical debt / P1 | Backlog | Reviewer/validation authorization; relevant WR-002/003/004 corrections, not every future feature. [Release checklist](RELEASE_CHECKLIST.md), [M8.4](M8_4_FINAL_RELEASE_AUDIT.md). | — |
+
+## Acceptance details and unresolved migration
+
+- **WR-001:** both contribution routes and safe sync documented; unique stable IDs and all 26 R1 candidates reconciled; README/AGENTS point to the correct authorities; original roadmap body, dependencies and gates preserved; documentation/security checks pass. No GitHub resources, remotes, permissions, protections or runtime behavior change. In Review does not claim that a PR has already been opened or that this package has been independently accepted.
+- **WR-002:** preserve the R1 56-document/asset map and old links. Correct current schema/setup/refresh wording and clarify launcher versus CLI settings before broader relocation. **Unresolved migration:** a complete clause-by-clause extraction of every historical milestone gate into domain references has not been approved or performed. Until that review supplies an approved replacement, the original gate wording remains accessible and applicable in [ROADMAP.md](ROADMAP.md) and [MASTER_SPEC.md](MASTER_SPEC.md). Historical does not mean optional or discarded. This item cannot close merely because roadmap navigation has moved.
+- **Roadmap reference review (R2.0):** current navigation in README/AGENTS now uses the new authority split, and the master specification's introduction states it explicitly. Existing M7.2/M7.3/M7.4 contract citations in `M7_2_LEAGUE_ANALYTICS.md`, `M7_3_OPPORTUNITY_EXPLORER.md` and `M7_4_TRADE_LAB.md` remain valid historical gate/evidence references. `SEASON_SIMULATOR.md`'s roadmap reference for test counts is delivery-time evidence, not a promise of a current verification run; its wording is left for WR-002's guide cleanup. The accepted R1 proposal has a supersession notice rather than being rewritten. Existing documentation tests retain their historical acceptance assertions. New documents reference the roadmap only for preserved history/gates. No broad link relocation is needed for this transition.
+- **WR-003/006:** reproduce the respective Node-engine mismatch and malformed-companion error boundary with focused tests; preserve dependency intent and valid artifact bytes/checksums. Neither confirmed bug authorizes unrelated upgrades or numerical changes.
+- **WR-008:** retain the prior no-optimization decision unless representative measurements justify a small safe change; prove exact draws, scores, standings, postseason, probabilities, fingerprints and worker/resume parity before promotion.
+- **WR-009/010/015/018/019:** each research scope must state the question, evidence/authorization needed, retrieval context and acceptance method. Preserve **Verified live / Verified by tests / Unverified / Unsupported** distinctions; inconclusive findings do not become defaults. No live call, model, timing rule, lock permission or historical winner is inferred from a backlog row.
+- **WR-011/012/013/014:** approve interfaces and states before implementation; split staged translation, engine, API and historical-state work into small reviewed packages. Fixed actuals/carry count once; retain current-week locks, source identity and supported V1 compatibility. Completed-plus-unstarted scope need not wait for an in-progress method if its separately approved contract excludes in-progress players. No current-week action recommendation is authorized.
+- **WR-016/017:** start with discovery and approved designs, not a rewrite of completed M7 selectors/workspaces. Preserve real data, uncertainty, chronology, structural versus authorized/conditional actions, accessibility and request provenance. Visual redesign, trade-drafting and waiver-explanation improvements are distinct discovery tracks within WR-017; select one bounded change for implementation rather than one large UX PR. The R1 visual-only proposal's lower priority is consolidated into this normal-priority discovery item, not promoted to approved work.
+- **WR-020/021:** preserve leases, exact replay identities, completed results and authenticated recovery. Existing engine resume is not a missing feature; app resume remains unsupported. Record actual current verification and explicit reviewer release disposition, not old test counts or board/task completion.
+
+## R1 candidate reconciliation
+
+The [accepted R1 audit and follow-up](R1_REPOSITORY_AUDIT.md#11-proposed-initial-issue-catalog) are historical planning evidence. This map accounts for every proposed `B01`–`B26` once; those identifiers are not GitHub issues. Merged rows remain bounded work areas with separate approvals where needed, not mandates for enormous PRs.
+
+| R1 proposal(s) | Current work item / disposition |
+|---|---|
+| B01 | WR-001; GitHub Issues/Projects/labels/templates portions **superseded**, not queued for later automatic creation. |
+| B02, B04 | WR-002; consolidate current guides and evidence navigation. |
+| B03 | WR-003. |
+| B05 | WR-004; CI only if separately authorized later. |
+| B06 | WR-005; no dead-code deletion approved. |
+| B07 | WR-006. |
+| B08 | WR-007. |
+| B09 | WR-008; prior benchmark remains completed evidence. |
+| B10 | WR-009. |
+| B11 | WR-010. |
+| B12 | WR-011; no next feature milestone approved here. |
+| B13, B16 | WR-012; translation precedes any approved application exposure. |
+| B14 | WR-013. |
+| B15 | WR-014. |
+| B17 | WR-015. |
+| B18 | WR-016. |
+| B19, B20, B21 | WR-017; visual/trade/waiver discovery grouped, no new UX behavior approved. |
+| B22, B23 | WR-018; source-authority gaps and format support stay explicit subscopes. |
+| B24 | WR-019. |
+| B25 | WR-020. |
+| B26 | WR-021; release review, not a new implementation of M8. |
+
+Completed M0–M8.3 and accepted LW2.1–LW2.3A implementation history is not imported as outstanding work. Broad strategic ideas retained in the historical roadmap/specification (for example joint correlations or player-specific volatility) require an actionable approved scope before receiving new IDs. They are not silently deleted or approved by this inventory.
+
+## Completed work
+
+No R2.0 item is independently accepted in this record yet. Preserve completed/declined IDs and actual review references here as work is dispositioned; do not invent PR numbers or retroactively list all historical milestones.
+
+## R2.0 verification for review
+
+Executed `.venv\Scripts\python.exe -m pytest tests/test_documentation_links.py tests/test_repository_security.py tests/test_contributor_documentation.py -q -p no:cacheprovider`: **80 passed** (0.84 s). The new checks cover unique work IDs/metadata, exact one-time reconciliation of all 26 R1 candidates into 21 work areas, contributor navigation/local fragments and both documented sync paths. Ruff check/format for the new documentation test and `git diff --check` pass.
+
+A source comparison against the starting Git revision confirms the complete original roadmap text is unchanged after removing only its new banner, and all master-specification content from section 1 onward is unchanged. Existing roadmap citations remain available. Fork/branch instructions were statically reviewed, not exercised against either contributor's remote; no permissions, remotes, protections, GitHub resources or runtime behavior changed. Full engine/live/clean-machine verification was not needed or claimed for this documentation-only package. WR-001 remains In Review pending independent acceptance.

@@ -2,16 +2,26 @@
 
 This repository contains War Room, a clean-sheet league-wide decision engine and local web application for ESPN fantasy football. It estimates season-outcome distributions and compares roster actions by their effect on championship probability while honoring configured league rules, uncertainty, and full-league consequences.
 
-## Current status
+## Contributor entry points
+
+- [Contributing](CONTRIBUTING.md) — reviewed feature-branch/fork contributions and safe upstream synchronization.
+- [Development backlog](docs/BACKLOG.md) — the authoritative outstanding-work list, maintained through ordinary pull requests.
+- [Current capabilities](docs/status.md) — supported, provisional, engine-only and deferred behavior.
+- [Master specification](docs/MASTER_SPEC.md) — approved analytical requirements and modeling contracts.
+- [Historical roadmap](docs/ROADMAP.md) — preserved development, dependencies, acceptance gates and evidence; not a second current work queue.
+
+The detailed catalog below remains for compatibility pending later R2 documentation work. GitHub Issues, Projects, labels and templates are not required for this two-contributor workflow.
+
+## Release baseline
 
 M0–M8.3 and the associated consolidation checkpoints are **COMPLETE AND ACCEPTED**. M8.4 final release audit is **IMPLEMENTED — READY FOR INDEPENDENT REVIEW**. This status does not declare V1 released. The deterministic analytical engine, local application service, analytical workspaces, integrated Simulation Center, and browser-based immutable ESPN refresh workflow are implemented.
 
 V1 is a local web application restricted to localhost. The accepted React/TypeScript shell, League Overview, Opportunity Explorer, Trade Lab, and Simulation Center talk to FastAPI, which delegates all league rules and analytics to the accepted Python engine and uses SQLite-backed persistence/results. League Insights remains deferred, and M8 owns installation, real-league workflow validation, and release acceptance; focused CLIs remain developer diagnostics.
 
-## Authoritative documentation
+## Technical documentation and historical evidence
 
 - [Master specification](docs/MASTER_SPEC.md) — the complete approved model specification and governing requirements.
-- [Development roadmap](docs/ROADMAP.md) — the M0–M8 milestone sequence, individual work packages, dependencies, gates, and current statuses.
+- [Historical development roadmap](docs/ROADMAP.md) — the original M0–M8/LW milestone sequence, dependencies, gates and delivery-time statuses. Use the backlog for outstanding work and the capability summary for current behavior.
 - [M0.2 ESPN connectivity findings](docs/ESPN_CONNECTIVITY.md) — sanitized live-access evidence, field provenance, validation results, and deferred questions.
 - [M0.3 future player-week findings](docs/ESPN_FUTURE_DATA_AUDIT.md) — projection, player-pool, bye, schedule, pagination, and provenance evidence.
 - [Missing projection policy](docs/MISSING_PROJECTION_POLICY.md) — approved raw-versus-effective representation, week 6 evidence, methodology, and limitations.

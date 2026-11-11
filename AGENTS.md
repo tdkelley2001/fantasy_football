@@ -1,13 +1,15 @@
 # Standing Development Instructions
 
-These rules apply to all future work in this repository. The approved requirements in `docs/MASTER_SPEC.md` are authoritative; `docs/ROADMAP.md` defines delivery order and gates.
+These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/MASTER_SPEC.md) is authoritative for approved analytical requirements and modeling contracts. [BACKLOG.md](docs/BACKLOG.md) is authoritative for outstanding work; [status.md](docs/status.md) summarizes current capabilities. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main.
+
+[ROADMAP.md](docs/ROADMAP.md) is the preserved historical development and acceptance record, not a parallel active backlog. Its applicable dependencies and acceptance gates remain binding until explicitly superseded by an approved contract; do not discard requirements merely because their original location is historical. No GitHub Issues/Projects/labels/templates or repository-setting changes are needed for the repository-native work list.
 
 ## Scope and sequencing
 
 1. Implement from the specification, not from memory, prior code, or convenience. Cite the governing specification section in each task or pull request.
 2. Preserve a clean-sheet architecture. Legacy code is historical reference only and must not shape interfaces or behavior merely because it exists.
-3. Work in small, independently testable tasks. Do not combine roadmap packages unless their interfaces and acceptance gates have already been verified.
-4. Respect milestone dependencies and statuses. Never mark a task or milestone complete until its documented acceptance gate passes with inspectable evidence.
+3. Work in small, independently testable tasks. Do not combine work packages unless their interfaces and acceptance gates have already been verified; a backlog proposal is not implementation approval.
+4. Respect applicable milestone dependencies, approved scope and acceptance gates. Never mark a backlog item or milestone complete until its documented acceptance gate passes with inspectable evidence and review.
 5. Do not begin a milestone or work package without the required review or approval.
 6. Inspect existing modules before adding new ones. Reuse established configuration, authentication, logging, error handling, and validation; extract shared infrastructure only after multiple tasks demonstrate a real need.
 7. Avoid premature frameworks, unnecessary abstractions, and architectural changes unrelated to the assigned work package.
