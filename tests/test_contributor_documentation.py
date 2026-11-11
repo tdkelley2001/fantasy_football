@@ -91,13 +91,8 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/BACKLOG.md",
         "docs/status.md",
         "docs/index.md",
-        "docs/getting-started/installation.md",
-        "docs/getting-started/configuration.md",
-        "docs/getting-started/first-run.md",
-        "docs/getting-started/operations.md",
-        "docs/getting-started/development.md",
+        "docs/OPERATIONS.md",
         "docs/LOCAL_V1_USER_GUIDE.md",
-        "docs/M8_1_LOCAL_INSTALLATION.md",
         "docs/CANONICAL_MODEL.md",
         "docs/SNAPSHOT_STORAGE.md",
         "docs/MISSING_PROJECTION_POLICY.md",
@@ -109,8 +104,6 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/APPLICATION_SERVICE.md",
         "docs/architecture/overview.md",
         "docs/R23_DOCUMENTATION_RECONCILIATION.md",
-        "docs/development/verification.md",
-        "docs/RELEASE_CHECKLIST.md",
         "docs/PRE_M3_REPOSITORY_AUDIT.md",
         "docs/PRE_M4_INTEGRATION_AUDIT.md",
         "docs/archive/audits/PRE_M3_REPOSITORY_AUDIT.md",
@@ -202,15 +195,97 @@ def test_current_setup_routes_replace_conflicting_user_guidance() -> None:
     user = _read("docs/LOCAL_V1_USER_GUIDE.md")
     assert "SNAPSHOT_DB_PATH` controls the private append-only" not in user
     assert "Enter the first scoring week that has not begun" not in user
-    for guide in ("installation", "configuration", "first-run", "operations"):
-        target = f"getting-started/{guide}.md"
-        assert target in user
-        assert target in _read("README.md")
-        assert target in _read("docs/index.md")
-    assert "getting-started/development.md" in _read("CONTRIBUTING.md")
+    for source in (
+        "README.md",
+        "AGENTS.md",
+        "docs/index.md",
+        "docs/LOCAL_V1_USER_GUIDE.md",
+    ):
+        assert "OPERATIONS.md" in _read(source)
+    assert "docs/OPERATIONS.md" in _read("CONTRIBUTING.md")
     application = _read("docs/APPLICATION_SERVICE.md")
-    assert "getting-started/development.md" in application
+    assert "../CONTRIBUTING.md" in application
     assert 'pip install -e ".[app]"' not in application
-    assert "Historical implementation evidence" in _read(
-        "docs/M8_1_LOCAL_INSTALLATION.md"
+
+
+def test_operations_launcher_defaults_match_supported_start_parameters() -> None:
+    document = _read("docs/OPERATIONS.md")
+    script = _read("scripts/start-local.ps1")
+    rows = re.findall(
+        r"^\| `(-\w+)` \| `(WAR_ROOM_\w+)` \| `([^`]+)` \|$",
+        document,
+        re.MULTILINE,
     )
+    assert len(rows) == 5
+    for parameter, variable, default in rows:
+        value = re.escape(default)
+        assert re.search(
+            rf"\${parameter[1:]} = \$\(if \(\$env:{variable}\).*?else "
+            rf'\{{ "?{value}"? \}}\)',
+            script,
+        ), (parameter, variable, default)
+
+
+def test_operations_preserves_separate_configuration_authorities() -> None:
+    document = _read("docs/OPERATIONS.md")
+    for phrase in (
+        "does not read `.env`",
+        "Explicit parameters override process-environment variables",
+        "process environment, including empty values",
+        "not `SNAPSHOT_DB_PATH`",
+        "**not the `.env` file's parent**",
+        "**`--manual-config` explicitly**",
+        "`--first-simulation-week` explicitly",
+        "automatic safe-week detection",
+        "WR-003 remains unresolved",
+    ):
+        assert phrase in document
+    for name in (
+        "ESPN_LEAGUE_ID",
+        "ESPN_SEASON",
+        "ESPN_S2",
+        "ESPN_SWID",
+        "SNAPSHOT_DB_PATH",
+        "FANTASY_FOOTBALL_RULE_CONFIG_PATH",
+    ):
+        assert name in document and name in _read("src/fantasy_football/config.py")
+
+
+def test_contributor_locked_setup_and_vite_commands_match_sources() -> None:
+    document = _read("CONTRIBUTING.md")
+    setup = _read("scripts/setup-local.ps1")
+    for arguments in (
+        "--disable-pip-version-check -r requirements.lock",
+        "--disable-pip-version-check --no-deps -e .",
+        "ci --no-audit --no-fund",
+    ):
+        assert arguments in document
+        assert all(f'"{part}"' in setup for part in arguments.split())
+    vite = _read("frontend/vite.config.ts")
+    assert "VITE_API_TARGET" in document and "VITE_API_TARGET" in vite
+    assert "changeOrigin: false" in vite and "without changing Origin" in document
+    assert "not launcher-owned" in document
+
+
+def test_release_signoffs_have_an_explicit_backlog_destination() -> None:
+    section = (
+        _read("docs/BACKLOG.md")
+        .split("## WR-021 release acceptance\n", 1)[1]
+        .split("\n## ", 1)[0]
+    )
+    for requirement in (
+        "revision, working-tree state",
+        "Clean Windows setup and production-local start",
+        "Authenticated local identity/static boundary",
+        "Refresh and snapshot evidence",
+        "Ordinary analytical workflow",
+        "Shutdown, restart and recovery",
+        "No P0 or P1 finding remains open",
+        "Repository privacy",
+        "Independent release decision",
+        "manual-rule configuration follow-ups",
+        "V1 released",
+    ):
+        assert requirement in section
+    assert "tier-4-release-verification" in section
+    assert "tier-5-explicitly-authorized-integration" in section

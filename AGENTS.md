@@ -6,6 +6,8 @@ These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/M
 
 ## Scope and sequencing
 
+User/operator procedures are in [OPERATIONS](docs/OPERATIONS.md); developer setup, verification tiers and documentation maintenance are in [CONTRIBUTING](CONTRIBUTING.md). Enhancements must update the owning domain reference and affected operating procedures; future obligations belong in BACKLOG and ordinary history in Git/PRs.
+
 Reader-oriented documentation navigation is in [docs/index.md](docs/index.md); this does not replace the authorities above or approve future work.
 
 1. Implement from the specification, not from memory, prior code, or convenience. Cite the governing specification section in each task or pull request.

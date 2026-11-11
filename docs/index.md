@@ -1,16 +1,15 @@
 # War Room documentation
 
-Choose a starting point by what you want to do. Existing references stay at their original paths; this index does not relocate documents or turn historical evidence into current implementation claims.
+Choose a starting point by what you want to do. Current references own procedures; retired reports remain in Git/PR history. Historical evidence is not a current implementation claim.
 
 ## Getting started
 
 - [README](../README.md): product scope, prerequisites and Windows quick start.
-- [Installation](getting-started/installation.md): software prerequisites and locked setup.
-- [Configuration](getting-started/configuration.md): public/private ESPN profile, manual rules and browser/CLI path precedence.
-- [First run](getting-started/first-run.md): launch, refresh/select a snapshot, baseline and action analysis.
-- [Operations and troubleshooting](getting-started/operations.md): private persistence, safe shutdown/recovery and common problems.
+- [Installation](OPERATIONS.md#installation-and-prerequisites): software prerequisites and locked setup.
+- [Configuration](OPERATIONS.md#league-configuration): public/private ESPN profile, manual rules and browser/CLI path precedence.
+- [First run](OPERATIONS.md#launch-and-first-use): launch, refresh/select a snapshot, baseline and action analysis.
+- [Operations and troubleshooting](OPERATIONS.md#local-data-and-privacy): private persistence, safe shutdown/recovery and common problems.
 - [Application user guide](LOCAL_V1_USER_GUIDE.md): analytical interpretation and workspace usage.
-- [Original installation evidence](M8_1_LOCAL_INSTALLATION.md): retained implementation and acceptance history.
 - [Contributor environment and checks](../CONTRIBUTING.md#development-environment-and-checks): locked toolchain, known Node-version mismatch and safe verification tiers.
 
 Use these current guides when older handoff material gives a broader runtime range or historical setup commands. Launcher and Python CLI settings differ as explained in configuration. Installation/startup is credential-free; private-league retrieval needs paired local credentials. No guide authorizes public deployment or bypassing a safe scoring boundary.
@@ -41,14 +40,10 @@ The engine owns league mechanics and numerical interpretation. The frontend pres
 
 ## Developing and testing
 
-- [Verification and documentation maintenance](development/verification.md): five tiers, change-based matrix, numerical standards, maintenance responsibilities and the proposed two-audit archive pilot.
-
-- [Developer setup](getting-started/development.md): locked dependencies, backend/Vite terminals, synthetic fixtures and verification tiers.
-
-- [CONTRIBUTING.md](../CONTRIBUTING.md): original-repository and fork branches, upstream sync, overlap coordination, PR review and verification.
+- [CONTRIBUTING](../CONTRIBUTING.md): both branch/fork workflows, developer environment, backend/Vite, five verification tiers, change matrix and documentation maintenance.
 - [AGENTS.md](../AGENTS.md): standing implementation, evidence, fail-closed and change-discipline rules.
 - [Backlog maintenance](BACKLOG.md#maintaining-this-file): propose, claim, update and complete stable work items through ordinary PRs.
-- [Release checklist](RELEASE_CHECKLIST.md): credential-free versus explicit Windows process/recovery checks and independent signoff.
+- [Release acceptance](BACKLOG.md#wr-021-release-acceptance): outstanding obligations and independent signoff; [release procedure](../CONTRIBUTING.md#tier-4-release-verification) owns commands.
 - [API evolution and compatibility](APPLICATION_SERVICE.md#api-evolution): additive versus incompatible changes; current developer setup remains in the guide above.
 
 The full release script builds artifacts and runs a networked dependency audit; it is not a read-only/offline check. Live ESPN requests, process recovery and private stores require explicit scope. Report actual checks/results, skipped checks and limitations. Do not infer a fresh-machine or live-data pass from fixture tests.
@@ -76,7 +71,7 @@ These references contain implementation layers and historical amendments. The st
 
 ## Current status and outstanding work
 
-The [revised R2.7 plan](development/documentation-consolidation.md), in existing [PR #121](https://github.com/tdkelley2001/fantasy_football/pull/121), proposes a conditional 17-document architecture: domain documents own current contracts, BACKLOG owns exact future requirements/approval/delivery, and Git/PRs own ordinary history. It replaces the initial 40-document proposal and proposes retiring MASTER_SPEC after reviewed requirement transfer, with no replacement master. R2.7 is independently accepted at `fd99424`; D1 now consolidates API/execution documentation and is In Review. Other packages/authority transfer remain separately gated; current authorities below still apply. The [R2.6 inventory](R26_DOCUMENTATION_MIGRATION_PLAN.md) is discovery evidence, not an active archive plan. Use BACKLOG for work status, not either plan as a second queue.
+The [revised R2.7 plan](development/documentation-consolidation.md), in existing [PR #121](https://github.com/tdkelley2001/fantasy_football/pull/121), proposes a conditional 17-document architecture: domain documents own current contracts, BACKLOG owns exact future requirements/approval/delivery, and Git/PRs own ordinary history. It replaces the initial 40-document proposal and proposes retiring MASTER_SPEC after reviewed requirement transfer, with no replacement master. R2.7 is independently accepted at `fd99424`; D1 is accepted at `f933b74`; D2 consolidates operations/contributor guidance and is In Review. Other packages/authority transfer remain separately gated; current authorities below still apply. The [R2.6 inventory](R26_DOCUMENTATION_MIGRATION_PLAN.md) is discovery evidence, not an active archive plan. Use BACKLOG for work status, not either plan as a second queue.
 
 | Document | Authority |
 |---|---|
@@ -98,7 +93,7 @@ Historical records remain discoverable. R2.1 preserved their original locations;
 - Repository audits: [archived pre-M3](archive/audits/PRE_M3_REPOSITORY_AUDIT.md), [archived pre-M4](archive/audits/PRE_M4_INTEGRATION_AUDIT.md), [post-M7](POST_M7_CONSOLIDATION_AUDIT.md) and [R1 inventory/migration map](R1_REPOSITORY_AUDIT.md). The original two pilot audit paths remain navigation pages; [R2.5](R25_ARCHIVE_PILOT.md) records that pilot.
 - The five redundant application/backend reports were incorporated into [APPLICATION_SERVICE](APPLICATION_SERVICE.md) in D1. Their chronology and exact historical evidence remain in accepted Git history; [source/verification](APPLICATION_SERVICE.md#source-and-verification) links the useful measured baseline.
 - UI evidence: [frontend foundation](M7_1_FRONTEND_FOUNDATION.md), [superseded visual exploration](M7_1_VISUAL_DIRECTION_REVIEW.md), [League Overview](M7_2_LEAGUE_ANALYTICS.md), [Explorer](M7_3_OPPORTUNITY_EXPLORER.md), [Trade Lab](M7_4_TRADE_LAB.md) and [Simulation Center](M7_5_SIMULATION_CENTER.md). Linked screenshots remain evidence, not fabricated analytics.
-- Local operation/release evidence: [installation](M8_1_LOCAL_INSTALLATION.md), [authorized real-league validation](M8_2_REAL_LEAGUE_VALIDATION.md), [runtime/recovery](M8_3_RUNTIME_AND_RECOVERY.md) and [M8.4 release audit](M8_4_FINAL_RELEASE_AUDIT.md). The [release checklist](RELEASE_CHECKLIST.md) still needs explicit reviewer disposition.
+- Local operation/release evidence: [authorized real-league validation](M8_2_REAL_LEAGUE_VALIDATION.md), [runtime/recovery](M8_3_RUNTIME_AND_RECOVERY.md) and [M8.4 release audit](M8_4_FINAL_RELEASE_AUDIT.md). [WR-021](BACKLOG.md#wr-021-release-acceptance) retains exact pending signoffs.
 - Live-week records: [LW1](LIVE_WEEK_SCORING.md), [LW2 foundations/integration](LW2_PARTIAL_WEEK_CONTRACT.md) and [accepted performance/consolidation checkpoint](LW23A_PERFORMANCE_CHECKPOINT.md).
 
 For active work use the backlog, not a historical checklist. Preserve original evidence and resolve conflicting contract text explicitly before changing behavior.

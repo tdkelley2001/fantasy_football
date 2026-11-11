@@ -62,13 +62,13 @@ def test_historical_milestone_contracts_remain_accessible_from_index() -> None:
         "M7_4_TRADE_LAB.md",
         "M7_5_SIMULATION_CENTER.md",
         "POST_M7_CONSOLIDATION_AUDIT.md",
-        "M8_1_LOCAL_INSTALLATION.md",
+        "OPERATIONS.md",
         "M8_2_REAL_LEAGUE_VALIDATION.md",
         "M7_1_VISUAL_DIRECTION_REVIEW.md",
         "M8_3_RUNTIME_AND_RECOVERY.md",
         "M8_4_FINAL_RELEASE_AUDIT.md",
         "LOCAL_V1_USER_GUIDE.md",
-        "RELEASE_CHECKLIST.md",
+        "BACKLOG.md",
     ):
         assert reference in index
     assert "Integrated CLI V1" not in master_spec
@@ -107,9 +107,7 @@ def test_m8_4_release_documents_and_verification_entrypoint_are_present() -> Non
     guide = (REPOSITORY_ROOT / "docs" / "LOCAL_V1_USER_GUIDE.md").read_text(
         encoding="utf-8"
     )
-    checklist = (REPOSITORY_ROOT / "docs" / "RELEASE_CHECKLIST.md").read_text(
-        encoding="utf-8"
-    )
+    checklist = (REPOSITORY_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
     verifier = (REPOSITORY_ROOT / "scripts" / "verify-release.ps1").read_text(
         encoding="utf-8"
     )

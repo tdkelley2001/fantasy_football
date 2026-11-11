@@ -38,7 +38,7 @@ def read(name: str) -> str:
 def test_verification_guide_covers_current_release_steps_and_actual_test_modules() -> (
     None
 ):
-    guide = read("docs/development/verification.md")
+    guide = read("CONTRIBUTING.md")
     script = read("scripts/verify-release.ps1")
     default_steps = script.split("if ($IncludeWindowsProcessTests)", 1)[0]
     names = re.findall(r'Invoke-ReleaseStep "([^"]+)"', default_steps)
@@ -54,7 +54,7 @@ def test_verification_guide_covers_current_release_steps_and_actual_test_modules
 
 
 def test_verification_frontend_commands_and_navigation_match_current_sources() -> None:
-    guide = read("docs/development/verification.md")
+    guide = read("CONTRIBUTING.md")
     scripts = json.loads(read("frontend/package.json"))["scripts"]
     commands = re.findall(r"npm\.cmd --prefix frontend run ([a-z-]+)", guide)
     assert commands
@@ -62,13 +62,8 @@ def test_verification_frontend_commands_and_navigation_match_current_sources() -
     assert scripts["test"] == "vitest run"
     assert scripts["typecheck"] in guide
     assert scripts["build"] in guide
-    for path in (
-        "CONTRIBUTING.md",
-        "docs/getting-started/development.md",
-        "docs/index.md",
-        "docs/RELEASE_CHECKLIST.md",
-    ):
-        assert "development/verification.md" in read(path)
+    for path in ("README.md", "AGENTS.md", "docs/index.md", "docs/OPERATIONS.md"):
+        assert "CONTRIBUTING.md" in read(path)
 
 
 def test_canonical_reference_versions_match_current_publication_and_reads() -> None:
@@ -185,7 +180,7 @@ def test_application_reference_covers_public_lifecycle_and_error_categories() ->
         "README.md",
         "docs/index.md",
         "docs/architecture/overview.md",
-        "docs/development/verification.md",
+        "CONTRIBUTING.md",
         "docs/BACKLOG.md",
     ):
         assert re.search(r"\]\([^)]*APPLICATION_SERVICE\.md(?:#[^)]*)?\)", read(source))

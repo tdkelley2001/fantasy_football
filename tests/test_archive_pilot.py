@@ -57,7 +57,7 @@ def _notice(name: str) -> str:
         "Original findings, measurements and acceptance gates remain in force at their "
         "stated baseline; relocation does not supersede them. For current behavior use "
         "the [architecture overview](../../architecture/overview.md) and "
-        "[verification guide](../../development/verification.md).\n\n"
+        "[verification guide](../../../CONTRIBUTING.md#tier-1-fast-local-checks).\n\n"
     )
 
 
@@ -94,7 +94,10 @@ def test_every_original_heading_and_anchor_survives_at_old_and_new_locations(
         assert f"archive/audits/{name}#{anchor}" in stub
     assert "Archived historical evidence" in stub
     assert "not current implementation instructions" in stub
-    assert "architecture/overview.md" in stub and "development/verification.md" in stub
+    assert (
+        "architecture/overview.md" in stub
+        and "../CONTRIBUTING.md#tier-1-fast-local-checks" in stub
+    )
 
 
 def test_duplicate_heading_suffixes_preserve_distinct_automatic_ids():
@@ -166,4 +169,4 @@ def test_pilot_records_and_navigation_remain_accessible():
         assert f"(archive/audits/{name})" in history
     current = index.split("## Historical development records", 1)[0]
     assert "architecture/overview.md" in current
-    assert "development/verification.md" in current
+    assert "(../CONTRIBUTING.md)" in current
