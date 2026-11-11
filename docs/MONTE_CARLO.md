@@ -1,8 +1,14 @@
 # Provisional Repeated Season Simulation and Probability Precision
 
-M2.6 is implemented by `fantasy_football.monte_carlo`. It sequentially generates
-path-indexed score scenarios and passes each one to the accepted, unchanged M2.5
-`simulate_deterministic_season()` coordinator.
+M2.6 is implemented by `fantasy_football.monte_carlo`. It generates path-indexed
+score scenarios and passes each one to the existing `simulate_deterministic_season()`
+coordinator, including the accepted opt-in LW2.2B/LW2.3A pregame path described
+below. Ordinary V1 behavior remains unchanged.
+
+The performance/consolidation checkpoint against accepted `86189da` is documented
+in `LW23A_PERFORMANCE_CHECKPOINT.md`, with raw repeated 100/500/1,000-path
+sequential/parallel timing, profiling, memory and equivalence artifacts. It retains
+the accepted production code; no validation cache or new probability logic is added.
 
 ## Public contract
 

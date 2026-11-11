@@ -1,6 +1,6 @@
 # LW2.1 Partial-Week Evidence and Simulation Contract
 
-Status: **IMPLEMENTED — REVIEW PENDING, 11 November 2026**. Governing requirements: the LW2.1 authorization, the LW1 scoring-state addendum in `MASTER_SPEC.md`, and the fail-closed evidence rules in `LIVE_WEEK_SCORING.md`. This milestone changes no Monte Carlo mathematics and does not authorize LW2.2.
+Current acceptance baseline: **LW2.1 through LW2.3A accepted, `86189da`**. The package sections below preserve their delivery-time status and scope; later explicitly authorized packages supersede earlier statements that integration was not yet implemented. Governing requirements remain the LW2.1 authorization, `MASTER_SPEC.md` section 1.3 and the fail-closed rules in `LIVE_WEEK_SCORING.md`. The current performance/consolidation checkpoint is implemented for review in `LW23A_PERFORMANCE_CHECKPOINT.md`; it authorizes no LW2.3B work.
 
 ## Scope and acceptance contract
 
