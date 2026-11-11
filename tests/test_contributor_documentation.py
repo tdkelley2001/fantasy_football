@@ -113,6 +113,11 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/R23_DOCUMENTATION_RECONCILIATION.md",
         "docs/development/verification.md",
         "docs/RELEASE_CHECKLIST.md",
+        "docs/PRE_M3_REPOSITORY_AUDIT.md",
+        "docs/PRE_M4_INTEGRATION_AUDIT.md",
+        "docs/archive/audits/PRE_M3_REPOSITORY_AUDIT.md",
+        "docs/archive/audits/PRE_M4_INTEGRATION_AUDIT.md",
+        "docs/R25_ARCHIVE_PILOT.md",
     ),
 )
 def test_contributor_links_and_fragments_resolve(document: str) -> None:

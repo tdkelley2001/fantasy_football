@@ -136,6 +136,8 @@ Use an ordinary reviewed PR; no extra committee, tracker, template or workflow i
 
 ## Archive pilot candidate
 
+R2.5 follow-through: the explicitly authorized two-audit pilot uses `docs/archive/audits/` and retains heading-compatible original paths. See the [migration record](../R25_ARCHIVE_PILOT.md) for actual scope, baseline comparisons and review state. The R2.4 proposal below is preserved historical planning evidence, not authorization for additional groups.
+
 Proposal only, for subsequent separately approved scope: move **`docs/PRE_M3_REPOSITORY_AUDIT.md` and `docs/PRE_M4_INTEGRATION_AUDIT.md` together** to the R1-proposed audit archive. They are text-only dated consolidation evidence at `381fdb2` / `87cdbbb`, with no linked screenshots/JSON to migrate. Their module inventories, old lint/tool status, test counts and “M3/M4 not started” statements are historical, not current developer instructions. Neither file moves in R2.4.
 
 Use the current [architecture overview](../architecture/overview.md), [configuration guide](../getting-started/configuration.md), [canonical](../CANONICAL_MODEL.md) / [storage](../SNAPSHOT_STORAGE.md) references, [Monte Carlo/identity contract](../MONTE_CARLO.md) and this verification guide as current replacements for navigation, **not replacements for the audits' accepted evidence**. Preserve all original audit text, baseline IDs, configuration/provenance limits, exact-oracle rationale, pre-M4 reusable-worker seed-identity correction and recommendation/gate language. R1's [56-file migration inventory](../R1_REPOSITORY_AUDIT.md#7-file-by-file-documentation-migration-map) remains unchanged.
