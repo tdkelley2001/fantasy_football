@@ -4,11 +4,33 @@ Current acceptance baseline: **LW2.1 through LW2.3A accepted, `86189da`**; the p
 
 ## Scope and acceptance contract
 
+Read the current capability map first; the original scope remains below for preserved acceptance evidence.
+
+## Current capability map
+
+This map summarizes accepted implementation; the original LW2.1 audit/proposals and package delivery notes below remain historical. Applicable gates are preserved. All partial execution here is **engine-only, Verified by tests** with synthetic inputs, not automatic ESPN translation or browser support.
+
+| Layer | Supported input and behavior | Fail-closed boundary |
+|---|---|---|
+| Ordinary V1 | Whole unstarted week; positive-projection optimizer and normal weekly transactions. | Live v4 evidence must establish the current week begins its authoritative matchup period; cannot skip unresolved prior contributions. Historical v2/v3 compatibility is not new live authority. |
+| LW2.2A companion/composer | Artifact-version-1 evidence independent of snapshot schema; fixed completed actuals, unstarted explicit realizations, or explicitly approved deterministic remaining values. | Preserve unresolved evidence, but execution requires verified cutoff, source/timing, complete observed assignments, capacities, locks, score reconciliation and full-period carry. No conditional distribution is inferred. |
+| LW2.2B season path | Optional `DeterministicPartialWeekInput` to the existing coordinator; compose first week once, then ordinary future weeks. | Scenario contains subsequent weeks only; no first-week transactions or hypothetical initial ownership/ledger changes. Cutoff excludes current period, ends before its first week and includes known prior periods. Multiweek regular starts and missing earlier-round bracket history are unsupported. |
+| LW2.3A Monte Carlo | Optional `MonteCarloPartialWeekInput` in config; every rostered current player must be unstarted with approved full-game mean matching a nonmissing canonical projection. Existing draw set is generated once; only supplied current starters' draws enter partial composition. | Completed, in-progress, missing, nonparticipating or unresolved current players are rejected. No conditional remainder sampling or current-week action recommendations. Full evidence/lineup identity binds opt-in checkpoints; absent input preserves V1 identity. |
+| Application/browser | Ordinary V1 execution, nullable live-state summaries and automatic safe-week refresh. | No public DTO for the companion, empirical evidence selection or partial execution; cannot infer engine-only support from live-summary fields. |
+
+For deterministic multiweek postseason starts, every preceding current-period team/week score must reconcile exactly to verified aggregate carry-in and full authoritative membership, including weeks outside the snapshot horizon. Replay prior contributions through existing postseason accumulation; add current-week composition without duplicating carry; advance only after the full period completes. These supplied authority assertions do not independently authenticate historical ESPN standings or locks.
+
+Observed assignments must match canonical player/team/slot records and configured capacities; request context must establish current roster timing (`mRoster` with matching period or supported current-request context). Proposed legal assignments remain separately validated and cannot move locked players. Future weeks reoptimize without retaining current-week locks. See [season coordinator](SEASON_SIMULATOR.md), [Monte Carlo](MONTE_CARLO.md) and [partial-week implementation](../src/fantasy_football/partial_week.py).
+
+## Original LW2.1 scope and acceptance contract
+
 Input: one immutable schema-v4 snapshot plus its captured ESPN sources, a current scoring period, complete canonical matchup-period membership, and read-only diagnostic observations. Output: a sanitized evidence report and this implementation contract. Invalid, missing, contradictory, or semantically unverified evidence remains an explicit unresolved capability. No published snapshot is mutated.
 
 Acceptance requires deterministic tests for structural evidence classification, missing-versus-zero preservation, exact game-ID status joins, and provenance-bearing fail-closed behavior. It does not require an in-progress simulation result.
 
 ## Existing-engine audit
+
+Historical audit of ordinary V1 before opt-in integration. The current capability map and implemented LW2.2A/B/2.3A sections supersede statements that no partial inputs or evidence fingerprint exist; they do not waive the original evidence/permission gates.
 
 The accepted engine is reusable, but its boundary is a whole unstarted scoring week:
 
@@ -55,6 +77,8 @@ In the unplayed observation all 1,061 player-pool and all 233 roster-entry copie
 - player actual-record presence does not prove participation; missing is not zero and can reflect bye, inactivity, delayed data, or absent coverage.
 
 ## Proposed canonical contract for LW2.2
+
+Historical proposal terminology follows. The accepted companion and executable names are documented in the LW2.2A/B/2.3A sections and current map above; these proposals do not define an additional current JSON schema.
 
 LW2.2 should add one immutable, versioned partial-week companion rather than overloading `PlayerWeek` projections or replacing `LiveScoringState`. Names below are contract proposals, not implemented schema.
 

@@ -11,8 +11,8 @@ authentication, or frontend code. See `RUN_MANAGEMENT.md` for M6.2 details.
 M8.2 additively exposes a separate asynchronous ingestion-job contract at
 `/api/v1/refresh/profile` and `/api/v1/refreshes`. It reuses the M1 adapter and
 append-only snapshot store; it is not an analytical run type. The browser can
-select only the configured server-side league profile and an explicit simulation
-start week. Credentials, arbitrary URLs, and filesystem paths are absent from the
+select only the configured server-side league profile and an optional simulation
+start-week override (omission uses automatic validation). Credentials, arbitrary URLs, and filesystem paths are absent from the
 DTO. See [`M8_2_REAL_LEAGUE_VALIDATION.md`](M8_2_REAL_LEAGUE_VALIDATION.md).
 
 LW1 makes the refresh start week nullable. Omission requests fail-closed automatic
@@ -29,8 +29,7 @@ safe snapshot is published. See [`LIVE_WEEK_SCORING.md`](LIVE_WEEK_SCORING.md).
 version `1.0`. `fantasy_football.app.service` maps those DTOs to the accepted
 snapshot store, M3 precision runner, M4 scenario evaluator, and M5.8 search
 orchestrator. `fantasy_football.app.http` translates the same services into
-FastAPI routes. `fantasy_football.app.server` is the loopback-only development
-entry point.
+FastAPI routes. `fantasy_football.app.server` is the loopback-only local production/development entry point: by default it serves built `frontend/dist` assets and the API in one process. Separate Vite/proxy development is optional; see [developer setup](getting-started/development.md). The browser remains a presentation client, not a second simulator.
 
 The dependency direction is HTTP → application service → accepted engine →
 snapshot/result storage. The application layer validates public shape, numeric
@@ -47,17 +46,22 @@ explicit evidence-selection DTO; an unknown model discriminator is rejected.
 | Method | Route | Contract |
 |---|---|---|
 | GET | `/api/v1/health` | Service/schema/build metadata plus local process and optional launcher-run identity; no snapshot or credentials required. |
-
-The additive M8.1 `process_id` and nullable `launcher_run_id` fields bind the
-loopback launcher to the actual Uvicorn process. They are local operational
-identity, not simulation provenance or an authorization secret.
 | GET | `/api/v1/snapshots` | Compact persisted snapshots with optional league/season filters. `team_count` is null because compact store metadata does not load the canonical document. |
 | GET | `/api/v1/snapshots/{snapshot_id}` | Canonical league/team/player/roster/schedule summary plus unresolved rule capabilities. |
+| GET | `/api/v1/refresh/profile` | Sanitized configured league/season, credential mode and validated manual-rule availability. |
+| POST | `/api/v1/refreshes` | HTTP 202 refresh submission using `SnapshotRefreshRequest`; independent of analysis runs. |
+| GET | `/api/v1/refreshes/current` | Current refresh record or null; registered before the ID route. |
+| GET | `/api/v1/refreshes/{refresh_id}` | Refresh lifecycle/stage, resolved week, errors and publication-commit flag. |
+| POST | `/api/v1/refreshes/{refresh_id}/cancel` | Cooperative cancellation before the atomic publication boundary. |
+| GET | `/api/v1/refreshes/{refresh_id}/result` | Published snapshot summary, validation findings and unresolved capabilities. |
 | POST | `/api/v1/analyses/baseline` | Synchronous accepted M3.4 precision execution. |
 | POST | `/api/v1/analyses/manual-scenario` | Synchronous accepted M4 completion and paired evaluation. |
 | POST | `/api/v1/analyses/action-search` | Synchronous accepted M5.8 unified action search. |
-| POST | `/api/v1/runs/{baseline,manual-scenario,action-search}` | HTTP 202 background submission. |
-| GET | `/api/v1/runs[/{run_id}]` | Run list and lifecycle/provenance detail. |
+| POST | `/api/v1/runs/baseline` | HTTP 202 background baseline submission. |
+| POST | `/api/v1/runs/manual-scenario` | HTTP 202 background manual-scenario submission. |
+| POST | `/api/v1/runs/action-search` | HTTP 202 background action-search submission. |
+| GET | `/api/v1/runs` | Retained run list, optionally scoped to snapshot. |
+| GET | `/api/v1/runs/{run_id}` | Lifecycle/provenance detail. |
 | GET | `/api/v1/runs/{run_id}/progress` | Structured engine/coarse operation progress. |
 | POST | `/api/v1/runs/{run_id}/cancel` | Idempotent cooperative cancellation. |
 | GET | `/api/v1/runs/{run_id}/result` | Completed retained result summary. |
@@ -65,6 +69,10 @@ identity, not simulation provenance or an authorization secret.
 | GET | `/api/v1/runs/{run_id}/candidates/{candidate_id}` | Candidate action detail. |
 | GET | `/api/v1/runs/{run_id}/states/{state_id}` | Shared completed-state detail. |
 | DELETE | `/api/v1/runs/{run_id}` | Terminal-run deletion. |
+
+This table lists the implemented `/api/v1` surface in [http.py](../src/fantasy_football/app/http.py); exact request/response models are [contracts.py](../src/fantasy_football/app/contracts.py), public schema version **1.0**. Local `/openapi.json` and `/docs` expose runtime shape. Canonical schema 4, partial companion artifact 1 and SQLite schemas are independent versions. `SnapshotRefreshRequest` has `api_schema_version`, configured `profile_id`, positive `league_id`, `season` (at least 2000) and nullable `first_simulation_week` (1–25 when supplied). No credentials, source URLs or rule-file paths are client request fields. Analytical requests require explicit `NormalOutcomeModelConfiguration`; empirical selection and partial-week execution have no public request fields and unknown fields are forbidden. Nullable `SnapshotSummary.live_scoring` is evidence display, not a partial execution permission.
+
+The additive M8.1 `process_id` and nullable `launcher_run_id` fields bind the loopback launcher to the actual Uvicorn process. They are local operational identity, not simulation provenance or an authorization secret. When frontend assets are configured, `/assets/{asset_path:path}` and the frontend fallback serve only allowed built files, not arbitrary repository files; these routes are excluded from OpenAPI and are not analytical API versions.
 
 Requests use strict discriminators and forbid unknown fields. Probabilities are
 named `*_probability`; paired changes are `*_probability_points`; counts include
@@ -134,7 +142,7 @@ distinct. Responses omit tracebacks, filesystem paths, credentials, raw source
 payloads, and arbitrary exception objects. Unexpected failures retain logged
 exception context and return HTTP 500 rather than masquerading as user errors.
 
-Install and run locally:
+For the current locked installation and built-frontend path use [installation](getting-started/installation.md) and [developer setup](getting-started/development.md). The following commands are the historical M6 Python-only handoff, preserved as evidence; they are not current onboarding instructions and may resolve beyond the lockfile:
 
 ```powershell
 python -m pip install -e ".[app]"

@@ -2,6 +2,8 @@
 
 Status: **IMPLEMENTED — REVIEW PENDING**. Governing requirement: approved LW1 milestone and the live-week addendum in `MASTER_SPEC.md`.
 
+The preceding status is the original delivery statement. Current acceptance and capabilities are maintained in [status](status.md). This document's whole-week restrictions describe **ordinary V1**. Accepted opt-in deterministic partial-season and fully unstarted Monte Carlo paths are separate engine-only contracts in the [current partial capability map](LW2_PARTIAL_WEEK_CONTRACT.md#current-capability-map); they do not authorize automatic ESPN partial translation, browser partial execution or conditional in-progress distributions. The live observations below retain their original date/context; R2.3 performs no new live validation.
+
 LW1 adds canonical schema v4 scoring-state evidence without changing the V1 season engine. Schema-v2 and schema-v3 snapshots remain readable. New snapshots retain explicit NFL game status, current player actual-score observations, per-week classification, and a provenance-bearing simulation-boundary decision. Existing analytical results remain bound to their original immutable snapshots.
 
 ## Boundary contract

@@ -8,6 +8,8 @@ network access and generates no random values.
 
 ## Public contract
 
+Current architecture: [overview](architecture/overview.md). Ordinary V1 and opt-in partial execution share this coordinator, weekly rules and postseason machinery. The [partial capability map](LW2_PARTIAL_WEEK_CONTRACT.md#current-capability-map) distinguishes deterministic supplied realizations from the narrower unstarted-only Monte Carlo path and application limitations. Canonical schema 4 does not imply that a snapshot has executable partial evidence.
+
 `simulate_deterministic_season()` returns `DeterministicSeasonResult`.
 `DeterministicScoreScenario` has a stable caller-supplied ID and an immutable
 tuple of `RealizedPlayerScore` records. Score records must reference canonical
@@ -136,7 +138,7 @@ postseason, exact standings/PF reconciliation, a settings-driven 14-team
 disabled consolation, historical-bye exclusion, current-bye and pending-
 placement eligibility, rejected fabricated provenance, unresolved transaction
 authorization, malformed score inputs, replay determinism and input
-immutability. Current test counts are recorded in `ROADMAP.md`.
+immutability. Delivery-time test counts are preserved in `ROADMAP.md`; current verification for this reconciliation is in [R2.3 evidence](R23_DOCUMENTATION_RECONCILIATION.md).
 Synthetic uninstrumented averages were 14.58 ms for the compact three-week
 path, 52.06 ms for the 14-team four-week postseason path, and 19.07 ms for the
 compact transaction-active path. `tracemalloc` measured peaks of 337.4 KiB and

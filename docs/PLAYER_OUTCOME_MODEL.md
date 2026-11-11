@@ -5,6 +5,14 @@ the canonical player-week universe into one immutable
 `DeterministicScoreScenario`. It supplies scores only; M2.5 remains authoritative
 for transactions, lineups, matchups, standings, and postseason progression.
 
+## Current execution boundary
+
+Both models remain supported engine inputs; the HTTP DTO currently exposes only explicit `provisional_normal`, not empirical evidence selection or partial-week input. Lineup eligibility is decided from canonical positive effective projections before observing draws. A generated value is not eligibility or participation evidence. Missing, explicit zero and finite negative projections are not selected by the ordinary optimizer, even when a Normal draw happens to be positive. Actual signed/zero outcomes of eligible starters remain valid. Partial-week fixed-actual composition uses its own evidence gate, not a changed V1 availability rule.
+
+Normal samples every in-horizon player/week, including missing/zero means; with positive base dispersion these unused records can be nonzero. Empirical emits deterministic zero for missing/explicit-zero classes and samples finite present projections, including negatives. Both preserve raw/effective records and path keys. See the preserved [policy ambiguity](R23_DOCUMENTATION_RECONCILIATION.md#unresolved-semantic-question); R2.3 authorizes no mathematical change.
+
+Source: [player_outcomes.py](../src/fantasy_football/player_outcomes.py), [weekly scoring](../src/fantasy_football/weekly_engine.py), [HTTP contracts](../src/fantasy_football/app/contracts.py). The sections below include dated implementation/benchmark evidence; their test counts are historical. Neither model is a fully calibrated released forecast: empirical bins/pooled sparse-group policy rely on explicitly classified exploratory historical evidence, not authenticated pregame vintages. There is no conditional in-game, injury-absence or correlation sampler.
+
 ## Preserved Normal baseline
 
 `ProvisionalNormalModel(base_stddev, projection_scale)` uses independent draws:

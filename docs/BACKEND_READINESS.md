@@ -2,6 +2,8 @@
 
 Status: **COMPLETE AND ACCEPTED** (28 October 2026).
 
+This is the historical M6 readiness matrix and M7/M8 handoff, including its future-tense packaging statements. Current architecture is in [overview](architecture/overview.md), actual routes/models in [application contracts](APPLICATION_SERVICE.md), durable lifecycle in [run management](RUN_MANAGEMENT.md), and acceptance/capabilities in [status](status.md). Engine-only empirical and partial-week interfaces are not public API inputs; safe refresh can now select its week automatically. This pointer supersedes current-looking handoff wording while preserving the original readiness evidence.
+
 Governing requirements are `MASTER_SPEC.md` Sections 8, 9, and 12 and the M6.4
 roadmap gate. The dependency direction remains HTTP → application service →
 accepted analytical engine → local snapshot/result storage. The frontend must

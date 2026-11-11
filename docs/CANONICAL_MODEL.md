@@ -1,10 +1,12 @@
-# Canonical Snapshot Contract — Schema Version 3
+# Canonical Snapshot Contract — Schema Version 4
 
 ## Scope
 
 M1.1 defines the immutable ESPN-independent contract between ingestion, persistence, and simulation. M1.2 translates live ESPN responses into this contract, and M1.3 assigns publication IDs and persists complete documents. The canonical package itself does not fetch ESPN data, access SQLite, compile simulation arrays, or implement league behavior.
 
-The implementation is in `src/fantasy_football/canonical/` and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror. New snapshots use schema version 3; version-aware reading preserves existing schema-v2 documents.
+The implementation is in [canonical/](../src/fantasy_football/canonical/model.py) and uses frozen, slotted Python dataclasses and tuples. Records are deliberately flat and joined by stable identifiers. `LeagueSnapshot` is the logical container, not an ESPN response mirror. Current canonical schema is **4**; supported document reads are **2, 3, 4**. New publication requires **4**. SQLite snapshot storage remains schema **1**, independently versioned. See [storage](SNAPSHOT_STORAGE.md) and the [architecture overview](architecture/overview.md).
+
+Schema v4 adds nullable live-scoring evidence and NFL game status/source fields; it does not merge fixed actuals into future projections. The separate partial-week companion is artifact version **1**, not canonical schema 5. Earlier v4 records without independent full current-period membership remain readable but cannot authorize V1 execution. Read compatibility is not proof of live-boundary, drop, lock or settlement capability.
 
 Schema v2 adds immutable `LineupSlotNamespace.observed_slot_ids`, derived from the exact union of raw player eligibility evidence. This namespace is distinct from `LeagueRules.lineup_slots`, which contains only ESPN-configured capacities. An observed but unconfigured category such as slot 25 remains preserved but is not a legal roster destination. Occupied slots must have positive configured capacity and appear in the player's raw eligibility. Schema-v1 JSON is intentionally incompatible and rejected because it cannot express this distinction.
 
@@ -21,7 +23,7 @@ Schema v2 adds immutable `LineupSlotNamespace.observed_slot_ids`, derived from t
 | `MatchupPeriod` | Positive matchup-period ID mapped to ordered scoring weeks and only a `regular` or `postseason` calendar phase |
 | `FantasyMatchup` | Positive matchup ID, period ID, bracket classification, zero-to-two known sides, and explicit scheduled/bye/partial/placeholder state |
 | `NFLTeam` | Positive NFL-team ID and optional bye week; player NFL-team ID zero is a separate unassigned sentinel |
-| `NFLGame` | Source game ID, scoring week, two NFL-team IDs, and optional UTC kickoff |
+| `NFLGame` | Source game ID, scoring week, two NFL-team IDs, optional UTC kickoff, v4 status and status source |
 | `SourceReference` | Stable request/reference ID, HTTPS endpoint, raw view, parameters, UTC retrieval time, optional SHA-256 payload digest |
 | `RuleInterpretation` | Raw field/value, optional normalized meaning, evidence status, source, and optional audited manual configuration provenance; values may be JSON scalars or immutable structured JSON |
 | `RuleGap` | Named unresolved gap, reason, affected future capabilities, source, and whether audited manual configuration is permitted |
@@ -97,7 +99,7 @@ For the sanitized fixture, the overall projection summary contains 15 records: 1
 
 ## Serialization
 
-`snapshot_to_json` and `snapshot_from_json` implement schema versions `2` and `3`:
+`snapshot_to_json` and `snapshot_from_json` implement schema versions `2`, `3` and `4`:
 
 - JSON is indented, human-readable, and ends with a newline;
 - object keys and all identity-bearing record collections have deterministic ordering;
@@ -107,11 +109,15 @@ For the sanitized fixture, the overall projection summary contains 15 records: 1
 - deserialization reconstructs typed immutable records and performs full validation; and
 - v3 requires the league/player protection keys even when their values are null;
 - v2 rejects v3 protection keys and reserializes without adding them; and
-- any schema version other than `2` or `3` fails explicitly.
+- pre-v4 output omits live-scoring and NFL game status/source fields; decoding supplies no live companion and unknown statuses;
+- v4 retains nullable live state and detailed game-status provenance; older optional evidence is not invented; and
+- any schema version other than `2`, `3` or `4` fails explicitly (including v1).
 
-This remains an interchange contract: `snapshot_store.py` owns SQLite, compressed evidence, publication UUIDs, and whole-document checksums without adding simulation-path state to canonical entities. New publication requires v3. Existing v2 bytes, IDs, and checksums remain immutable and readable for their previously supported capabilities, but they cannot authorize automatic drops.
+This remains an interchange contract: `snapshot_store.py` owns SQLite, compressed evidence, publication UUIDs, and whole-document checksums without adding simulation-path state to canonical entities. New publication requires v4. Existing v2/v3/v4 stored bytes, IDs and checksums are never rewritten. Historical v2 records cannot authorize automatic drops because they lack player protection evidence; v3 adds that evidence but does not itself prove its semantics. Historical records without live metadata retain their established compatibility path, not newly authenticated live readiness. Stored exact-byte preservation is distinct from serializing a typed historical record whose omitted optional fields may be materialized with defaults. Use the store's original `canonical_json` bytes for historical byte identity.
 
 ## Evolving transaction state
+
+This section records the M2.3b state/legality contract. Later [weekly transaction execution](WEEKLY_TRANSACTIONS.md) is implemented; references below to future M2.3d are preserved package-time sequencing, not a current missing feature.
 
 `fantasy_football.evolving_state` is a separate immutable simulation-path contract, not part of canonical JSON. `EvolvingLeagueState` records its source snapshot ID/version, scoring week, acquisition cycle and matchup-period identity, authoritative modeled `RosterEntry` tuple, per-player acquisition availability, current and frozen-initial waiver queues, independent season and matchup-period acquisition counts, player/week strict-IR evidence, explicit IR policy, transaction ledger, and named V1 assumptions. Every operation returns a new validated value; ownership is never duplicated into an independently mutable owner map.
 
@@ -152,6 +158,8 @@ The only currently implemented artifact classification is `verified_by_tests`, p
 An alternate fixture test removes IR and adds multiple flex slots, demonstrating that the validator does not impose the current league's roster template.
 
 ## Implemented and deferred boundaries
+
+Current interpretation: V(R), weekly transactions, season coordination and Monte Carlo are implemented in separate engine modules; they are not deferred capabilities of today's application. The following M1/M2 delivery statements are preserved historical scope, not the current work queue. Use [status](status.md), [backlog](BACKLOG.md) and the [R2.3 reconciliation inventory](R23_DOCUMENTATION_RECONCILIATION.md) for current disposition.
 
 M1.2 implements ESPN translation, M1.3 implements immutable document persistence, and M1.4/M1.5 implement quality reporting and inspection. M2.3b implements schema v3 and the evolving-state legality primitives above. V(R), transaction selection, complete weekly waiver/free-agent execution, and lookahead remain M2.3c–e.
 
