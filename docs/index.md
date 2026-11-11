@@ -5,11 +5,15 @@ Choose a starting point by what you want to do. Existing references stay at thei
 ## Getting started
 
 - [README](../README.md): product scope, prerequisites and Windows quick start.
-- [Application user guide](LOCAL_V1_USER_GUIDE.md): configure ESPN access, refresh/select a snapshot and run your first analysis.
-- [Local installation reference](M8_1_LOCAL_INSTALLATION.md): launcher options, paths, startup/shutdown and troubleshooting.
+- [Installation](getting-started/installation.md): software prerequisites and locked setup.
+- [Configuration](getting-started/configuration.md): public/private ESPN profile, manual rules and browser/CLI path precedence.
+- [First run](getting-started/first-run.md): launch, refresh/select a snapshot, baseline and action analysis.
+- [Operations and troubleshooting](getting-started/operations.md): private persistence, safe shutdown/recovery and common problems.
+- [Application user guide](LOCAL_V1_USER_GUIDE.md): analytical interpretation and workspace usage.
+- [Original installation evidence](M8_1_LOCAL_INSTALLATION.md): retained implementation and acceptance history.
 - [Contributor environment and checks](../CONTRIBUTING.md#development-environment-and-checks): locked toolchain, known Node-version mismatch and safe verification tiers.
 
-Start with the README/contributor prerequisites when older handoff material gives a broader runtime range. Launcher and Python CLI database settings differ; the contributor guide explains the current behavior. Fuller setup-guide consolidation is outstanding in the backlog. Installation/startup is credential-free; private-league retrieval needs paired local credentials. No guide authorizes public deployment or bypassing a safe scoring boundary.
+Use these current guides when older handoff material gives a broader runtime range or historical setup commands. Launcher and Python CLI settings differ as explained in configuration. Installation/startup is credential-free; private-league retrieval needs paired local credentials. No guide authorizes public deployment or bypassing a safe scoring boundary.
 
 ## Using War Room
 
@@ -34,6 +38,8 @@ Workspace documents include dated delivery evidence as well as interface explana
 The engine owns league mechanics and numerical interpretation. The frontend presents validated results. A historical milestone name is not permission to copy rules into a new presentation layer.
 
 ## Developing and testing
+
+- [Developer setup](getting-started/development.md): locked dependencies, backend/Vite terminals, synthetic fixtures and verification tiers.
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md): original-repository and fork branches, upstream sync, overlap coordination, PR review and verification.
 - [AGENTS.md](../AGENTS.md): standing implementation, evidence, fail-closed and change-discipline rules.
@@ -74,7 +80,7 @@ These references contain implementation layers and historical amendments. The st
 | [MASTER_SPEC](MASTER_SPEC.md) | Approved analytical requirements and modeling contracts. |
 | [Historical roadmap](ROADMAP.md) | Original milestone history, dependencies and preserved acceptance gates; not current priorities. |
 
-R2.0 is independently accepted at `3391552`. The LW2.3A performance checkpoint (`d630887`) is also independently accepted. Neither acceptance declares V1 released: **M8.4 remains pending independent release disposition**. Future features and model/source changes still need applicable approvals. Historical gates remain binding until an approved replacement explicitly supersedes them; unresolved gate migration remains WR-002, not discarded.
+R2.0 and R2.1 are independently accepted; R2.0 is recorded at `3391552` and R2.1 in [PR #113](https://github.com/tdkelley2001/fantasy_football/pull/113). The LW2.3A performance checkpoint (`d630887`) is also independently accepted. These acceptances do not declare V1 released: **M8.4 remains pending independent release disposition**. R2.2 awaits independent review. Future features and model/source changes still need applicable approvals. Historical gates remain binding until an approved replacement explicitly supersedes them; unresolved gate migration remains WR-002, not discarded.
 
 ## Historical development records
 

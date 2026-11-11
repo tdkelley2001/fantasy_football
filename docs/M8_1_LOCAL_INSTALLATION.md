@@ -1,5 +1,7 @@
 # M8.1 local installation and operation
 
+> Historical implementation evidence follows, including delivery-time status and prerequisite wording. For current instructions use [installation](getting-started/installation.md), [configuration](getting-started/configuration.md), [first run](getting-started/first-run.md) and [operations](getting-started/operations.md). In particular, use the tested Node version there rather than interpreting the historical broad minimum as full-toolchain compatibility. Original evidence is preserved below; current release disposition is in [status](status.md).
+
 Status: **IMPLEMENTED — REVIEW PENDING** (31 October 2026).
 
 M8.1 supplies one loopback-only FastAPI/Uvicorn process for API 1.0 and the

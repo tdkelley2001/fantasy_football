@@ -58,6 +58,8 @@ Classification: **API**, **engine-only**, **presentation**, or **unsupported**.
 
 ## Local setup and clean start
 
+> Historical backend handoff commands follow. They are not the current dependency/install path and can resolve dependencies beyond the lockfile. Use [developer setup](getting-started/development.md) for locked installation, frontend build/Vite and isolated synthetic tests; ordinary users should start with [installation](getting-started/installation.md). Static frontend packaging is now implemented. Preserve the original M6/M7 handoff evidence below without treating its future-tense packaging or Python-only prerequisites as current instructions.
+
 Requirements: CPython 3.12, repository lockfile, and a writable private local
 directory. Credentials are unnecessary for credential-free development.
 

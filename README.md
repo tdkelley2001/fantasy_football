@@ -20,6 +20,8 @@ Ordinary V1 simulation requires a verified safe whole-week boundary. Opt-in part
 
 ## Requirements and quick start
 
+Use the current [installation guide](docs/getting-started/installation.md), [configuration reference](docs/getting-started/configuration.md), [first-run walkthrough](docs/getting-started/first-run.md) and [operations/troubleshooting guide](docs/getting-started/operations.md) for the complete user path. Contributors use the separate [developer setup](docs/getting-started/development.md).
+
 The supplied launchers target Windows with PowerShell 5.1 or 7, 64-bit Python 3.12 with the `py` launcher, Git and Node.js/npm. Node 24.19.0 was verified in the existing contributor environment. The installer currently accepts a wider Node range than the complete locked test toolchain supports; see [contributor requirements](CONTRIBUTING.md#development-environment-and-checks) and WR-003 in the [backlog](docs/BACKLOG.md#work-items).
 
 From a fresh checkout:
@@ -41,7 +43,7 @@ Edit the ignored `.env` with your `ESPN_LEAGUE_ID` and `ESPN_SEASON`. Public lea
 
 Open `http://127.0.0.1:8000/`. The application serves the built frontend; no separate Vite server is needed for ordinary use. Refresh the configured league explicitly, select a snapshot, then submit a baseline or action analysis in Simulation Center. Automatic boundary detection can reject a live/unsettled week; a manual override cannot bypass that safety contract.
 
-For configuration, snapshot selection, interpretation, cancellation and authenticated recovery, use the [application user guide](docs/LOCAL_V1_USER_GUIDE.md) and [installation reference](docs/M8_1_LOCAL_INSTALLATION.md). Launcher storage uses `WAR_ROOM_DATABASE`/`-Database`; Python settings/CLIs use `SNAPSHOT_DB_PATH`. The [contributor guide](CONTRIBUTING.md) records this distinction and the verification commands.
+For analytical interpretation and workspace details, use the [application user guide](docs/LOCAL_V1_USER_GUIDE.md). Launcher storage uses `WAR_ROOM_DATABASE`/`-Database`; Python settings/CLIs use `SNAPSHOT_DB_PATH`. The [configuration guide](docs/getting-started/configuration.md) explains precedence and browser/CLI differences. Original [installation evidence](docs/M8_1_LOCAL_INSTALLATION.md) remains preserved.
 
 ## Documentation and contribution
 
