@@ -24,6 +24,7 @@ from fantasy_football.espn_adapter import (
     EspnAdapterError,
     ManualRuleOverride,
     build_live_scoring_evidence_report,
+    capture_response,
     load_manual_rule_config,
     request_with_retries,
     translate_bundle,
@@ -105,6 +106,52 @@ def test_live_scoring_preserves_zero_actual_and_automatic_boundary_evidence() ->
     assert observed.actual_status is ScoreEvidenceStatus.CONFIRMED
 
 
+def test_live_schedule_shape_joins_current_scoreboard_by_game_id() -> None:
+    bundle = source_bundle()
+    events = []
+    seen: set[int] = set()
+    for team in bundle.pro_schedule.payload["settings"]["proTeams"]:
+        for games in team.get("proGamesByScoringPeriod", {}).values():
+            for game in games:
+                game.pop("status", None)
+                game["statsOfficial"] = game["scoringPeriodId"] == 1
+                game["validForLocking"] = True
+                game["startTimeTBD"] = False
+                if game["scoringPeriodId"] == 2 and game["id"] not in seen:
+                    seen.add(game["id"])
+                    events.append({
+                        "id": str(game["id"]),
+                        "status": {"type": {
+                            "name": "STATUS_SCHEDULED",
+                            "state": "pre",
+                            "completed": False,
+                        }},
+                    })
+    scoreboard = capture_response(
+        {"events": events},
+        source_id="nfl-scoreboard-current",
+        request_type="nfl_scoreboard",
+        endpoint="https://site.api.espn.com/scoreboard",
+        view="scoreboard",
+        parameters=(("dates", 2026), ("seasontype", 2), ("week", 2)),
+        retrieved_at_utc=bundle.retrieval_finished_at_utc,
+    )
+
+    snapshot = translate_bundle(replace(bundle, nfl_scoreboard=scoreboard)).snapshot
+
+    assert snapshot.live_scoring is not None
+    assert snapshot.live_scoring.supported_simulation_week == 2
+    assert {
+        game.status for game in snapshot.nfl_games if game.scoring_week == 1
+    } == {NFLGameStatus.COMPLETED}
+    assert {
+        game.status for game in snapshot.nfl_games if game.scoring_week == 2
+    } == {NFLGameStatus.SCHEDULED}
+    assert {
+        game.status for game in snapshot.nfl_games if game.scoring_week == 3
+    } == {NFLGameStatus.UNKNOWN}
+
+
 def test_second_week_of_two_week_matchup_is_not_a_safe_unplayed_boundary() -> None:
     bundle = source_bundle()
     schedule = bundle.league_initial.payload["settings"]["scheduleSettings"]
@@ -184,6 +231,39 @@ def test_live_scoring_diagnostic_reports_sanitized_mixed_actual_coverage() -> No
         ("STATUS_FINAL", 16), ("STATUS_SCHEDULED", 31),
     )
     assert all("Sanitized Player" not in item for item in report.limitations)
+
+
+def test_live_diagnostic_distinguishes_previous_actuals_and_zero_scores() -> None:
+    bundle = source_bundle()
+    previous_pages = deepcopy(bundle.current_player_pages)
+    wrappers = [
+        wrapper
+        for page in previous_pages
+        for wrapper in page.response.payload["players"]
+    ]
+    wrappers[0]["player"]["stats"].append({
+        "seasonId": 2026, "scoringPeriodId": 1, "statSourceId": 0,
+        "statSplitTypeId": 1, "appliedTotal": 0.0,
+    })
+    wrappers[1]["player"]["stats"].append({
+        "seasonId": 2026, "scoringPeriodId": 1, "statSourceId": 0,
+        "statSplitTypeId": 1, "appliedTotal": 12.5,
+    })
+
+    report = build_live_scoring_evidence_report(
+        league_id=bundle.league_id,
+        season=bundle.season,
+        league_initial=bundle.league_initial,
+        current_player_pages=bundle.current_player_pages,
+        previous_player_pages=previous_pages,
+        pro_schedule=bundle.pro_schedule,
+    )
+
+    assert report.previous_configured_period == 1
+    assert report.previous_period_actual_record_count == 2
+    assert report.previous_period_explicit_zero_actual_count == 1
+    assert ("0", "1", 2) in report.stat_source_split_counts
+    assert dict(report.stat_applied_total_presence)["present_numeric"] > 0
 
 
 def test_live_scoring_diagnostic_reports_unknown_token_without_inventing_boundary() -> None:

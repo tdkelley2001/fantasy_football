@@ -53,6 +53,17 @@ def render_summary(report: LiveScoringEvidenceReport) -> str:
         f"Next fully unplayed period: {report.next_fully_unplayed_period}",
         f"Safe V1 simulation week: {report.supported_simulation_week}",
         f"Boundary rationale: {report.boundary_rationale}",
+        f"Sanitized game structures: {list(report.game_record_structures)}",
+        f"Player stat field structure: {list(report.player_stat_record_structure)}",
+        f"Stat records by source/split: {list(report.stat_source_split_counts)}",
+        f"Stat scoring periods: {list(report.stat_scoring_period_counts)}",
+        f"appliedTotal presence: {dict(report.stat_applied_total_presence)}",
+        (
+            "Previous configured period actuals: "
+            f"period={report.previous_configured_period}, "
+            f"present={report.previous_period_actual_record_count}, "
+            f"zero={report.previous_period_explicit_zero_actual_count}"
+        ),
         "Unresolved capabilities:",
         *(f"- {item}" for item in report.unresolved_capabilities),
         "Limitations:",

@@ -27,8 +27,9 @@ The future LW2 boundary is `earliest_unresolved_period`. When that period is par
 |---|---|---|---|
 | Current scoring period | league `scoringPeriodId` | **Verified live** by prior adapter audit | Identifies period, not completion. |
 | NFL kickoff | `proTeamSchedules_wl` game `date` | **Verified live** | Never completion proof. |
-| NFL game status | `proTeamSchedules_wl` game `status` | **Verified by tests** | Live field/token coverage requires an authorized diagnostic. Missing evidence fails closed. |
-| Player actual points | `kona_player_info` `stats[]`, source 0, matching season/period/split, `appliedTotal` | **Verified by tests** | Record presence does not prove participation; absence cannot distinguish inactivity, bye, unrostered status, delayed data, or missing data. Correction timing remains unverified. |
+| Completed NFL game evidence | `proTeamSchedules_wl` game `statsOfficial=true` | **Verified live** | False does not prove a game is unplayed; it remains unknown without scoreboard evidence. |
+| Current NFL game status | Public ESPN NFL scoreboard event joined by exact game ID; `status.type.name` | **Verified live** | Current diagnostic observed `STATUS_SCHEDULED`; unsupported tokens or incomplete ID coverage fail closed. |
+| Player actual points | Week-specific `kona_player_info` `stats[]`, source 0, matching season/period/split, `appliedTotal` | **Verified live** for the previous configured period | The current unplayed period correctly returned no actuals. Record presence does not prove participation; correction timing remains unverified. |
 | Fantasy matchup/standings settlement | no accepted current-period settlement field | **Unsupported** | Final NFL games and some/all player actual records do not prove that ESPN cumulative fantasy standings include the period. |
 | Future projection | matching stat source 1 | **Verified live** | Not relabeled as remaining in-game projection. |
 | Per-player lineup lock | no accepted field | **Unsupported** | Required before LW2 authorizes remaining moves. |
@@ -36,7 +37,9 @@ The future LW2 boundary is `earliest_unresolved_period`. When that period is par
 
 Unknown game tokens fail translation. Missing actuals remain unavailable rather than becoming zero, while confirmed zero remains distinct. No complete-player-pool rule is used: rostered, unrostered, bye, and score-record counts are diagnostic categories, not inferred participation. Player observations preserve source IDs and remain separate from future `PlayerWeek` projections. Schema-v4 snapshots retain detailed NFL game rows for the complete configured scoring schedule needed to substantiate the live boundary; the V1 `PlayerWeek` horizon remains unchanged.
 
-For authorized manual evidence collection, run `python -m fantasy_football.live_scoring_diagnostic` (or add `--json`). It performs bounded ESPN GET requests and reports sanitized aggregate token/count evidence only; it does not print player identities, cookies, or raw payloads. Synthetic tests verify the parser, not live token availability.
+For authorized manual evidence collection, run `python -m fantasy_football.live_scoring_diagnostic` (or add `--json`). It performs bounded ESPN GET requests and reports sanitized field/type structures, game-state aggregates, stat source/split counts, scoring-period coverage, and missing-versus-zero actual coverage. It does not print player identities, cookies, or raw payloads.
+
+The 11 November 2026 authorized diagnostic observed 136 past schedule games with `statsOfficial=true`, 14 current games with `statsOfficial=false`, and 122 future games with `statsOfficial=false`. Exact game-ID joins found all 14 current games in the public scoreboard as `STATUS_SCHEDULED` with `state=pre` and `completed=false`. A separate week-specific request for configured period 9 returned 688 source-0/split-1 actual records, including 358 explicit zeros; configured period 10 returned no actuals and 686 projection records. These observations verify the fields for this retrieval context, not an ESPN versioned contract or participation semantics.
 
 ## LW2 integration contract
 
