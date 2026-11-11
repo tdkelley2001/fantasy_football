@@ -1,6 +1,8 @@
 # LW2.3A performance and consolidation checkpoint
 
-Status: implemented for independent review. Governing contracts: `MASTER_SPEC.md` section 1.3, `LW2_PARTIAL_WEEK_CONTRACT.md` (LW2.2A through LW2.3A), and `MONTE_CARLO.md` reproducibility, precision and recovery contracts. Accepted reference: `86189da`.
+Current disposition: **ACCEPTED**. The checkpoint implemented at `d630887` was independently accepted after implementation, as confirmed in the R2.1 authorization. This is not a V1 release decision or approval to begin LW2.3B. The original report's measurements and delivery-time review statements are preserved below as evidence, not current pending-review claims.
+
+Status at delivery: implemented for independent review. Governing contracts: `MASTER_SPEC.md` section 1.3, `LW2_PARTIAL_WEEK_CONTRACT.md` (LW2.2A through LW2.3A), and `MONTE_CARLO.md` reproducibility, precision and recovery contracts. Accepted execution reference: `86189da`.
 
 ## Scope and decision
 

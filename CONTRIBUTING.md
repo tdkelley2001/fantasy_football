@@ -4,6 +4,8 @@
 
 Start with the [development backlog](docs/BACKLOG.md), [current capabilities](docs/status.md), [approved analytical specification](docs/MASTER_SPEC.md) and [standing development rules](AGENTS.md). The [original roadmap](docs/ROADMAP.md) preserves historical milestones, dependencies and acceptance evidence; it is no longer a parallel work queue. Applicable acceptance gates remain binding until explicitly superseded by an approved contract.
 
+Use the [documentation index](docs/index.md) to find user guides, architecture, domain/API references and historical evidence without following the original implementation chronology.
+
 ## Agree the work first
 
 Use a stable `WR-NNN` backlog ID in the branch/PR description. Propose new work or claim an existing item by editing [BACKLOG.md](docs/BACKLOG.md) through an ordinary PR. An owner is optional; agree assignments rather than assigning the other contributor without discussion. A listed proposal is not implementation approval. Record scope, dependencies, acceptance/verification and the governing specification before starting substantive work.

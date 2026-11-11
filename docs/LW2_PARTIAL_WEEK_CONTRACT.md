@@ -1,6 +1,6 @@
 # LW2.1 Partial-Week Evidence and Simulation Contract
 
-Current acceptance baseline: **LW2.1 through LW2.3A accepted, `86189da`**. The package sections below preserve their delivery-time status and scope; later explicitly authorized packages supersede earlier statements that integration was not yet implemented. Governing requirements remain the LW2.1 authorization, `MASTER_SPEC.md` section 1.3 and the fail-closed rules in `LIVE_WEEK_SCORING.md`. The current performance/consolidation checkpoint is implemented for review in `LW23A_PERFORMANCE_CHECKPOINT.md`; it authorizes no LW2.3B work.
+Current acceptance baseline: **LW2.1 through LW2.3A accepted, `86189da`**; the performance/consolidation checkpoint implemented at `d630887` is also independently accepted, as confirmed in the R2.1 authorization. The package sections below preserve their delivery-time status and scope; later explicitly authorized packages supersede earlier statements that integration was not yet implemented. Governing requirements remain the LW2.1 authorization, `MASTER_SPEC.md` section 1.3 and the fail-closed rules in `LIVE_WEEK_SCORING.md`. The accepted checkpoint evidence is in `LW23A_PERFORMANCE_CHECKPOINT.md`; it authorizes no LW2.3B work and does not declare a V1 release.
 
 ## Scope and acceptance contract
 
