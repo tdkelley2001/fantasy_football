@@ -15,7 +15,11 @@ from fantasy_football.canonical.model import (
     ProjectionClass,
 )
 from fantasy_football.canonical.serialization import snapshot_from_json, snapshot_to_json
-from fantasy_football.canonical.validation import CanonicalValidationError, validate_snapshot
+from fantasy_football.canonical.validation import (
+    CanonicalValidationError,
+    authoritative_current_matchup_period_scoring_weeks,
+    validate_snapshot,
+)
 from fantasy_football.espn_adapter import (
     EspnAdapterError,
     ManualRuleOverride,
@@ -99,6 +103,48 @@ def test_live_scoring_preserves_zero_actual_and_automatic_boundary_evidence() ->
     observed = next(item for item in live.observations if item.player_id == wrapper["id"])
     assert observed.actual_points == 0.0
     assert observed.actual_status is ScoreEvidenceStatus.CONFIRMED
+
+
+def test_second_week_of_two_week_matchup_is_not_a_safe_unplayed_boundary() -> None:
+    bundle = source_bundle()
+    schedule = bundle.league_initial.payload["settings"]["scheduleSettings"]
+    schedule["matchupPeriods"] = {"1": [1], "2": [2, 3]}
+    schedule["playoffMatchupPeriodLengthByRound"] = {}
+    bundle.league_initial.payload["scoringPeriodId"] = 3
+    bundle.league_reconciliation.payload["settings"]["scheduleSettings"] = deepcopy(schedule)
+    bundle.league_reconciliation.payload["scoringPeriodId"] = 3
+    bundle = replace(
+        bundle,
+        first_simulation_week=3,
+        future_player_pages=tuple(
+            page for page in bundle.future_player_pages if page.scoring_week == 3
+        ),
+        simulation_week_automatically_detected=True,
+    )
+
+    with pytest.raises(
+        EspnAdapterError,
+        match="automatic live scoring boundary conflicts with the retrieved simulation horizon",
+    ):
+        translate_bundle(bundle)
+
+
+def test_stored_matchup_membership_must_match_authoritative_schedule_settings() -> None:
+    snapshot = translate_bundle(source_bundle()).snapshot
+    assert authoritative_current_matchup_period_scoring_weeks(snapshot) == (2,)
+    assert snapshot.live_scoring is not None
+    forged = replace(
+        snapshot,
+        live_scoring=replace(
+            snapshot.live_scoring,
+            current_matchup_period_scoring_weeks=(1, 2),
+        ),
+    )
+    with pytest.raises(
+        CanonicalValidationError,
+        match="does not agree with authoritative schedule settings",
+    ):
+        validate_snapshot(forged)
 
 
 def test_live_scoring_diagnostic_reports_sanitized_mixed_actual_coverage() -> None:

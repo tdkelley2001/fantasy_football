@@ -12,7 +12,10 @@ from fantasy_football.canonical.model import (
     MatchupEntryStatus,
     MatchupPhase,
 )
-from fantasy_football.canonical.validation import validate_snapshot
+from fantasy_football.canonical.validation import (
+    authoritative_current_matchup_period_scoring_weeks,
+    validate_snapshot,
+)
 from fantasy_football.evolving_state import (
     EvolvingLeagueState,
     IREligibilityEvidence,
@@ -223,7 +226,12 @@ def _preflight(
     consolation_configuration: ConsolationLadderConfiguration | None,
 ) -> dict[tuple[int, int], RealizedPlayerScore]:
     validate_snapshot(snapshot)
-    if snapshot.live_scoring is not None and not has_safe_v1_boundary(snapshot.live_scoring):
+    if snapshot.live_scoring is not None and not has_safe_v1_boundary(
+        snapshot.live_scoring,
+        authoritative_current_matchup_period_scoring_weeks=(
+            authoritative_current_matchup_period_scoring_weeks(snapshot)
+        ),
+    ):
         raise SeasonSimulationError(
             "snapshot live-scoring evidence does not establish a safe fully unplayed V1 boundary"
         )
