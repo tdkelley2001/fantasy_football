@@ -119,6 +119,7 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/archive/audits/PRE_M4_INTEGRATION_AUDIT.md",
         "docs/R25_ARCHIVE_PILOT.md",
         "docs/R26_DOCUMENTATION_MIGRATION_PLAN.md",
+        "docs/development/documentation-consolidation.md",
     ),
 )
 def test_contributor_links_and_fragments_resolve(document: str) -> None:
