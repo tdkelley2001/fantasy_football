@@ -1,6 +1,6 @@
 # Standing Development Instructions
 
-These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/MASTER_SPEC.md) is authoritative for approved analytical requirements and modeling contracts. [BACKLOG.md](docs/BACKLOG.md) is authoritative for outstanding work; [status.md](docs/status.md) summarizes current capabilities. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main.
+These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/MASTER_SPEC.md) is authoritative for approved analytical requirements and modeling contracts. [BACKLOG.md](docs/BACKLOG.md) is authoritative for outstanding work; [README](README.md#current-capabilities) owns the product/capability summary. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main.
 
 [ROADMAP.md](docs/ROADMAP.md) is the preserved historical development and acceptance record, not a parallel active backlog. Its applicable dependencies and acceptance gates remain binding until explicitly superseded by an approved contract; do not discard requirements merely because their original location is historical. No GitHub Issues/Projects/labels/templates or repository-setting changes are needed for the repository-native work list.
 
@@ -8,7 +8,7 @@ These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/M
 
 User/operator procedures are in [OPERATIONS](docs/OPERATIONS.md); developer setup, verification tiers and documentation maintenance are in [CONTRIBUTING](CONTRIBUTING.md). Enhancements must update the owning domain reference and affected operating procedures; future obligations belong in BACKLOG and ordinary history in Git/PRs.
 
-Reader-oriented documentation navigation is in [docs/index.md](docs/index.md); this does not replace the authorities above or approve future work.
+Product navigation is in [README](README.md); workspace/presentation contracts are in [INTERFACE](docs/INTERFACE.md); this does not replace the authorities above or approve future work.
 
 1. Implement from the specification, not from memory, prior code, or convenience. Cite the governing specification section in each task or pull request.
 2. Preserve a clean-sheet architecture. Legacy code is historical reference only and must not shape interfaces or behavior merely because it exists.

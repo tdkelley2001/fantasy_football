@@ -94,6 +94,11 @@ def test_r1_map_and_completed_archive_compatibility_are_reconciled_without_new_w
             if "/archive/" in path
             else "(development/verification.md)",
         )
+        # D3 retargets only the current navigation citation after retiring index.
+        actual = actual.replace(
+            "[documentation index](../README.md#understand-the-system)",
+            "[documentation index](index.md)",
+        )
         assert actual == _tree()[path].decode("utf-8").replace("\r\n", "\n")
 
 

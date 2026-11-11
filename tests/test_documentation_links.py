@@ -32,12 +32,11 @@ def test_relative_documentation_links_resolve(document: Path) -> None:
     )
 
 
-def test_historical_milestone_contracts_remain_accessible_from_index() -> None:
+def test_governing_milestone_acceptance_contracts_remain_intact() -> None:
     master_spec = (REPOSITORY_ROOT / "docs" / "MASTER_SPEC.md").read_text(
         encoding="utf-8"
     )
     roadmap = (REPOSITORY_ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
-    index = (REPOSITORY_ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     assert "FastAPI" in master_spec
     for milestone in (
         "M6.1",
@@ -54,23 +53,6 @@ def test_historical_milestone_contracts_remain_accessible_from_index() -> None:
     assert "Pre-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
     assert "Post-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
     assert "analytics-first" in roadmap.casefold()
-    for reference in (
-        "APPLICATION_SERVICE.md",
-        "M7_1_FRONTEND_FOUNDATION.md",
-        "M7_2_LEAGUE_ANALYTICS.md",
-        "M7_3_OPPORTUNITY_EXPLORER.md",
-        "M7_4_TRADE_LAB.md",
-        "M7_5_SIMULATION_CENTER.md",
-        "POST_M7_CONSOLIDATION_AUDIT.md",
-        "OPERATIONS.md",
-        "M8_2_REAL_LEAGUE_VALIDATION.md",
-        "M7_1_VISUAL_DIRECTION_REVIEW.md",
-        "M8_3_RUNTIME_AND_RECOVERY.md",
-        "M8_4_FINAL_RELEASE_AUDIT.md",
-        "LOCAL_V1_USER_GUIDE.md",
-        "BACKLOG.md",
-    ):
-        assert reference in index
     assert "Integrated CLI V1" not in master_spec
     assert "Optional visual dashboard" not in master_spec
 
@@ -85,16 +67,11 @@ def test_historical_acceptance_and_current_release_disposition_are_distinct() ->
         assert "REVIEW PENDING" not in parent.group(0)
         assert "M8.4" in text and "READY FOR INDEPENDENT REVIEW" in text
     readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
-    status = (REPOSITORY_ROOT / "docs" / "status.md").read_text(encoding="utf-8")
     checkpoint = (
         REPOSITORY_ROOT / "docs" / "LW23A_PERFORMANCE_CHECKPOINT.md"
     ).read_text(encoding="utf-8")
     assert "not formally released" in readme
-    assert "M8.4 release disposition remains pending" in status
-    assert (
-        "performance/consolidation checkpoint implemented at `d630887` is **independently accepted**"
-        in status
-    )
+    assert "M8.4 release disposition remains pending" in readme
     assert "Current disposition: **ACCEPTED**" in checkpoint
     assert "Status at delivery: implemented for independent review" in checkpoint
     assert "not permission to begin LW2.3B" in checkpoint
@@ -104,9 +81,7 @@ def test_m8_4_release_documents_and_verification_entrypoint_are_present() -> Non
     audit = (REPOSITORY_ROOT / "docs" / "M8_4_FINAL_RELEASE_AUDIT.md").read_text(
         encoding="utf-8"
     )
-    guide = (REPOSITORY_ROOT / "docs" / "LOCAL_V1_USER_GUIDE.md").read_text(
-        encoding="utf-8"
-    )
+    guide = (REPOSITORY_ROOT / "docs" / "INTERFACE.md").read_text(encoding="utf-8")
     checklist = (REPOSITORY_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
     verifier = (REPOSITORY_ROOT / "scripts" / "verify-release.ps1").read_text(
         encoding="utf-8"
@@ -120,9 +95,12 @@ def test_m8_4_release_documents_and_verification_entrypoint_are_present() -> Non
     ):
         assert heading in audit
     assert "does not declare" in audit
-    assert "locally hosted" in guide
+    assert "OPERATIONS.md" in guide
     assert "Confidence intervals" in guide
-    assert "never executes real transactions" in guide
+    assert "ESPN submission remain unsupported" in guide
+    assert "never submits real transactions" in (
+        REPOSITORY_ROOT / "README.md"
+    ).read_text(encoding="utf-8")
     assert "performs no ESPN request" in checklist
     for required_step in (
         "Python credential-free default suite",
@@ -148,24 +126,17 @@ def test_historical_m5_parent_status_and_ui_vision_are_preserved() -> None:
         assert "REVIEW PENDING" not in parent.group(0)
         assert "M5.1–M5.8" in parent.group(0)
         assert "UI_DESIGN_VISION.md" in text
-    index = (REPOSITORY_ROOT / "docs" / "index.md").read_text(encoding="utf-8")
-    assert "UI_DESIGN_VISION.md" in index
 
 
 def test_m7_visual_first_standard_is_authoritative_and_applied() -> None:
-    vision = (REPOSITORY_ROOT / "docs" / "UI_DESIGN_VISION.md").read_text(
-        encoding="utf-8"
-    )
-    m7_2 = (REPOSITORY_ROOT / "docs" / "M7_2_LEAGUE_ANALYTICS.md").read_text(
-        encoding="utf-8"
-    )
+    vision = (REPOSITORY_ROOT / "docs" / "INTERFACE.md").read_text(encoding="utf-8")
     master_spec = (REPOSITORY_ROOT / "docs" / "MASTER_SPEC.md").read_text(
         encoding="utf-8"
     )
     roadmap = (REPOSITORY_ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
 
-    assert "## Visual-first information design standard" in vision
-    assert "Default to visual communication" in vision
+    assert "## Visual-first design standard" in vision
+    assert "Meaningful visualizations take priority" in vision
     for workspace in (
         "League Overview",
         "Opportunity Explorer",
@@ -178,12 +149,11 @@ def test_m7_visual_first_standard_is_authoritative_and_applied() -> None:
     assert "decorative charts" in vision
     assert "visual-first information design standard" in master_spec
     assert "visual-first information standard" in roadmap
-    assert "## Visual representation decisions" in m7_2
     for representation in (
-        "ranked dot-and-whisker plot",
-        "ranked probability bands",
-        "team-by-placement heatmap",
-        "focused detail panel",
-        "progressive disclosure",
+        "dot-and-whisker plot",
+        "probability bands",
+        "placement heatmap",
+        "Focused team panel",
+        "Progressive technical disclosure",
     ):
-        assert representation in m7_2
+        assert representation in vision

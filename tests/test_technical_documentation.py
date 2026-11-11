@@ -62,7 +62,7 @@ def test_verification_frontend_commands_and_navigation_match_current_sources() -
     assert scripts["test"] == "vitest run"
     assert scripts["typecheck"] in guide
     assert scripts["build"] in guide
-    for path in ("README.md", "AGENTS.md", "docs/index.md", "docs/OPERATIONS.md"):
+    for path in ("README.md", "AGENTS.md", "docs/INTERFACE.md", "docs/OPERATIONS.md"):
         assert "CONTRIBUTING.md" in read(path)
 
 
@@ -178,9 +178,91 @@ def test_application_reference_covers_public_lifecycle_and_error_categories() ->
         assert re.search(rf"\b{re.escape(value)}\b", document), value
     for source in (
         "README.md",
-        "docs/index.md",
+        "docs/INTERFACE.md",
         "docs/architecture/overview.md",
         "CONTRIBUTING.md",
         "docs/BACKLOG.md",
     ):
         assert re.search(r"\]\([^)]*APPLICATION_SERVICE\.md(?:#[^)]*)?\)", read(source))
+
+
+def test_product_workspace_availability_matches_shell_navigation() -> None:
+    navigation = re.findall(
+        r'\["\w+", "([^"]+)", \w+, (true|false)\]',
+        read("frontend/src/App.tsx"),
+    )
+    assert len(navigation) == 5
+    product = read("README.md")
+    interface = read("docs/INTERFACE.md")
+    for name, deferred in navigation:
+        assert name in product and name in interface
+        if deferred == "false":
+            assert f"## {name}\n" in interface
+        else:
+            assert (
+                name
+                in product.split("| Unsupported / deferred |", 1)[1].split("\n", 1)[0]
+            )
+    for boundary in (
+        "Accepted engine interfaces, not exposed in the browser/API",
+        "fully unstarted",
+        "Provisional / evidence-limited",
+        "M8.4 release disposition remains pending",
+        "safe whole-week boundary",
+    ):
+        assert boundary in product
+
+
+def test_interface_display_bounds_are_backed_by_current_frontend() -> None:
+    interface = read("docs/INTERFACE.md")
+    explorer = read("frontend/src/OpportunityExplorer.tsx")
+    api = read("frontend/src/lib/api.ts")
+    simulation = read("frontend/src/SimulationCenter.tsx")
+    page = re.search(r"const PAGE_SIZE=(\d+)", explorer)
+    comparison = re.search(r"current.length<(\d+)", explorer)
+    history = re.search(r"/api/v1/runs\?limit=(\d+)", api)
+    assert page and comparison and history
+    assert f"**{page[1]}-row server pages**" in interface
+    assert int(comparison[1]) == 4 and "**four** paths" in interface
+    assert f"newest {history[1]} records" in interface
+    presets = re.findall(r"(?:quick|balanced|detailed):\{paths:(\d+)", simulation)
+    assert len(presets) == 3
+    assert "**" + " / ".join(presets) + "**" in interface
+    assert "not complete lifetime history" in interface
+
+
+def test_interface_preserves_request_and_accessibility_boundaries() -> None:
+    interface = read("docs/INTERFACE.md")
+    shell = read("frontend/src/App.tsx")
+    manual = read("frontend/src/TradeLab.tsx")
+    for name in ("war-room-theme", "war-room-snapshot"):
+        assert name in shell and f"`{name}`" in interface
+    assert "item.inert=true" in shell and "inert analytical background" in interface
+    assert "retainedRequest" in manual and "monotonic token" in interface
+    assert (
+        "AbortController" in interface
+        and "does not cancel an accepted backend job" in interface
+    )
+    assert "refresh declares dialog semantics" in interface
+    assert "lacks equivalent tested focus containment" in interface
+    for phrase in (
+        "Interval unavailable",
+        "no invented zero-width marker",
+        "no extra multiplication by 100",
+        "no inferred percentage or ETA",
+    ):
+        assert phrase.casefold() in interface.casefold()
+    followup = (
+        read("docs/BACKLOG.md")
+        .split("## Interface follow-up disposition", 1)[1]
+        .split("\n## ", 1)[0]
+    )
+    for term in (
+        "glossary",
+        "denominator",
+        "runtime",
+        "WR-017",
+        "Superseded",
+        "approval",
+    ):
+        assert term in followup

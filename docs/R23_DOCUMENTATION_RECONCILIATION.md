@@ -1,6 +1,6 @@
 # R2.3 technical documentation reconciliation
 
-Baseline: independently accepted R2.2 `a7c0ff41778673ab7809b95b7b500e8db0bc552b`. Scope is WR-002 technical reference reconciliation and a concise [architecture overview](architecture/overview.md), governed by [MASTER_SPEC sections 2–4, 8–9 and 12](MASTER_SPEC.md#2-system-architecture-and-execution-lifecycle), standing rules and accepted [R1 inventory](R1_REPOSITORY_AUDIT.md). No source/schema/model/API/persistence/dependency changes or historical archive migration are authorized. R2.3 awaits independent PR review; this report does not replace current [status](status.md) or the [backlog](BACKLOG.md).
+Baseline: independently accepted R2.2 `a7c0ff41778673ab7809b95b7b500e8db0bc552b`. Scope is WR-002 technical reference reconciliation and a concise [architecture overview](architecture/overview.md), governed by [MASTER_SPEC sections 2–4, 8–9 and 12](MASTER_SPEC.md#2-system-architecture-and-execution-lifecycle), standing rules and accepted [R1 inventory](R1_REPOSITORY_AUDIT.md). No source/schema/model/API/persistence/dependency changes or historical archive migration are authorized. R2.3 awaits independent PR review; this report does not replace current [status](../README.md#current-capabilities) or the [backlog](BACKLOG.md).
 
 ## Bounded statement inventory
 
@@ -59,5 +59,5 @@ Not executed: full repository regression, browser/frontend build, dependency ins
 
 - New [architecture overview](architecture/overview.md) and this bounded reconciliation report.
 - Technical references: [canonical](CANONICAL_MODEL.md), [snapshot storage](SNAPSHOT_STORAGE.md), [missing policy](MISSING_PROJECTION_POLICY.md), [outcome models](PLAYER_OUTCOME_MODEL.md), [Monte Carlo](MONTE_CARLO.md), [season](SEASON_SIMULATOR.md), [LW1](LIVE_WEEK_SCORING.md), [partial-week contract](LW2_PARTIAL_WEEK_CONTRACT.md), [application service](APPLICATION_SERVICE.md), [run management](APPLICATION_SERVICE.md#analysis-lifecycle), [backend handoff](APPLICATION_SERVICE.md#api-evolution).
-- Navigation/status: [README](../README.md), [index](index.md), [status](status.md), [backlog](BACKLOG.md).
+- Navigation/status: [README](../README.md), [index](../README.md#understand-the-system), [status](../README.md#current-capabilities), [backlog](BACKLOG.md).
 - Documentation tests: [contributor/anchor checks](../tests/test_contributor_documentation.py), new [technical source-contract checks](../tests/test_technical_documentation.py). Existing engine and application tests are unchanged.

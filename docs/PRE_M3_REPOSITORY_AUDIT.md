@@ -2,7 +2,7 @@
 
 **Archived historical evidence — compatibility location.** Read the [complete pre-M3 audit](archive/audits/PRE_M3_REPOSITORY_AUDIT.md#pre-m3-repository-consolidation-and-health-audit); it retains the full original narrative, measurements, caveats and acceptance evidence. Its development recommendations describe the historical baseline, not current implementation instructions. Relocation does not waive any applicable gate.
 
-For current behavior start with the [architecture overview](architecture/overview.md), [verification guide](../CONTRIBUTING.md#tier-1-fast-local-checks) and [documentation index](index.md). The historical headings below preserve existing bookmarks and link to the corresponding full sections.
+For current behavior start with the [architecture overview](architecture/overview.md), [verification guide](../CONTRIBUTING.md#tier-1-fast-local-checks) and [documentation index](../README.md#understand-the-system). The historical headings below preserve existing bookmarks and link to the corresponding full sections.
 
 ## 1. Executive summary
 
