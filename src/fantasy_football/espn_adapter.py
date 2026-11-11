@@ -673,6 +673,14 @@ def _translate_rules(
     seeding_raw = _freeze_json(schedule.get("playoffSeedingRule"), "playoffSeedingRule")
     interpretations = (
         RuleInterpretation(
+            "matchup_period_configuration",
+            "settings.scheduleSettings.matchupPeriods",
+            _freeze_json(all_period_map, "scheduleSettings.matchupPeriods"),
+            _freeze_json(all_period_map, "scheduleSettings.matchupPeriods"),
+            InterpretationStatus.UNDERSTOOD,
+            source_id,
+        ),
+        RuleInterpretation(
             "acquisition_type", "settings.acquisitionSettings.acquisitionType", acquisition_type,
             "traditional_waiver_priority" if acquisition_type == "WAIVERS_TRADITIONAL" else None,
             InterpretationStatus.UNDERSTOOD if acquisition_type == "WAIVERS_TRADITIONAL" else InterpretationStatus.UNSUPPORTED,

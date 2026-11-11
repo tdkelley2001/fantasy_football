@@ -17,6 +17,8 @@ Kickoff time, wall-clock time, a zero player score, and a non-null score are not
 
 A manual override cannot bypass those invariants: it must select the current, explicitly unplayed, matchup-period-start week. A current period whose NFL games are final remains unresolved until authoritative fantasy-matchup and cumulative-standings settlement evidence is available. Player actual records are retained as observations but neither their presence nor absence proves settlement. The existing engine continues to receive only a safe fully unplayed boundary.
 
+New schema-v4 publications also retain the validated `settings.scheduleSettings.matchupPeriods` mapping as source-backed canonical rule evidence. Canonical validation requires the live current-period membership to agree with that independently stored mapping. This preserves full period membership when the simulation horizon omits an earlier week. Earlier schema-v4 documents without this evidence remain readable, but cannot authorize V1 simulation.
+
 The future LW2 boundary is `earliest_unresolved_period`. When that period is partial, `partial_week_simulation_required` is true. LW1 exposes this fact but does not simulate it.
 
 ## ESPN evidence audit
