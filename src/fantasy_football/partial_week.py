@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from fantasy_football.canonical.model import LeagueSnapshot, SlotKind
+from fantasy_football.canonical.model import (
+    LeagueSnapshot,
+    MatchupEntryStatus,
+    SlotKind,
+)
 from fantasy_football.canonical.validation import (
     authoritative_current_matchup_period_scoring_weeks,
     validate_snapshot,
@@ -755,10 +759,22 @@ def compose_partial_week_scores(
     starters_by_team: dict[int, list[PlayerScoreComposition]] = {
         team_id: [] for team_id in carry_by_team
     }
+    bye_teams = {
+        item.home_team_id
+        for item in snapshot.fantasy_matchups
+        if item.matchup_period_id == evidence.matchup_period_id
+        and item.entry_status is MatchupEntryStatus.BYE
+    }
     consumed: set[int] = set()
     for player_id, assignment in sorted(lineup_by_player.items()):
         if roles[assignment.lineup_slot_id] is not LineupRole.STARTER:
             continue
+        if assignment.team_id in bye_teams:
+            continue
+        if assignment.team_id not in starters_by_team:
+            _fail(
+                f"starter {player_id}: team {assignment.team_id} lacks current matchup or explicit bye evidence"
+            )
         state = player_states[player_id]
         supplied_value = supplied.get(player_id)
         fixed = remaining = 0.0

@@ -27,6 +27,23 @@ nonqualifier ranks.
 
 ## Weekly order
 
+LW2.2B adds an opt-in `partial_week=DeterministicPartialWeekInput(...)` to this
+same coordinator. Supply the validated LW2.2A evidence, legal complete roster-slot
+assignments, deterministic full-game/remaining realizations, and any preceding
+current-period postseason team/week scores. The ordinary score scenario must
+contain only subsequent weeks. The first week uses observed assignments and the
+accepted composer, requires a verified standings cutoff excluding the current
+period, and runs no transactions. Later weeks resume the order below. Explicit
+bye teams require no first-week realized score. Current-week hypothetical initial
+rosters/transactions and starts needing missing earlier-round bracket history
+fail closed. Full-period membership and prior team/week totals must substantiate
+multiweek carry-in; current-week totals never include that carry a second time.
+Partial runs receive a content digest in configuration provenance; ordinary V1
+calls and fingerprint algorithms are unchanged. See
+`LW2_PARTIAL_WEEK_CONTRACT.md` for the complete contract, limits and synthetic
+verification evidence. This interface does not provide live ESPN translation or
+authorize conditional probability distributions.
+
 For each canonical scoring week the coordinator:
 
 1. Advances the immutable acquisition cycle after the first week. Holds remain
