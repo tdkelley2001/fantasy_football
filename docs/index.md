@@ -76,6 +76,8 @@ These references contain implementation layers and historical amendments. The st
 
 ## Current status and outstanding work
 
+The [R2.6 documentation migration plan](R26_DOCUMENTATION_MIGRATION_PLAN.md) inventories all current tracked Markdown, evidence assets and supporting tools, with contract/gate risks and proposed bounded packages. It is planning under review, not approval to relocate another record or a replacement for the backlog/current technical references.
+
 | Document | Authority |
 |---|---|
 | [README](../README.md) | Product entry point and quick start. |
@@ -85,7 +87,7 @@ These references contain implementation layers and historical amendments. The st
 | [MASTER_SPEC](MASTER_SPEC.md) | Approved analytical requirements and modeling contracts. |
 | [Historical roadmap](ROADMAP.md) | Original milestone history, dependencies and preserved acceptance gates; not current priorities. |
 
-R2.0, R2.1 and R2.2 are independently accepted; R2.0 is recorded at `3391552`, R2.1 in [PR #113](https://github.com/tdkelley2001/fantasy_football/pull/113), and R2.2 at `a7c0ff4` ([PR #115](https://github.com/tdkelley2001/fantasy_football/pull/115)). The LW2.3A performance checkpoint (`d630887`) is also independently accepted. These acceptances do not declare V1 released: **M8.4 remains pending independent release disposition**. R2.3 ([PR #116](https://github.com/tdkelley2001/fantasy_football/pull/116)) and [WR-022](MISSING_PROJECTION_ZERO_CORRECTION.md) are independently accepted through baseline `28bf605`. R2.4 is independently accepted at `05165a8` ([PR #118](https://github.com/tdkelley2001/fantasy_football/pull/118)); R2.5's two-audit archive pilot awaits review. Future features and model/source changes still need applicable approvals. Historical gates remain binding until an approved replacement explicitly supersedes them; unresolved gate migration remains WR-002, not discarded.
+R2.0, R2.1 and R2.2 are independently accepted; R2.0 is recorded at `3391552`, R2.1 in [PR #113](https://github.com/tdkelley2001/fantasy_football/pull/113), and R2.2 at `a7c0ff4` ([PR #115](https://github.com/tdkelley2001/fantasy_football/pull/115)). The LW2.3A performance checkpoint (`d630887`) is also independently accepted. These acceptances do not declare V1 released: **M8.4 remains pending independent release disposition**. R2.3 ([PR #116](https://github.com/tdkelley2001/fantasy_football/pull/116)) and [WR-022](MISSING_PROJECTION_ZERO_CORRECTION.md) are independently accepted through baseline `28bf605`. R2.4 is independently accepted at `05165a8` ([PR #118](https://github.com/tdkelley2001/fantasy_football/pull/118)); R2.5's two-audit archive pilot is independently accepted at `fd98551` ([PR #119](https://github.com/tdkelley2001/fantasy_football/pull/119)); R2.6's migration plan awaits review and authorizes no future package. Future features and model/source changes still need applicable approvals. Historical gates remain binding until an approved replacement explicitly supersedes them; unresolved gate migration remains WR-002, not discarded.
 
 ## Historical development records
 
