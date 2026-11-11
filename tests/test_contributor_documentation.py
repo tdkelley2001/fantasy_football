@@ -98,7 +98,6 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/getting-started/development.md",
         "docs/LOCAL_V1_USER_GUIDE.md",
         "docs/M8_1_LOCAL_INSTALLATION.md",
-        "docs/BACKEND_READINESS.md",
         "docs/CANONICAL_MODEL.md",
         "docs/SNAPSHOT_STORAGE.md",
         "docs/MISSING_PROJECTION_POLICY.md",
@@ -108,7 +107,6 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/LIVE_WEEK_SCORING.md",
         "docs/LW2_PARTIAL_WEEK_CONTRACT.md",
         "docs/APPLICATION_SERVICE.md",
-        "docs/RUN_MANAGEMENT.md",
         "docs/architecture/overview.md",
         "docs/R23_DOCUMENTATION_RECONCILIATION.md",
         "docs/development/verification.md",
@@ -188,7 +186,7 @@ def test_index_covers_reader_needs_and_keeps_r1_inventory_reachable() -> None:
     )[0]
     inventory = re.findall(r"^\| `([^`]+\.md)` \|", section, re.MULTILINE)
     assert len(inventory) == len(set(inventory)) == 56
-    assert all((ROOT / path).is_file() for path in inventory)
+    # The R1 map is dated evidence; current targets are checked recursively.
     assert "R1_REPOSITORY_AUDIT.md" in index
 
 
@@ -210,7 +208,9 @@ def test_current_setup_routes_replace_conflicting_user_guidance() -> None:
         assert target in _read("README.md")
         assert target in _read("docs/index.md")
     assert "getting-started/development.md" in _read("CONTRIBUTING.md")
-    assert "Historical backend handoff commands" in _read("docs/BACKEND_READINESS.md")
+    application = _read("docs/APPLICATION_SERVICE.md")
+    assert "getting-started/development.md" in application
+    assert 'pip install -e ".[app]"' not in application
     assert "Historical implementation evidence" in _read(
         "docs/M8_1_LOCAL_INSTALLATION.md"
     )

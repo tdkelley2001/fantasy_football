@@ -44,4 +44,4 @@ Simulation Center rediscovers retained runs for the selected snapshot. Completed
 
 Use the same custom runtime directory if applicable. Do not delete runtime metadata or kill an unverified PID. [Operations and troubleshooting](operations.md) explains authenticated recovery, persistence and privacy.
 
-Source references: [refresh coordinator](../../src/fantasy_football/app/refresh.py), [refresh UI](../../frontend/src/LeagueRefresh.tsx), [application UI](../../frontend/src/App.tsx), [run lifecycle](../RUN_MANAGEMENT.md) and [Simulation Center contract](../M7_5_SIMULATION_CENTER.md). Fixture tests prove behavior; only separately identified live evidence establishes ESPN availability.
+Source references: [refresh coordinator](../../src/fantasy_football/app/refresh.py), [refresh UI](../../frontend/src/LeagueRefresh.tsx), [application UI](../../frontend/src/App.tsx), [run lifecycle](../APPLICATION_SERVICE.md#analysis-lifecycle) and [Simulation Center contract](../M7_5_SIMULATION_CENTER.md). Fixture tests prove behavior; only separately identified live evidence establishes ESPN availability.

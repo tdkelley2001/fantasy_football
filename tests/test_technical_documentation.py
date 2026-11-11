@@ -6,16 +6,22 @@ import ast
 import inspect
 import json
 import re
+from dataclasses import fields
 from pathlib import Path
+from typing import get_args
 
+from fantasy_football.app.background import BackgroundRunPolicy
 from fantasy_football.app.contracts import (
     API_SCHEMA_VERSION,
     ActionSearchRequest,
     BaselineAnalysisRequest,
+    ErrorDetail,
     ManualScenarioRequest,
     NormalOutcomeModelConfiguration,
+    RunStatus,
     SnapshotRefreshRequest,
 )
+from fantasy_football.app.service import SynchronousSearchSafetyPolicy
 from fantasy_football.canonical.model import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from fantasy_football.monte_carlo import MonteCarloConfig
 from fantasy_football.partial_week import PARTIAL_WEEK_ARTIFACT_VERSION
@@ -152,3 +158,34 @@ def test_partial_contract_keeps_distinct_opt_in_engine_entry_points() -> None:
         "locked",
     ):
         assert name in current
+
+
+def test_application_admission_defaults_are_documented_from_current_policies() -> None:
+    rows = dict(
+        re.findall(
+            r"^\| ((?:SynchronousSearchSafetyPolicy|BackgroundRunPolicy)\.\w+) \| ([0-9.]+) \|$",
+            read("docs/APPLICATION_SERVICE.md"),
+            re.MULTILINE,
+        )
+    )
+    expected = {
+        f"{policy.__name__}.{field.name}": float(field.default)
+        for policy in (SynchronousSearchSafetyPolicy, BackgroundRunPolicy)
+        for field in fields(policy)
+    }
+    assert {key: float(value) for key, value in rows.items()} == expected
+
+
+def test_application_reference_covers_public_lifecycle_and_error_categories() -> None:
+    document = read("docs/APPLICATION_SERVICE.md")
+    categories = get_args(ErrorDetail.model_fields["category"].annotation)
+    for value in (*get_args(RunStatus), *categories):
+        assert re.search(rf"\b{re.escape(value)}\b", document), value
+    for source in (
+        "README.md",
+        "docs/index.md",
+        "docs/architecture/overview.md",
+        "docs/development/verification.md",
+        "docs/BACKLOG.md",
+    ):
+        assert re.search(r"\]\([^)]*APPLICATION_SERVICE\.md(?:#[^)]*)?\)", read(source))

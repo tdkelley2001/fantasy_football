@@ -22,7 +22,7 @@ Use these current guides when older handoff material gives a broader runtime ran
 - [Opportunity Explorer reference](M7_3_OPPORTUNITY_EXPLORER.md): candidate exploration, coverage, rankings and paired impacts.
 - [Trade Lab reference](M7_4_TRADE_LAB.md): multi-team drafting, protected pins, completion and comparison.
 - [Simulation Center reference](M7_5_SIMULATION_CENTER.md): explicit run configuration, progress, cancellation and result navigation.
-- [Background runs](RUN_MANAGEMENT.md), [snapshot storage/inspection](SNAPSHOT_STORAGE.md) and [runtime/recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md): retained data and operational boundaries.
+- [Background runs](APPLICATION_SERVICE.md#analysis-lifecycle), [snapshot storage/inspection](SNAPSHOT_STORAGE.md) and [runtime/recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md): retained data and operational boundaries.
 
 Workspace documents include dated delivery evidence as well as interface explanations. Their historical review statements are not the current capability authority; use the status summary below. The application never submits transactions or invents acceptance/waiver-success probabilities.
 
@@ -32,7 +32,7 @@ Workspace documents include dated delivery evidence as well as interface explana
 
 - [Master specification, system architecture](MASTER_SPEC.md#2-system-architecture-and-execution-lifecycle): presentation → application → accepted engine → data/persistence boundaries.
 - [Canonical records](CANONICAL_MODEL.md), [ESPN adapter](ESPN_CANONICAL_ADAPTER.md) and [immutable storage](SNAPSHOT_STORAGE.md): source provenance and snapshot identity.
-- [Application service/API](APPLICATION_SERVICE.md) and [background lifecycle](RUN_MANAGEMENT.md): transport, orchestration and retained results.
+- [Application API and execution](APPLICATION_SERVICE.md): one current contract for transport, refresh, analysis lifecycle, retained results and local ownership.
 - [Deterministic season coordinator](SEASON_SIMULATOR.md), [postseason engine](POSTSEASON.md) and [Monte Carlo execution](MONTE_CARLO.md): simulation and reproducibility.
 - [R1 audit, feature/source ownership map](R1_REPOSITORY_AUDIT.md): where major features are implemented, known coupling and the proposed later documentation migration.
 - [UI principles](UI_DESIGN_VISION.md): approved source-backed visual, accessibility and interaction direction.
@@ -49,7 +49,7 @@ The engine owns league mechanics and numerical interpretation. The frontend pres
 - [AGENTS.md](../AGENTS.md): standing implementation, evidence, fail-closed and change-discipline rules.
 - [Backlog maintenance](BACKLOG.md#maintaining-this-file): propose, claim, update and complete stable work items through ordinary PRs.
 - [Release checklist](RELEASE_CHECKLIST.md): credential-free versus explicit Windows process/recovery checks and independent signoff.
-- [Backend readiness handoff](BACKEND_READINESS.md): API compatibility/troubleshooting reference; its Python-only startup procedure is historical, so use the current quick start for built frontend requirements.
+- [API evolution and compatibility](APPLICATION_SERVICE.md#api-evolution): additive versus incompatible changes; current developer setup remains in the guide above.
 
 The full release script builds artifacts and runs a networked dependency audit; it is not a read-only/offline check. Live ESPN requests, process recovery and private stores require explicit scope. Report actual checks/results, skipped checks and limitations. Do not infer a fresh-machine or live-data pass from fixture tests.
 
@@ -60,7 +60,7 @@ The full release script builds artifacts and runs a networked dependency audit; 
 - **League mechanics:** [roster valuation](ROSTER_VALUATION.md), [weekly transactions](WEEKLY_TRANSACTIONS.md), [complete-cycle reference/oracle](TRANSACTION_CYCLE_REFERENCE.md), [postseason](POSTSEASON.md), [season coordinator](SEASON_SIMULATOR.md).
 - **Outcomes and numerics:** [player outcome models](PLAYER_OUTCOME_MODEL.md), [Monte Carlo paths/precision/workers/recovery](MONTE_CARLO.md).
 - **Scenarios and searches:** [manual scenarios](MANUAL_SCENARIOS.md), [trade enumeration/screening/evaluation](TRADE_CANDIDATES.md), [acquisitions](ACQUISITION_CANDIDATES.md), [trade chains](MULTI_TRADE_CHAINS.md), [unified actions](UNIFIED_ACTION_SEARCH.md), [search orchestration](SEARCH_ORCHESTRATION.md).
-- **Application contracts:** [service/HTTP reference](APPLICATION_SERVICE.md), [retained runs/results](RUN_MANAGEMENT.md), [API compatibility handoff](BACKEND_READINESS.md). A running local server exposes `/docs` and `/openapi.json` for actual public shape; approved requirements govern meaning.
+- **Application contracts:** [API and execution reference](APPLICATION_SERVICE.md), including compatibility, refresh, lifecycle, storage, leases, limits and recovery. A running local server exposes `/docs` and `/openapi.json` for exact public shape; approved requirements govern meaning.
 
 These references contain implementation layers and historical amendments. The status summary identifies current supported subsets; an unverified source claim or future design paragraph is not an executable capability.
 
@@ -76,7 +76,7 @@ These references contain implementation layers and historical amendments. The st
 
 ## Current status and outstanding work
 
-The [revised R2.7 plan](development/documentation-consolidation.md), in existing [PR #121](https://github.com/tdkelley2001/fantasy_football/pull/121), proposes a conditional 17-document architecture: domain documents own current contracts, BACKLOG owns exact future requirements/approval/delivery, and Git/PRs own ordinary history. It replaces the initial 40-document proposal and proposes retiring MASTER_SPEC after reviewed requirement transfer, with no replacement master. D1 combines API/execution documentation first. This remains In Review; current authorities below still apply and no consolidation/deletion is authorized. The [R2.6 inventory](R26_DOCUMENTATION_MIGRATION_PLAN.md) is discovery evidence, not an active archive plan. Use BACKLOG for work status, not either plan as a second queue.
+The [revised R2.7 plan](development/documentation-consolidation.md), in existing [PR #121](https://github.com/tdkelley2001/fantasy_football/pull/121), proposes a conditional 17-document architecture: domain documents own current contracts, BACKLOG owns exact future requirements/approval/delivery, and Git/PRs own ordinary history. It replaces the initial 40-document proposal and proposes retiring MASTER_SPEC after reviewed requirement transfer, with no replacement master. R2.7 is independently accepted at `fd99424`; D1 now consolidates API/execution documentation and is In Review. Other packages/authority transfer remain separately gated; current authorities below still apply. The [R2.6 inventory](R26_DOCUMENTATION_MIGRATION_PLAN.md) is discovery evidence, not an active archive plan. Use BACKLOG for work status, not either plan as a second queue.
 
 | Document | Authority |
 |---|---|
@@ -95,8 +95,8 @@ Historical records remain discoverable. R2.1 preserved their original locations;
 
 - [Original roadmap](ROADMAP.md) and delivery sections of [MASTER_SPEC](MASTER_SPEC.md): milestone sequence, decisions and acceptance gates.
 - [M0 feasibility/handoff](M0_FEASIBILITY_AND_M1_HANDOFF.md) and [proposed M1 data dictionary](ESPN_DATA_DICTIONARY.md): design vocabulary and discovery context, not replacements for today's canonical classes.
-- Repository audits: [archived pre-M3](archive/audits/PRE_M3_REPOSITORY_AUDIT.md), [archived pre-M4](archive/audits/PRE_M4_INTEGRATION_AUDIT.md), [post-M5](POST_M5_CONSOLIDATION_AUDIT.md), [pre-M7](PRE_M7_REPOSITORY_AUDIT.md), [post-M7](POST_M7_CONSOLIDATION_AUDIT.md) and [R1 inventory/migration map](R1_REPOSITORY_AUDIT.md). The original two audit paths remain heading-compatible navigation pages; the [R2.5 migration record](R25_ARCHIVE_PILOT.md) records the preservation checks.
-- Backend evidence: [M6 validation](M6_3_BACKEND_VALIDATION.md) and [backend readiness](BACKEND_READINESS.md).
+- Repository audits: [archived pre-M3](archive/audits/PRE_M3_REPOSITORY_AUDIT.md), [archived pre-M4](archive/audits/PRE_M4_INTEGRATION_AUDIT.md), [post-M7](POST_M7_CONSOLIDATION_AUDIT.md) and [R1 inventory/migration map](R1_REPOSITORY_AUDIT.md). The original two pilot audit paths remain navigation pages; [R2.5](R25_ARCHIVE_PILOT.md) records that pilot.
+- The five redundant application/backend reports were incorporated into [APPLICATION_SERVICE](APPLICATION_SERVICE.md) in D1. Their chronology and exact historical evidence remain in accepted Git history; [source/verification](APPLICATION_SERVICE.md#source-and-verification) links the useful measured baseline.
 - UI evidence: [frontend foundation](M7_1_FRONTEND_FOUNDATION.md), [superseded visual exploration](M7_1_VISUAL_DIRECTION_REVIEW.md), [League Overview](M7_2_LEAGUE_ANALYTICS.md), [Explorer](M7_3_OPPORTUNITY_EXPLORER.md), [Trade Lab](M7_4_TRADE_LAB.md) and [Simulation Center](M7_5_SIMULATION_CENTER.md). Linked screenshots remain evidence, not fabricated analytics.
 - Local operation/release evidence: [installation](M8_1_LOCAL_INSTALLATION.md), [authorized real-league validation](M8_2_REAL_LEAGUE_VALIDATION.md), [runtime/recovery](M8_3_RUNTIME_AND_RECOVERY.md) and [M8.4 release audit](M8_4_FINAL_RELEASE_AUDIT.md). The [release checklist](RELEASE_CHECKLIST.md) still needs explicit reviewer disposition.
 - Live-week records: [LW1](LIVE_WEEK_SCORING.md), [LW2 foundations/integration](LW2_PARTIAL_WEEK_CONTRACT.md) and [accepted performance/consolidation checkpoint](LW23A_PERFORMANCE_CHECKPOINT.md).

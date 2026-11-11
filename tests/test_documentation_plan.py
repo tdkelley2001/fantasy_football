@@ -60,7 +60,8 @@ def test_every_baseline_markdown_and_r26_addition_has_one_complete_disposition()
     assert len(baseline) == 73
     assert set(rows) == baseline | {PLAN}
     assert Counter(row[1] for row in rows.values()) == {"A": 30, "B": 10, "C": 34}
-    assert all((ROOT / name).is_file() for name in rows)
+    # This inventory describes accepted R2.6 Git objects, not perpetual live paths.
+    # Current navigation/targets are verified by test_documentation_links instead.
     assert all(all(row[index] for index in (2, 3, 4, 5, 6)) for row in rows.values())
 
 

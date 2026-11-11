@@ -92,11 +92,13 @@ Historical capture scripts under `frontend/dev/` may assume a fixed Windows Edge
 
 ## Change-based verification matrix
 
+The [application API and execution reference](../APPLICATION_SERVICE.md) owns current routes/DTOs, refresh, analysis lifecycle, limits, retained results and process-ownership guarantees. Use its [source/test entry points](../APPLICATION_SERVICE.md#source-and-verification) for application-only contract work; it replaces the separate backend/run handoffs, not the numerical or operational test tiers below.
+
 Start with Tier 1, then select relevant tests below. The module lists are useful starting points, not exhaustive signoff or permission to omit an applicable reference/acceptance gate. All test paths are relative to the repository root and can follow `python -m pytest` using the prepared interpreter. Include `-m "not windows_process"` for ordinary credential-free selection.
 
 | Change | Targeted starting points | Additional evidence when affected |
 |---|---|---|
-| Documentation only | Tier 1, `tests/test_release_verification.py` for verification-guide/script references. | Modified links/fragments, current versus historical status, source/command cross-check and preservation of gates/inventory. No numerical rerun merely to revalidate prose. |
+| Documentation only | Tier 1, `tests/test_release_verification.py` for verification-guide/script references. | Modified links/fragments, current versus historical status and source/command cross-check. Frozen inventories describe their baseline, not a requirement that retired files remain forever. Preserve applicable technical gates; no numerical rerun merely to revalidate prose. |
 | Canonical model/serialization | `tests/test_canonical_snapshot.py`, `tests/test_snapshot_store.py`, `tests/test_snapshot_cli.py`. | Historical v2/v3/v4 bytes, IDs/checksums, schema rejection, projection distinctions, capability fail-closed cases; adapter/consumer tests for interface changes. |
 | ESPN adapter/ingestion | `tests/test_espn_adapter.py`, `tests/test_espn_adapter_cli.py`, `tests/test_snapshot_refresh.py`, `tests/test_live_scoring.py`. | Pagination/identity, source provenance, missing versus zero, safe boundary and publication/rollback checks. New live-field claims require separately authorized observations; fixtures alone cannot promote semantics. |
 | Simulation/Monte Carlo | `tests/test_season_simulator.py`, `tests/test_weekly_engine.py`, `tests/test_postseason.py`, `tests/test_monte_carlo.py`. | Hand-checkable/reference outcomes, negative scores, standings/carry, path IDs, worker/batch and checkpoint suites: `tests/test_monte_carlo_parallel.py`, `tests/test_monte_carlo_execution.py`, `tests/test_monte_carlo_precision.py`; relevant partial suites. |
