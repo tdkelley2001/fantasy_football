@@ -2,7 +2,9 @@
 
 ## Decision
 
-Current implementation note: this decision governs ordinary V1 projected-lineup availability and team scoring. Draw-record generation is separate: the provisional Normal model generates the complete player/week universe, including unused zero-mean records; the empirical model emits deterministic zero records for missing/explicit-zero classes. Neither makes an unavailable player selectable. The literal phrase “unavailable for ... stochastic scoring” below is preserved as approved policy; whether it also prohibits unused random records is an unresolved wording/contract ambiguity for independent review, not silently waived here. See [outcome models](PLAYER_OUTCOME_MODEL.md) and [R2.3 finding R23-06](R23_DOCUMENTATION_RECONCILIATION.md#unresolved-semantic-question).
+Approved WR-022 modeling correction: **every player-week with canonical `projection_class=MISSING` must produce a simulated outcome of exactly `0.0` in every supported outcome-model family, regardless of dispersion parameters, seed or path**. No variance or random draw is permitted for missing observations. Use the canonical classification, not an effective value of zero, to identify missingness. Raw `null`, class, effective zero and provenance remain unchanged. This explicitly resolves R23-06; implementation review remains separate from approval of this policy. See [correction and compatibility record](MISSING_PROJECTION_ZERO_CORRECTION.md).
+
+Explicit ESPN zero is a different classification and its outcome treatment is unchanged: Normal retains its prior zero-mean/dispersion behavior; empirical retains deterministic zero. Positive and finite negative Normal draws retain their exact prior random keys and values. Existing positive-effective-projection lineup eligibility is unchanged; a random value never establishes availability. Fixed observed actuals and caller-supplied deterministic realizations are separate from generating simulated player outcomes.
 
 For V1 modeling, a player-week with no valid ESPN weekly projection record receives an **effective projection of zero** and is unavailable for projected-lineup selection and stochastic scoring for that week.
 
