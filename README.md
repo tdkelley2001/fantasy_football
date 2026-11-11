@@ -1,41 +1,42 @@
 # War Room
 
-War Room is a local web application for ESPN fantasy football analysis. It preserves league snapshots, simulates league-wide season outcomes and compares roster changes by their effect on championship probability.
+War Room is a local web application for ESPN fantasy football managers who want to understand league-wide season outcomes and compare hypothetical roster changes. It preserves immutable league snapshots, simulates the remaining season and compares actions using matched player-week draws.
 
-## What you can do
+ESPN access is **read-only**. War Room **never submits real transactions**, predicts manager acceptance or estimates waiver-claim success.
 
-- Explore championship, playoff and placement estimates with Monte Carlo sampling intervals and explicit precision/completeness information.
-- Compare multi-team trade scenarios and search selected trade, acquisition and combined-action universes using matched player-week draws.
-- Inspect configured league rules, immutable source snapshots and retained analysis results through League Overview, Opportunity Explorer, Trade Lab and Simulation Center.
+## Current capabilities
 
-ESPN access is **read-only**: War Room **never submits real transactions** or predicts whether another manager will accept a trade or a waiver claim will succeed.
+| Availability | What you can use |
+|---|---|
+| Application | Explicit ESPN refresh/publication and snapshot selection; League Overview championship/playoff/placement estimates; Opportunity Explorer retained candidate exploration; Trade Lab final-state scenarios; Simulation Center bounded baseline/action execution, cancellation and retained history. |
+| Accepted engine interfaces, not exposed in the browser/API | Validated partial-week evidence and deterministic fixed/remaining/carry composition; opt-in partial-season execution with verified standings cutoff/history; partial Monte Carlo for **fully unstarted** current players with approved matching full-game projections. Unresolved evidence and completed/in-progress/missing/ambiguous MC player states fail closed. Pregame equivalence requires matching starters/policies and no first-week acquisition changing ownership. Partial-season execution rejects current transactions/hypothetical initial rosters; later-round starts without reconstructible history and multiweek regular-period cases remain unsupported. |
+| Provisional / evidence-limited | The application uses the provisional Normal outcome model; an empirical research path is engine-only. Sampling intervals quantify Monte Carlo uncertainty, not model error. Historical returned ESPN projections do not prove authenticated pregame vintages. Live observations are bounded to documented retrievals, not universal ESPN guarantees. |
+| Unsupported / deferred | Automatic live-to-partial translation, conditional in-game distributions, current-week transaction/lineup advice, automatic injury forecasts, a joint-score model, Weekly Deep Dive, League Insights, application-level job resume, public hosting and accounts. A backlog proposal does not authorize implementation or new modeling assumptions. |
 
-## Current scope and limitations
+Ordinary V1 simulation requires a verified safe whole-week boundary. An explicit override or later unplayed games cannot bypass unresolved matchup-period membership, preceding contributions or standings evidence. NFL completion or score presence alone does not prove participation, fantasy settlement or stat-correction finality. Validated configuration determines league behavior; unknown rules and permissions fail closed.
 
-War Room is **not formally released**. The final M8.4 release decision remains pending. See [current capabilities](docs/status.md) for the supported, provisional, engine-only and deferred features.
+Canonical snapshots preserve source provenance and historical schema reads without rewriting bytes/IDs. Read compatibility does not guarantee every consumer capability. Missing projections, explicit ESPN zeros and policy-imputed zeros remain distinct; the approved deterministic-zero correction preserves nonmissing draws while distinguishing numerical policy identity. See [data contracts](docs/CANONICAL_MODEL.md) and [outcome models](docs/PLAYER_OUTCOME_MODEL.md).
 
-The application is loopback-only and assumes a trusted local machine. Do not expose it through port forwarding or a public proxy. ESPN projections are inputs to provisional outcome models, not guarantees; sampling intervals do not measure model error. Missing projections, explicit zeros and unsupported league mechanics remain distinct and visible.
+## Limitations and release status
 
-Ordinary V1 simulation requires a verified safe whole-week boundary. Opt-in partial-week foundations and fully unstarted Monte Carlo integration are engine-only; they do not enable automatic in-game forecasts, live-week lineup advice or current-week transaction recommendations. Source evidence and permissions fail closed when unverified.
+War Room is **not formally released**. Accepted engine/workspace implementation does not constitute release approval. **M8.4 release disposition remains pending**, including follow-up review and current clean-machine acceptance under [WR-021](docs/BACKLOG.md#wr-021-release-acceptance).
 
-## Requirements and quick start
+Exact valuation and action search can be expensive. A completed run can miss precision targets; incomplete paths/capabilities, candidate/evaluation coverage and unresolved rankings remain visible. A top displayed candidate need not be globally best or executable. Numerical checkpoint/resume exists; interrupted application jobs are classified, not automatically resumed. Active batches or synchronous ESPN calls can outlive cooperative shutdown waits; recovery requires authenticated launcher ownership.
 
-Follow [OPERATIONS](docs/OPERATIONS.md) for the complete Windows installation, ESPN configuration, launch, first analysis, private-data management and safe shutdown procedure. It records the tested Python/Node environment, locked setup and unresolved WR-003 version-policy mismatch. Installation/startup needs no ESPN credentials; private refresh needs the complete authorized cookie pair.
+The service binds to loopback on a trusted local machine. Host/Origin checks are not remote authentication or isolation from other local processes. Public proxies, port forwarding and untrusted shared-machine deployment are unsupported. Keep credentials, rule files, databases/sidecars, logs, research and user results private and out of Git.
 
-The application serves its built frontend on loopback. Refresh the configured league explicitly, select a snapshot, then submit a bounded baseline or hypothetical analysis in Simulation Center. A manual start-week override cannot bypass evidence safety checks. Use the [application user guide](docs/LOCAL_V1_USER_GUIDE.md) for workspace details and interpretation.
+## Start here
 
-Developers use [CONTRIBUTING](CONTRIBUTING.md#development-environment-and-checks) for the separate backend/Vite workflow and verification tiers. V1 release signoffs remain in [WR-021](docs/BACKLOG.md#wr-021-release-acceptance); historical implementation evidence remains in Git/PRs.
+- [Install and operate](docs/OPERATIONS.md): Windows prerequisites, locked setup, public/private ESPN configuration, launch, first analysis, private storage and safe shutdown. Installation/startup needs no ESPN credentials. Tested versions and the unresolved Node-policy mismatch (WR-003) are recorded there.
+- [Use the interface](docs/INTERFACE.md): workspace journeys, analytical presentation, provenance, accessibility and frontend contracts.
+- [Contribute](CONTRIBUTING.md): original-repository/fork branches, safe synchronization, developer environment, verification tiers and independent PR review. [AGENTS](AGENTS.md) supplies standing development rules.
+- [Development backlog](docs/BACKLOG.md): authoritative outstanding work and evidence/approval gates; a proposal is not implementation approval.
 
-## Documentation and contribution
+## Understand the system
 
-- [Documentation index](docs/index.md) — start here for guides, architecture, API/domain references, research and evidence.
-- [Contributing](CONTRIBUTING.md) — feature branches in the original repository or retained fork, safe synchronization, reviewed PRs and checks.
-- [Development backlog](docs/BACKLOG.md) — the authoritative list of outstanding work; a proposal is not implementation approval.
-- [Current capabilities](docs/status.md) — what is supported today and what remains provisional or unavailable.
-- [Master specification](docs/MASTER_SPEC.md) — approved analytical requirements, modeling contracts and architecture.
-- [Architecture overview](docs/architecture/overview.md) — subsystem/source map, data flow and extension boundaries.
-- [Application API and execution](docs/APPLICATION_SERVICE.md) — API 1.0, refresh, background lifecycle, retained results, ownership and local security.
-- [Historical roadmap](docs/ROADMAP.md) — preserved milestones, dependencies and acceptance gates, not an active work queue.
-- [Historical development records](docs/index.md#historical-development-records) — audits, source observations and visual/runtime evidence retained at their original paths.
-
-Keep changes small and use a reviewed pull request into `tdkelley2001/fantasy_football:main`. The repository-native backlog is maintained through those PRs; no Issues/Projects workflow is required.
+- [Architecture map](docs/architecture/overview.md) and [application API/execution](docs/APPLICATION_SERVICE.md): source ownership, runtime boundaries and public contracts.
+- [Canonical data](docs/CANONICAL_MODEL.md), [ESPN adapter](docs/ESPN_CANONICAL_ADAPTER.md) and [snapshot storage](docs/SNAPSHOT_STORAGE.md): evidence, configuration and immutable persistence.
+- [Season simulation](docs/SEASON_SIMULATOR.md), [outcome models](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo](docs/MONTE_CARLO.md): mechanics, provisional mathematics and reproducibility. [Partial-week contracts](docs/LW2_PARTIAL_WEEK_CONTRACT.md) define the separate evidence boundary.
+- [Manual scenarios](docs/MANUAL_SCENARIOS.md) and [action search](docs/UNIFIED_ACTION_SEARCH.md): counterfactual completion, selected universes and paired comparison.
+- [Research](docs/OUTCOME_DISTRIBUTION_RESEARCH.md) and [live-source evidence](docs/LIVE_WEEK_SCORING.md): provenance, verification classes and unresolved capabilities. Fixtures prove code behavior, not live ESPN semantics.
+- [MASTER_SPEC](docs/MASTER_SPEC.md) remains authoritative for approved analytical requirements until a separately reviewed transfer. [ROADMAP](docs/ROADMAP.md) preserves historical milestones and applicable gates, not a second work queue. Ordinary history and retired reports remain in Git/PRs; retained evidence applies at its stated revision.

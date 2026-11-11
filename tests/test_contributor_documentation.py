@@ -89,10 +89,8 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "AGENTS.md",
         "CONTRIBUTING.md",
         "docs/BACKLOG.md",
-        "docs/status.md",
-        "docs/index.md",
+        "docs/INTERFACE.md",
         "docs/OPERATIONS.md",
-        "docs/LOCAL_V1_USER_GUIDE.md",
         "docs/CANONICAL_MODEL.md",
         "docs/SNAPSHOT_STORAGE.md",
         "docs/MISSING_PROJECTION_POLICY.md",
@@ -143,10 +141,9 @@ def test_contributor_entry_points_link_the_four_distinct_authorities(
     assert {
         "CONTRIBUTING.md",
         "docs/BACKLOG.md",
-        "docs/status.md",
         "docs/MASTER_SPEC.md",
         "docs/ROADMAP.md",
-        "docs/index.md",
+        "docs/INTERFACE.md",
     } <= targets
 
 
@@ -160,19 +157,11 @@ def test_fork_and_original_branch_sync_examples_are_both_present() -> None:
     assert "fork only" in guide
 
 
-def test_index_covers_reader_needs_and_keeps_r1_inventory_reachable() -> None:
-    index = _read("docs/index.md")
-    for heading in (
-        "Getting started",
-        "Using War Room",
-        "Understanding the architecture",
-        "Developing and testing",
-        "Analytical and API references",
-        "Research and evidence",
-        "Current status and outstanding work",
-        "Historical development records",
-    ):
-        assert f"## {heading}\n" in index
+def test_readme_covers_reader_needs_without_rewriting_r1_inventory() -> None:
+    entry = _read("README.md")
+    for heading in ("Current capabilities", "Start here", "Understand the system"):
+        assert f"## {heading}\n" in entry
+    assert "docs/INTERFACE.md" in entry
     audit = _read("docs/R1_REPOSITORY_AUDIT.md")
     section = audit.split("## 7. File-by-file documentation migration map", 1)[1].split(
         "## 8.", 1
@@ -180,7 +169,7 @@ def test_index_covers_reader_needs_and_keeps_r1_inventory_reachable() -> None:
     inventory = re.findall(r"^\| `([^`]+\.md)` \|", section, re.MULTILINE)
     assert len(inventory) == len(set(inventory)) == 56
     # The R1 map is dated evidence; current targets are checked recursively.
-    assert "R1_REPOSITORY_AUDIT.md" in index
+    assert "docs/ROADMAP.md" in entry
 
 
 def test_accepted_r20_is_completed_but_broader_r2_work_remains_open() -> None:
@@ -192,20 +181,10 @@ def test_accepted_r20_is_completed_but_broader_r2_work_remains_open() -> None:
 
 
 def test_current_setup_routes_replace_conflicting_user_guidance() -> None:
-    user = _read("docs/LOCAL_V1_USER_GUIDE.md")
-    assert "SNAPSHOT_DB_PATH` controls the private append-only" not in user
-    assert "Enter the first scoring week that has not begun" not in user
-    for source in (
-        "README.md",
-        "AGENTS.md",
-        "docs/index.md",
-        "docs/LOCAL_V1_USER_GUIDE.md",
-    ):
+    for source in ("README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/INTERFACE.md"):
         assert "OPERATIONS.md" in _read(source)
-    assert "docs/OPERATIONS.md" in _read("CONTRIBUTING.md")
-    application = _read("docs/APPLICATION_SERVICE.md")
-    assert "../CONTRIBUTING.md" in application
-    assert 'pip install -e ".[app]"' not in application
+    assert "../CONTRIBUTING.md" in _read("docs/APPLICATION_SERVICE.md")
+    assert 'pip install -e ".[app]"' not in _read("docs/APPLICATION_SERVICE.md")
 
 
 def test_operations_launcher_defaults_match_supported_start_parameters() -> None:

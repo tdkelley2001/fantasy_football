@@ -224,7 +224,7 @@ Error categories remain invalid_request, not_found, unsupported_configuration, i
 - Exact execution can be expensive; coarse cancellation, sampled RSS/CPU versus enforced admission, unknown build revision, bounded run history and unverified source/rule capabilities remain visible. Synthetic measurements or unit tests do not establish live ESPN fields, fresh-machine setup or a release decision.
 - MASTER_SPEC §2.3 requires code/build provenance; the accepted outer explicit-or-unknown envelope describes the implemented compatibility boundary, not proof all engine artifacts carry immutable source revision. MASTER_SPEC §9.4's broader query ambition exceeds the delivered allowlist above. Preserve these obligations for the separately reviewed requirements/backlog transfer under WR-002; D1 does not waive or implement them.
 - Analysis submission compensation and queued-to-failed behavior are verified for BackgroundRunCoordinator; SnapshotRefreshCoordinator currently has no analogous compensation around executor.submit. Its generic error paths can also retain a committed flag while emitting pre-publication wording after a later inspection failure. Scope those guarantees accurately; this source-review limitation is not a new live incident or an authorized runtime correction.
-- Independent M8.4/release and follow-up dispositions remain pending as recorded in [status](status.md) and [backlog](BACKLOG.md). Consolidating documentation does not accept a release.
+- Independent M8.4/release and follow-up dispositions remain pending as recorded in [current capabilities](../README.md#current-capabilities) and [backlog](BACKLOG.md). Consolidating documentation does not accept a release.
 
 ## Source and verification
 

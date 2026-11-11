@@ -159,7 +159,7 @@ An alternate fixture test removes IR and adds multiple flex slots, demonstrating
 
 ## Implemented and deferred boundaries
 
-Current interpretation: V(R), weekly transactions, season coordination and Monte Carlo are implemented in separate engine modules; they are not deferred capabilities of today's application. The following M1/M2 delivery statements are preserved historical scope, not the current work queue. Use [status](status.md), [backlog](BACKLOG.md) and the [R2.3 reconciliation inventory](R23_DOCUMENTATION_RECONCILIATION.md) for current disposition.
+Current interpretation: V(R), weekly transactions, season coordination and Monte Carlo are implemented in separate engine modules; they are not deferred capabilities of today's application. The following M1/M2 delivery statements are preserved historical scope, not the current work queue. Use [current capabilities](../README.md#current-capabilities), [backlog](BACKLOG.md) and the [R2.3 reconciliation inventory](R23_DOCUMENTATION_RECONCILIATION.md) for current disposition.
 
 M1.2 implements ESPN translation, M1.3 implements immutable document persistence, and M1.4/M1.5 implement quality reporting and inspection. M2.3b implements schema v3 and the evolving-state legality primitives above. V(R), transaction selection, complete weekly waiver/free-agent execution, and lookahead remain M2.3c–e.
 

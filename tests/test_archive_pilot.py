@@ -153,7 +153,12 @@ def test_original_pilot_inventory_record_is_unchanged():
     # Current governing references may update citations after an authorized
     # consolidation. The pilot does not freeze every later specification edit.
     path = "docs/R1_REPOSITORY_AUDIT.md"
-    assert (ROOT / path).read_text(encoding="utf-8") == _baseline(path)
+    actual = (ROOT / path).read_text(encoding="utf-8")
+    # D3 retargets the supersession notice only; retain the complete R1 body.
+    actual = actual.replace(
+        "[status.md](../README.md#current-capabilities)", "[status.md](status.md)"
+    )
+    assert actual == _baseline(path)
 
 
 def test_pilot_records_and_navigation_remain_accessible():
@@ -163,10 +168,7 @@ def test_pilot_records_and_navigation_remain_accessible():
         for folder in ("docs", "docs/archive/audits")
         for name in NAMES
     )
-    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
-    history = index.split("## Historical development records", 1)[1]
-    for name in NAMES:
-        assert f"(archive/audits/{name})" in history
-    current = index.split("## Historical development records", 1)[0]
-    assert "architecture/overview.md" in current
-    assert "(../CONTRIBUTING.md)" in current
+    # D3 retires the chronological index; README links the owning references.
+    entry = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "docs/architecture/overview.md" in entry
+    assert "CONTRIBUTING.md" in entry
