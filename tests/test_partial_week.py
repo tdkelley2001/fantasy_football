@@ -5,7 +5,15 @@ from dataclasses import replace
 
 import pytest
 
-from fantasy_football.canonical.model import LineupSlotRule, SlotKind
+from fantasy_football.canonical.model import (
+    InterpretationStatus,
+    LineupSlotRule,
+    ProjectionClass,
+    ProjectionSource,
+    SlotKind,
+)
+from fantasy_football.canonical.validation import CanonicalValidationError
+from fantasy_football.lineup_optimizer import optimize_starting_lineup
 from fantasy_football.live_scoring import NFLGameStatus
 from fantasy_football.partial_week import (
     PARTIAL_WEEK_ARTIFACT_VERSION,
@@ -32,7 +40,19 @@ from fantasy_football.partial_week_serialization import (
     partial_week_from_json,
     partial_week_to_json,
 )
-from tests.canonical_fixtures import canonical_snapshot
+from fantasy_football.weekly_engine import (
+    RealizedPlayerScore,
+    initialize_standings,
+    resolve_regular_season_week,
+)
+from tests.canonical_fixtures import canonical_snapshot as _canonical_snapshot
+
+
+def canonical_snapshot():
+    base = _canonical_snapshot()
+    return replace(
+        base, sources=tuple(replace(item, view="mRoster") for item in base.sources)
+    )
 
 
 def _evidence(snapshot=None, **changes):
@@ -189,6 +209,35 @@ def test_deterministic_composition_separates_fixed_remaining_and_carry_in() -> N
 
 def test_unstarted_composition_matches_whole_week_sum() -> None:
     snapshot = canonical_snapshot()
+    snapshot = replace(
+        snapshot,
+        player_weeks=tuple(
+            replace(
+                item,
+                raw_projection=8.0,
+                effective_projection=8.0,
+                projection_class=ProjectionClass.PRESENT,
+                effective_source=ProjectionSource.ESPN,
+            )
+            for item in snapshot.player_weeks
+        ),
+    )
+    snapshot = replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            interpretations=tuple(
+                replace(
+                    item,
+                    normalized_value="allow_ties",
+                    status=InterpretationStatus.UNDERSTOOD,
+                )
+                if item.rule_id == "regular_matchup_tie"
+                else item
+                for item in snapshot.rules.interpretations
+            ),
+        ),
+    )
     source_id = snapshot.sources[0].source_id
     evidence = _evidence(
         snapshot,
@@ -230,6 +279,98 @@ def test_unstarted_composition_matches_whole_week_sum() -> None:
         == 3.0
     )
     assert source_id in evidence.source_ids
+    lineups = tuple(
+        optimize_starting_lineup(snapshot, team.team_id, 15) for team in snapshot.teams
+    )
+    observed_starters = {
+        (item.team_id, item.lineup_slot_id, item.player_id) for item in evidence.lineups
+    }
+    assert {
+        (lineup.team_id, item.slot.lineup_slot_id, item.player_id)
+        for lineup in lineups
+        for item in lineup.assignments
+    } == observed_starters
+    weekly = resolve_regular_season_week(
+        snapshot,
+        15,
+        initialize_standings(snapshot),
+        lineups,
+        tuple(
+            RealizedPlayerScore(item.player_id, snapshot.season, 15, value)
+            for item, value in zip(evidence.players, (1.0, 2.0, 3.0), strict=True)
+        ),
+    )
+    assert {item.team_id: item.final_matchup_points for item in result.teams} == {
+        item.team_id: item.total_realized_points for item in weekly.team_scores
+    }
+
+
+@pytest.mark.parametrize("slot", (20, 25))
+def test_observed_slot_must_match_canonical_even_when_eligible(slot) -> None:
+    snapshot = canonical_snapshot()
+    snapshot = replace(
+        snapshot,
+        rules=replace(
+            snapshot.rules,
+            lineup_slots=snapshot.rules.lineup_slots
+            + (LineupSlotRule(25, 1, SlotKind.STARTER),),
+        ),
+    )
+    evidence = _evidence(snapshot)
+    forged = replace(
+        evidence,
+        lineups=tuple(
+            replace(
+                item,
+                lineup_slot_id=slot,
+                role=LineupRole.BENCH if slot == 20 else LineupRole.STARTER,
+            )
+            if item.player_id == 1
+            else item
+            for item in evidence.lineups
+        ),
+    )
+    with pytest.raises(PartialWeekError, match="differs from canonical roster slot"):
+        validate_partial_week_evidence(snapshot, forged)
+    validate_partial_week_evidence(snapshot, evidence)
+
+
+def test_observed_overcapacity_is_rejected_by_canonical_authority() -> None:
+    base = canonical_snapshot()
+    snapshot = replace(
+        base,
+        players=tuple(
+            replace(item, eligible_lineup_slot_ids=(0, 16, 20))
+            if item.player_id == -101
+            else item
+            for item in base.players
+        ),
+        roster_entries=tuple(
+            replace(item, lineup_slot_id=0) if item.player_id == -101 else item
+            for item in base.roster_entries
+        ),
+    )
+    with pytest.raises(
+        CanonicalValidationError, match="occupancy 2 exceeds capacity 1"
+    ):
+        validate_partial_week_evidence(snapshot, _evidence(snapshot))
+
+
+@pytest.mark.parametrize("parameters", ((), (("scoringPeriodId", 14),)))
+def test_unknown_or_different_roster_period_is_preservable_but_not_executable(
+    parameters,
+) -> None:
+    base = canonical_snapshot()
+    snapshot = replace(
+        base,
+        sources=tuple(replace(item, parameters=parameters) for item in base.sources),
+    )
+    evidence = _evidence(snapshot)
+    validate_partial_week_evidence(snapshot, evidence)
+    with pytest.raises(
+        PartialWeekError, match="does not establish current scoring-period slot timing"
+    ):
+        require_executable_partial_week_evidence(snapshot, evidence)
 
 
 def test_bench_player_is_excluded_and_unused_input_is_rejected() -> None:
@@ -397,6 +538,10 @@ def test_multiweek_period_requires_verified_carry_in() -> None:
     base = canonical_snapshot()
     snapshot = replace(
         base,
+        sources=tuple(
+            replace(item, parameters=(("scoringPeriodId", 16),))
+            for item in base.sources
+        ),
         matchup_periods=tuple(
             replace(item, scoring_weeks=(15, 16))
             if item.matchup_period_id == 1

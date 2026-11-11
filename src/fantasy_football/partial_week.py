@@ -402,6 +402,11 @@ def validate_partial_week_evidence(
     state_by_id = {item.player_id: item for item in evidence.players}
     roles = _slot_roles(snapshot)
     roster_owner = {item.player_id: item.team_id for item in snapshot.roster_entries}
+    roster_slots = {
+        item.player_id: item.lineup_slot_id for item in snapshot.roster_entries
+    }
+    observed_counts: Counter[tuple[int, int]] = Counter()
+    capacities = {item.slot_id: item.capacity for item in snapshot.rules.lineup_slots}
     lineup_ids: set[int] = set()
     for assignment in evidence.lineups:
         if (
@@ -427,6 +432,12 @@ def validate_partial_week_evidence(
                 f"observed lineup player {assignment.player_id}: slot role is inconsistent"
             )
         canonical_eligible = player_by_id[assignment.player_id].eligible_lineup_slot_ids
+        if assignment.lineup_slot_id != roster_slots[assignment.player_id]:
+            _fail(
+                f"observed lineup player {assignment.player_id}: slot {assignment.lineup_slot_id} "
+                f"differs from canonical roster slot {roster_slots[assignment.player_id]}"
+            )
+        observed_counts[(assignment.team_id, assignment.lineup_slot_id)] += 1
         if assignment.eligible_lineup_slot_ids != canonical_eligible:
             _fail(
                 f"observed lineup player {assignment.player_id}: eligibility differs from canonical player"
@@ -501,6 +512,12 @@ def validate_partial_week_evidence(
         _fail(
             "observed lineup assignments must cover every canonical roster entry exactly once"
         )
+    for (team_id, slot_id), count in observed_counts.items():
+        if count > capacities[slot_id]:
+            _fail(
+                f"observed lineup team {team_id}: slot {slot_id} occupancy {count} "
+                f"exceeds capacity {capacities[slot_id]}"
+            )
     if not lineup_ids <= score_ids:
         _fail("every rostered player requires one partial player scoring state")
 
@@ -653,6 +670,25 @@ def require_executable_partial_week_evidence(
             "partial-week evidence lacks a verified standings cutoff excluding the current period"
         )
     for assignment in evidence.lineups:
+        source = next(
+            item for item in snapshot.sources if item.source_id == assignment.source_id
+        )
+        requested_period = dict(source.parameters).get("scoringPeriodId")
+        current_period = (
+            snapshot.live_scoring.current_scoring_period
+            if snapshot.live_scoring is not None
+            else None
+        )
+        if "mRoster" not in source.view.split(",") or (
+            requested_period != evidence.scoring_period
+            and not (
+                requested_period is None and current_period == evidence.scoring_period
+            )
+        ):
+            _fail(
+                f"observed lineup player {assignment.player_id}: canonical roster source "
+                "does not establish current scoring-period slot timing"
+            )
         if assignment.lock_state is LockState.UNRESOLVED:
             _fail(
                 f"partial-week evidence has unresolved lock status for player {assignment.player_id}"
