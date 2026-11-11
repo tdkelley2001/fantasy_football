@@ -6,6 +6,8 @@ These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/M
 
 ## Scope and sequencing
 
+Reader-oriented documentation navigation is in [docs/index.md](docs/index.md); this does not replace the authorities above or approve future work.
+
 1. Implement from the specification, not from memory, prior code, or convenience. Cite the governing specification section in each task or pull request.
 2. Preserve a clean-sheet architecture. Legacy code is historical reference only and must not shape interfaces or behavior merely because it exists.
 3. Work in small, independently testable tasks. Do not combine work packages unless their interfaces and acceptance gates have already been verified; a backlog proposal is not implementation approval.

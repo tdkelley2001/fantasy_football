@@ -2,7 +2,7 @@
 
 This is the authoritative **current capability summary**, not a work queue or approval of a new model. Use [BACKLOG.md](BACKLOG.md) for outstanding work and [MASTER_SPEC.md](MASTER_SPEC.md) for approved analytical requirements. [CONTRIBUTING.md](../CONTRIBUTING.md) governs collaboration; [ROADMAP.md](ROADMAP.md) preserves historical milestones, dependencies and acceptance evidence. A summary cannot override an applicable specification or gate; resolve contradictions explicitly.
 
-R2.0 consolidates navigation and work tracking only. It does not change code, source verification, API versions, stored artifacts, runtime settings or release disposition. Historical delivery-time status lines in older documents are not a second live capability tracker.
+R2.0–R2.1 consolidate navigation and work tracking only. They do not change code, source verification, API versions, stored artifacts, runtime settings or release disposition. Use the [documentation index](index.md) for reader-oriented navigation. Historical delivery-time status lines in older documents are not a second live capability tracker.
 
 ## Implemented and supported boundaries
 
@@ -21,7 +21,9 @@ R2.0 consolidates navigation and work tracking only. It does not change code, so
 
 ## Approval and release disposition
 
-M0–M8.3 and their associated accepted consolidation work are historical completed implementation. LW2.1–LW2.3A are accepted through `86189da`; this does not approve live translation or additional scoring states. M8.4 release disposition and the performance checkpoint retain their documented review state; R1 acceptance and this R2.0 documentation change do **not** declare V1 released. [WR-021](BACKLOG.md#work-items) tracks the outstanding release review, not reimplementation of completed milestones.
+M0–M8.3 and their associated accepted consolidation work are historical completed implementation. LW2.1–LW2.3A are accepted through `86189da`. The LW2.3A performance/consolidation checkpoint implemented at `d630887` is **independently accepted**, as confirmed by the R2.1 authorization; its delivery-time review statements remain historical evidence. These acceptances do not approve live translation or additional scoring states.
+
+R2.0 is independently accepted at `3391552`. **M8.4 release disposition remains pending**; neither the accepted performance checkpoint nor the documentation packages declare V1 released. [WR-021](BACKLOG.md#work-items) tracks that outstanding review, not reimplementation of completed milestones. R2.1 itself awaits PR review and is not marked accepted here.
 
 Current partial integration claims are **Verified by tests** with synthetic evidence. The bounded **Verified live** LW1 source observations remain exactly as described in the evidence audit. Active-game projection/lock, fantasy cutoff/settlement/finalization and conditional remaining-performance requirements remain **Unverified** or **Unsupported** where documented. No new live check was performed for this summary.
 
