@@ -24,6 +24,41 @@ another path. Execution performs no ESPN request.
 
 ## Results and reconciliation
 
+LW2.3A adds `MonteCarloConfig.partial_week`, default `None`. To opt in, supply
+`MonteCarloPartialWeekInput(evidence, lineup, prior_postseason_scores=())` with
+the immutable LW2.2A companion and the complete legal roster-slot assignment.
+The existing batch, path, parallel, precision and checkpoint entry points all
+carry this same configuration. The supported case requires every rostered
+current-week player (including bench/reserve players) to be unstarted with an
+approved full-game projection equal to its nonmissing canonical effective
+projection. Completed, in-progress, missing, nonparticipating or unresolved
+current player evidence is rejected, together with unverified permissions or
+cutoffs. All LW2.2B boundary and historical-carry restrictions still apply.
+
+The outcome model generates exactly the same full player/week universe once per
+path. Only legal current starters' generated values are mapped to
+`DeterministicPlayerValue(unstarted_realized_points=...)`; bench and explicit bye
+draws are unused, as in ordinary scoring. The first week is removed from the
+ordinary deterministic scenario. The existing coordinator then receives both
+the remaining scenario and `DeterministicPartialWeekInput`. The path summary
+retains the original complete scenario ID/digest so paired runs can audit shared
+draws. Models, random keys, aggregation and interval calculations are unchanged.
+
+Pregame equivalence requires the same snapshot, model, seed/path range and
+policies, the same current starters as V1's optimizer, and no first-week
+acquisition that would alter the roster. Supplied legal observed lineups are
+preserved; other lineups can yield different scores/probabilities while using
+identical draws. Current-week transactions remain disabled by LW2.2B, and
+hypothetical initial rosters/transaction ledgers fail closed. No scenario/action
+permission is inferred from this integration. Later weeks use normal policies.
+
+Only opt-in fingerprint payloads add `partial_week`, containing the complete
+serialized companion, sorted supplied assignments and prior postseason scores,
+and contract `lw2.3a-unstarted-partial-week-v1`. Seed/path identity and checkpoint
+compatibility reuse existing machinery. Absent input adds no key. Existing V1
+fingerprints and results are checked against goldens obtained from `432a85f`.
+See `LW2_PARTIAL_WEEK_CONTRACT.md` for synthetic evidence and verification results.
+
 `MonteCarloBatchResult` records snapshot/league/season identity, model identity
 and parameters, seed, exact path IDs, complete/incomplete/invalid counts,
 projection-class coverage, assumptions, compact replay metadata, capability
