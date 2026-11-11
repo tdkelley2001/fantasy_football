@@ -55,9 +55,9 @@ Merging upstream into a shared branch is the default; rebasing or rewriting publ
 
 ## Development environment and checks
 
-The supplied application launchers target Windows. Python 3.12 is required. Use the locked Python/frontend dependencies; do not update them as an incidental cleanup. The existing environment was checked with Node 24.19.0. The installer currently accepts a wider Node range than the full frontend test lockfile supports; [WR-003](docs/BACKLOG.md#work-items) tracks that confirmed mismatch. Check the locked toolchain requirements rather than interpreting “Node 20 or newer” as sufficient for all contributor tests.
+Use the current [developer setup](docs/getting-started/development.md) for locked Python/frontend dependencies, backend/Vite development, synthetic fixtures and test tiers. Ordinary application users should follow [installation](docs/getting-started/installation.md), [configuration](docs/getting-started/configuration.md), [first run](docs/getting-started/first-run.md) and [operations](docs/getting-started/operations.md).
 
-For the supplied Windows setup, use `scripts/setup-local.ps1` as described in [local installation](docs/M8_1_LOCAL_INSTALLATION.md). It installs dependencies and builds assets. Installation and startup need no ESPN credentials. For authorized ESPN access, use ignored local configuration as described in the [user guide](docs/LOCAL_V1_USER_GUIDE.md); private credentials must be supplied as a complete pair. The launcher uses `WAR_ROOM_DATABASE`/`-Database`, while Python settings/CLIs use `SNAPSHOT_DB_PATH`; do not assume changing one changes the other. CLI manual rule files use `--manual-config`; browser refresh resolves the configured settings path. [WR-002](docs/BACKLOG.md#work-items) tracks the fuller guide consolidation.
+Python 3.12 and the tested Node 24.19.0 are the contributor baseline. The broader installer/locked-toolchain mismatch remains [WR-003](docs/BACKLOG.md#work-items). Launcher `WAR_ROOM_DATABASE`/`-Database` and Python CLI `SNAPSHOT_DB_PATH` differ; browser and CLI manual-rule configuration also differ. The configuration guide documents actual precedence without changing it.
 
 Choose checks proportional to the change and report the actual results. Useful Windows commands are:
 

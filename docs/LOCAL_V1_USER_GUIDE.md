@@ -4,56 +4,19 @@ War Room is a locally hosted fantasy-football analysis web application. It reads
 
 ## Before you start
 
-You need Windows, Python 3.12, Node.js/npm, Git, and enough free disk space for the local SQLite databases and frontend dependencies. The application runs on your computer at `http://127.0.0.1:8000`; it is not a conventional installed desktop program and is not publicly hosted.
+Use the current [installation](getting-started/installation.md), [configuration](getting-started/configuration.md), [first-run walkthrough](getting-started/first-run.md) and [operations/troubleshooting](getting-started/operations.md) guides. They are the single current path for prerequisites, public/private ESPN setup, launcher storage, refresh, snapshot selection and safe shutdown. Contributors use [developer setup](getting-started/development.md).
 
-From a clean checkout:
+Launcher storage uses `WAR_ROOM_DATABASE`/`-Database`; `SNAPSHOT_DB_PATH` controls Python settings/CLI defaults and does not move launcher data. Browser refresh uses automatic safe-week detection by default; an optional override cannot bypass live-evidence validation. The adapter/publication CLIs require an explicit week and `--manual-config` for manual rules; browser rules instead resolve the settings path. See the configuration guide for exact precedence.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-local.ps1
-.\scripts\start-local.ps1
-```
-
-The setup command is safe to repeat. Startup builds no development server: FastAPI serves the production React files. Stop the launcher-owned process with:
-
-```powershell
-.\scripts\stop-local.ps1
-```
-
-The launcher verifies its recorded PID, creation time, executable, exact command identity, configured paths, and—while available—listener and health identity before stopping anything. It first requests graceful shutdown. If bounded graceful shutdown cannot finish, it recovers only the authenticated launcher-owned process tree and preserves both SQLite databases. If ownership is ambiguous, it fails safely rather than terminating another process.
+Installation/startup needs no ESPN credentials. Refresh requires the configured league/season and, for private access, a complete credential pair. Publication appends immutable snapshots; inspect capability findings before analysis. Never guess a rule or bypass an unresolved scoring boundary.
 
 ## Configure ESPN access
 
-Copy `.env.example` to `.env`. Set `ESPN_LEAGUE_ID` and `ESPN_SEASON`. A public league needs no credentials. A private league requires both `ESPN_S2` and `ESPN_SWID`; never commit `.env`, screenshots containing those values, or local databases.
-
-`SNAPSHOT_DB_PATH` controls the private append-only snapshot database. The related run database uses the same base path with `.runs.sqlite3`. Keep both under the ignored `outputs/` directory unless you deliberately choose another private local path.
-
-To enable an independently reviewed manual rule file, set its optional path in
-`.env` and restart War Room:
-
-```dotenv
-FANTASY_FOOTBALL_RULE_CONFIG_PATH=config/league_rules.local.yaml
-```
-
-Relative paths resolve from the repository directory used by
-`start-local.ps1`. A process-environment value overrides `.env`. On restart,
-`GET /api/v1/refresh/profile` reports
-`manual_rule_configuration_available: true` only when the file is readable,
-valid YAML, and identifies the configured league and season. The newly
-published snapshot, not that profile flag, is the authoritative evidence that
-an approved rule was actually applied.
-
-Some league rules are not exposed sufficiently by ESPN. When the application reports an unresolved capability—such as a consolation-period mapping—provide only the validated configuration described by the error and the league-configuration documentation. Do not guess.
+Follow [current configuration](getting-started/configuration.md#league-profile) for the public/private profile and [manual-rule guidance](getting-started/configuration.md#manual-league-rules). This heading is retained for existing bookmarks; setup instructions are maintained in the consolidated guide.
 
 ## Refresh and select a league snapshot
 
-1. Start War Room and open the local URL.
-2. Open the ESPN refresh control.
-3. Confirm the configured league and season.
-4. Enter the first scoring week that has not begun.
-5. Start the authorized read-only refresh.
-6. Review validation and capability findings.
-
-Publication is append-only. A successful refresh creates a new immutable snapshot and selects it; it does not overwrite an earlier snapshot or change the ESPN league. Closing the refresh panel does not cancel server work. Use the explicit cancellation control when available, understanding that cancellation is cooperative.
+Follow [the first-run snapshot steps](getting-started/first-run.md#refresh-and-select-a-snapshot), including automatic boundary validation, immutable publication and explicit snapshot selection. This heading remains available for existing bookmarks.
 
 ## Run and interpret analyses
 
@@ -99,4 +62,4 @@ If a run or ESPN request stalls, cooperative shutdown can exceed the launcher ti
 - War Room never executes real transactions and cannot promise trade acceptance or waiver success.
 - League Insights and other post-V1 work remain deferred.
 
-For installation failures, launcher ownership, database recovery, and advanced diagnostics, see [local installation](M8_1_LOCAL_INSTALLATION.md), [runtime and recovery](M8_3_RUNTIME_AND_RECOVERY.md), and [run management](RUN_MANAGEMENT.md).
+For installation failures, launcher ownership and database recovery, use [current operations](getting-started/operations.md). Original [installation evidence](M8_1_LOCAL_INSTALLATION.md), [runtime and recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md), and [run management contracts](RUN_MANAGEMENT.md) remain available.

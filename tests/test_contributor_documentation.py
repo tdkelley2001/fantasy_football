@@ -91,6 +91,14 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/BACKLOG.md",
         "docs/status.md",
         "docs/index.md",
+        "docs/getting-started/installation.md",
+        "docs/getting-started/configuration.md",
+        "docs/getting-started/first-run.md",
+        "docs/getting-started/operations.md",
+        "docs/getting-started/development.md",
+        "docs/LOCAL_V1_USER_GUIDE.md",
+        "docs/M8_1_LOCAL_INSTALLATION.md",
+        "docs/BACKEND_READINESS.md",
     ),
 )
 def test_contributor_links_and_fragments_resolve(document: str) -> None:
@@ -169,3 +177,19 @@ def test_accepted_r20_is_completed_but_broader_r2_work_remains_open() -> None:
         for row in _work_rows("Completed work")
     )
     assert any(row[0] == "WR-002" and row[3] != "Done" for row in _work_rows())
+
+
+def test_current_setup_routes_replace_conflicting_user_guidance() -> None:
+    user = _read("docs/LOCAL_V1_USER_GUIDE.md")
+    assert "SNAPSHOT_DB_PATH` controls the private append-only" not in user
+    assert "Enter the first scoring week that has not begun" not in user
+    for guide in ("installation", "configuration", "first-run", "operations"):
+        target = f"getting-started/{guide}.md"
+        assert target in user
+        assert target in _read("README.md")
+        assert target in _read("docs/index.md")
+    assert "getting-started/development.md" in _read("CONTRIBUTING.md")
+    assert "Historical backend handoff commands" in _read("docs/BACKEND_READINESS.md")
+    assert "Historical implementation evidence" in _read(
+        "docs/M8_1_LOCAL_INSTALLATION.md"
+    )
