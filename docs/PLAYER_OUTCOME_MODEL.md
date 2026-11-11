@@ -9,13 +9,15 @@ for transactions, lineups, matchups, standings, and postseason progression.
 
 Both models remain supported engine inputs; the HTTP DTO currently exposes only explicit `provisional_normal`, not empirical evidence selection or partial-week input. Lineup eligibility is decided from canonical positive effective projections before observing draws. A generated value is not eligibility or participation evidence. Missing, explicit zero and finite negative projections are not selected by the ordinary optimizer, even when a Normal draw happens to be positive. Actual signed/zero outcomes of eligible starters remain valid. Partial-week fixed-actual composition uses its own evidence gate, not a changed V1 availability rule.
 
-Normal samples every in-horizon player/week, including missing/zero means; with positive base dispersion these unused records can be nonzero. Empirical emits deterministic zero for missing/explicit-zero classes and samples finite present projections, including negatives. Both preserve raw/effective records and path keys. See the preserved [policy ambiguity](R23_DOCUMENTATION_RECONCILIATION.md#unresolved-semantic-question); R2.3 authorizes no mathematical change.
+Both models emit exactly `0.0` for canonical `MISSING` records without applying dispersion or sampling. Normal otherwise preserves its prior behavior, including random zero-mean draws for **explicit ESPN zero** when base dispersion is positive. Empirical already emitted deterministic zero for both missing and explicit-zero classes and remains unchanged; it samples finite present projections, including negatives. Both preserve raw/effective records and valid-projection random keys. This is the separately approved [WR-022 correction](MISSING_PROJECTION_ZERO_CORRECTION.md), resolving R23-06 after the documentation-only R2.3 package.
 
 Source: [player_outcomes.py](../src/fantasy_football/player_outcomes.py), [weekly scoring](../src/fantasy_football/weekly_engine.py), [HTTP contracts](../src/fantasy_football/app/contracts.py). The sections below include dated implementation/benchmark evidence; their test counts are historical. Neither model is a fully calibrated released forecast: empirical bins/pooled sparse-group policy rely on explicitly classified exploratory historical evidence, not authenticated pregame vintages. There is no conditional in-game, injury-absence or correlation sampler.
 
 ## Preserved Normal baseline
 
 `ProvisionalNormalModel(base_stddev, projection_scale)` uses independent draws:
+
+The equations below apply only to nonmissing classifications. `MISSING` bypasses them and emits exact `0.0` without requesting a random number.
 
 `score = effective_projection + sigma * Z`
 
@@ -30,7 +32,7 @@ or shared game shocks.
 
 The canonical raw projection, projection class, effective projection, and source
 are never modified. Missing-policy zero and explicit ESPN zero both have mean
-zero under this provisional family, but remain distinct canonical evidence and
+zero under this provisional family, but only missing is forced to a deterministic zero; they remain distinct canonical evidence and
 are counted separately in batch metadata. A present finite negative effective
 projection retains that signed mean.
 
@@ -41,7 +43,9 @@ Each player-week draw hashes the following canonical JSON tuple with SHA-256:
 - key-contract name `fantasy-football-player-week-draw-v1`;
 - caller master seed and nonnegative path index;
 - player ID, season, and scoring week;
-- model ID and complete ordered parameters.
+- historical draw-model `version` and the original three ordered dispersion parameters.
+
+WR-022 separates public model-policy identity from the preserved random-key identity: public `model_id` appends `:missing-projection-zero-v1` to the supplied `version`, and public `parameters` adds `("missing_projection_outcome", "deterministic-zero-v1")`. The discriminator is necessary because a historical custom version can equal the suffixed model ID. Historical public parameters always had three entries, so the fourth entry distinguishes the corrected policy for every historical Normal version. The draw key instead uses the original `version` and private `_draw_parameters` containing exactly the same three historical entries. Nonmissing key bytes and draws are unchanged, including custom version strings. Full public identity feeds Monte Carlo, paired/search fingerprints and checkpoint compatibility even when no records are missing. Earlier PR checkpoints lacking the discriminator are also rejected. Empirical identity is unchanged. Historical exact reproduction requires prior code; no production legacy-policy switch is added. See [compatibility details](MISSING_PROJECTION_ZERO_CORRECTION.md#compatibility-decision).
 
 Two counter-separated SHA-256 digests produce open-interval uniforms, which are
 converted with the Box-Muller transform. No Python `hash()`, batch RNG, shared

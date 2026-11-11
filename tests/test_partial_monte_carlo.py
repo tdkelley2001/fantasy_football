@@ -372,16 +372,18 @@ def test_first_week_draw_validation_cannot_be_lost_when_scores_are_split(change)
         run_monte_carlo_path(snapshot, config, BrokenDraws(), 0)
 
 
-def test_ordinary_v1_fingerprint_matches_accepted_432a85f():
+def test_historical_v1_fingerprint_matches_accepted_432a85f():
+    from tests.legacy_normal_reference import LegacyNormalReference
+
     # Captured by executing the accepted commit's fingerprint function, not derived from this implementation.
     assert (
         simulation_configuration_fingerprint(
-            _snapshot(), _config(0, 4), ProvisionalNormalModel(2.0, 0.1)
+            _snapshot(), _config(0, 4), LegacyNormalReference(2.0, 0.1)
         )
         == "9d2a4d074a6e3b3562ef30d6136b7d3a8266d6e40f2c4700b1892c2ddd1eb89a"
     )
     result = run_monte_carlo_batch(
-        _snapshot(), _config(0, 4), ProvisionalNormalModel(2.0, 0.1)
+        _snapshot(), _config(0, 4), LegacyNormalReference(2.0, 0.1)
     )
     assert (
         hashlib.sha256(
