@@ -4,7 +4,7 @@
 
 M1.3 persistence and M1.5 read-only snapshot management are complete. `fantasy_football.snapshot_store` persists validated M1.2 adapter results in one private local SQLite database. The exact deterministic canonical JSON bytes are the sole authoritative normalized snapshot representation. SQL does not duplicate teams, players, player-weeks, rosters, rules, or matchups as competing authoritative records.
 
-Canonical document schema version and database schema version are independent. New publications use canonical schema **3**, version-aware reads retain canonical schema **2**, and SQLite remains schema **1**. Unsupported versions fail explicitly; the store does not silently migrate or rewrite documents.
+Canonical document schema version and database schema version are independent. New publications require canonical schema **4**, reads support canonical schemas **2, 3, 4**, and SQLite remains schema **1**. Unsupported versions fail explicitly; the store does not silently migrate or rewrite documents. The partial-week companion's artifact version 1 and the application's separate run-store schema are independent contracts.
 
 ## Database schema
 
@@ -21,7 +21,9 @@ Indexes support deterministic newest selection by `(league_id, season, published
 
 Each publication attempt that reaches persistence receives a newly generated UUID. It is not derived from content, so identical refreshes remain separately retained. The UUID is applied immutably to the final `LeagueSnapshot`; new publication requires the current schema (v4 after LW1) and serialization occurs before the write transaction. SHA-256 covers the exact UTF-8 canonical JSON bytes, including the UUID.
 
-Existing v2 rows, canonical bytes, publication IDs, checksums, and raw evidence are never rewritten. The same SQLite-v1 layout stores both document versions because the canonical version is already explicit in metadata and JSON. Loading v2 reconstructs the historical typed contract and reserializes byte-for-byte without adding v3 protection fields. Its previously supported inspection and reproducibility behavior remains available, while automatic-drop authorization rejects it precisely because it lacks player-level protection evidence. No database migration is required.
+The adapter candidate must have `snapshot_id=None`; publication, not retrieval, assigns identity. An explicit caller-supplied publication UUID must be canonical lowercase UUID text and cannot duplicate an existing row. Publication requires validated canonical state, reconciled captured source/reference identities and digests, deterministic canonical round-trip and verified raw compression before entering the transaction. A document's structural validity still does not establish every simulation capability.
+
+Existing v2/v3/v4 rows, canonical bytes, publication IDs, checksums and raw evidence are never rewritten. The same SQLite-v1 layout stores all supported document versions because the canonical version is explicit in metadata and JSON. Version-aware v2 serialization omits v3 protection fields; pre-v4 serialization omits live metadata. Earlier v4 documents without independently supported period membership can be inspected but cannot authorize V1 live-boundary execution. Historical read compatibility does not grant missing drop, lock or settlement authority. No database migration is required. `LoadedSnapshot.canonical_json` returns the original verified stored bytes; do not replace them with a reserialization that may materialize optional defaults from a historical record.
 
 The canonical serializer determines collection and key ordering. Persistence decodes and re-encodes the prepared document before publication to prove deterministic byte round-tripping. Retrieval and publication timestamps remain distinct, and publication cannot precede retrieval completion.
 
@@ -41,6 +43,8 @@ The lifecycle is:
 No ESPN request occurs inside the transaction. A failed candidate never replaces, hides, or modifies a previously committed snapshot. Tests force failure after multiple inserts and verify that the new UUID is absent while the prior snapshot remains byte-for-byte unchanged. SQLite uses WAL journal mode with `synchronous=FULL`; standard SQLite commit, rollback, and crash recovery are authoritative rather than a custom staging service.
 
 ## Read-time integrity verification
+
+The checks below describe default `load(..., verify_sources=True)` and `verify()`. Internal callers can explicitly disable raw-source decompression/checksum verification with `verify_sources=False`; that narrower read is not full source-payload verification. Canonical byte/identity and source-row relationship checks still apply. User-facing verified selection uses the full path.
 
 `SnapshotStore.load(snapshot_id)` verifies:
 
@@ -74,9 +78,11 @@ Default list and inspection output contains sanitized aggregates only. Detailed 
 
 Every committed snapshot is retained indefinitely by default, even when content resembles an earlier refresh. There is no automatic cleanup, rolling retention, deduplication, or update API.
 
-`SNAPSHOT_DB_PATH` defaults to `outputs/fantasy_football.sqlite3`; callers may pass another local path explicitly. `.gitignore` excludes SQLite, DB, WAL, and SHM artifacts. Raw payloads contain private league information, so the database is a private local artifact. Credentials, cookies, tokens, and headers are neither accepted as stored request metadata nor written by the adapter.
+Python settings/CLI `SNAPSHOT_DB_PATH` defaults to `outputs/fantasy_football.sqlite3`; callers may pass another local path explicitly. Launcher `-Database`/`WAR_ROOM_DATABASE` is a separate configuration path; see [configuration](getting-started/configuration.md). `.gitignore` excludes SQLite, DB, WAL, and SHM artifacts. Raw payloads contain private league information, so the database is a private local artifact. Credentials, cookies, tokens, and headers are neither accepted as stored request metadata nor written by the adapter.
 
 ## Verification evidence and limitations
+
+The counts and M1/M2 scope statements below are delivery-time evidence. They do not describe the current repository test count or deny the later application/background refresh. Snapshot storage still has no delete/update/migration API; terminal application-run deletion is a separate store capability. Current source is [snapshot_store.py](../src/fantasy_football/snapshot_store.py); compatibility checks are in [storage tests](../tests/test_snapshot_store.py), [canonical tests](../tests/test_canonical_snapshot.py) and [adapter legacy-v4 tests](../tests/test_espn_adapter.py). R2.3 checks are recorded in the [reconciliation inventory](R23_DOCUMENTATION_RECONCILIATION.md).
 
 Credential-free fixtures verify successful publish/reopen/round-trip, raw missing/zero/positive/negative projections, signed IDs, raw enums, structured rule evidence, observed slot 25, complete source retention, checksums, multiple retained refreshes, deterministic newest selection, cross-connection visibility, rollback before commit, forced mid-insert failure, duplicate UUID rejection, immutable-row triggers, corrupted canonical/source bytes, unsupported schema versions, explicit database-wide foreign-key diagnostics, and the pre-commit/post-commit failure distinction.
 

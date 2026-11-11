@@ -12,6 +12,10 @@ the accepted production code; no validation cache or new probability logic is ad
 
 ## Public contract
 
+For subsystem responsibilities see the [architecture overview](architecture/overview.md); for supported player states see the [current partial capability map](LW2_PARTIAL_WEEK_CONTRACT.md#current-capability-map). HTTP exposes the Normal whole-week path, not empirical selection or a partial-week companion. Both outcome families remain provisional engine implementations. Generation of a player/week record does not authorize selection into a lineup; see [outcome semantics](PLAYER_OUTCOME_MODEL.md#current-execution-boundary).
+
+Fixed path outcomes are invariant under supported batching/workers/order. Adaptive precision can stop after different numbers of paths when its configured look schedule changes; compare identical path ranges, not merely a seed. Statistical intervals quantify sampling under the model, not model correctness. M3.6 durable engine checkpoints are implemented below; HTTP restart instead marks abandoned jobs interrupted and does not automatically resume them. Checkpoint execution-policy compatibility can be stricter than path equivalence (including worker/task settings). Neither contract permits combining incompatible evidence or incomplete-only denominators.
+
 `MonteCarloConfig` validates the master seed, positive path count, first path
 index, IR policy, weekly transaction policy, postseason participation policy,
 optional consolation configuration, and complete-result requirement.
@@ -180,8 +184,7 @@ run. Each checkpoint still produces an ordinary `MonteCarloBatchResult` and is
 combined through the accepted identity and coverage checks. Worker count, chunk
 size, and completion order do not enter simulation fingerprints and cannot alter
 path-indexed draws. Runtime diagnostics are observational and are not part of
-deterministic result identity. Durable resume and distributed execution remain
-out of scope.
+deterministic result identity. Durable resume was out of scope at the M3.5 delivery boundary; M3.6 below adds local checkpoint recovery. Distributed execution remains unsupported.
 
 ## Evidence classification and limitations
 

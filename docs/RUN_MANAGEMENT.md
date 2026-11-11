@@ -2,6 +2,12 @@
 
 Status: **COMPLETE AND ACCEPTED**; consolidated for M6.4 handoff.
 
+Current boundaries: this is the durable **analysis-run** store, separate from immutable snapshot publication and transient refresh jobs. The local server serves built frontend assets plus API 1.0; [architecture](architecture/overview.md) shows the components and [API reference](APPLICATION_SERVICE.md#versioned-http-surface) lists the exact routes. Historical M6/M8 measurements below remain delivery evidence, not a fresh process/recovery test.
+
+Analysis request JSON/checksum and snapshot/build provenance persist in the adjacent `.runs.sqlite3` database; queries read retained results without resimulation. A completed lifecycle state may still contain a resource-capped, capability-incomplete or unconverged analytical result. Retention/deletion applies to terminal runs, never deletes immutable source snapshots, and is not infinite history. Lease ownership and authenticated launcher recovery must not be bypassed. Cancellation may race with committed completion and cannot force-stop an arbitrary running Python thread. Startup classifies abandoned durable runs as `interrupted`, not resumable engine checkpoints.
+
+Refresh coordination is a different, in-memory one-at-a-time lifecycle in [refresh.py](../src/fantasy_football/app/refresh.py). Its job history is not the durable analysis-run catalog; successful publication persists the snapshot even though refresh bookkeeping is transient. `publication_committed` distinguishes post-commit verification failure from rollback. No browser request can supply partial-week evidence, select the empirical model or automatically resume a run. See [configuration](getting-started/configuration.md), [operations](getting-started/operations.md) and [source-contract evidence](R23_DOCUMENTATION_RECONCILIATION.md).
+
 This implements `MASTER_SPEC.md` Sections 8, 9, and 12 and the M6.2 roadmap
 gate. It changes application execution only. Accepted engines remain
 authoritative for candidates, legality, simulation, statistics, precision,

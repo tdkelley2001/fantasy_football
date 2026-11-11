@@ -99,6 +99,18 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/LOCAL_V1_USER_GUIDE.md",
         "docs/M8_1_LOCAL_INSTALLATION.md",
         "docs/BACKEND_READINESS.md",
+        "docs/CANONICAL_MODEL.md",
+        "docs/SNAPSHOT_STORAGE.md",
+        "docs/MISSING_PROJECTION_POLICY.md",
+        "docs/PLAYER_OUTCOME_MODEL.md",
+        "docs/MONTE_CARLO.md",
+        "docs/SEASON_SIMULATOR.md",
+        "docs/LIVE_WEEK_SCORING.md",
+        "docs/LW2_PARTIAL_WEEK_CONTRACT.md",
+        "docs/APPLICATION_SERVICE.md",
+        "docs/RUN_MANAGEMENT.md",
+        "docs/architecture/overview.md",
+        "docs/R23_DOCUMENTATION_RECONCILIATION.md",
     ),
 )
 def test_contributor_links_and_fragments_resolve(document: str) -> None:

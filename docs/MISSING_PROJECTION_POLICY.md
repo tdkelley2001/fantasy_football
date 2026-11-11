@@ -2,11 +2,13 @@
 
 ## Decision
 
+Current implementation note: this decision governs ordinary V1 projected-lineup availability and team scoring. Draw-record generation is separate: the provisional Normal model generates the complete player/week universe, including unused zero-mean records; the empirical model emits deterministic zero records for missing/explicit-zero classes. Neither makes an unavailable player selectable. The literal phrase “unavailable for ... stochastic scoring” below is preserved as approved policy; whether it also prohibits unused random records is an unresolved wording/contract ambiguity for independent review, not silently waived here. See [outcome models](PLAYER_OUTCOME_MODEL.md) and [R2.3 finding R23-06](R23_DOCUMENTATION_RECONCILIATION.md#unresolved-semantic-question).
+
 For V1 modeling, a player-week with no valid ESPN weekly projection record receives an **effective projection of zero** and is unavailable for projected-lineup selection and stochastic scoring for that week.
 
 This is an approved conservative modeling transformation, not a reinterpretation of ESPN's response. The canonical snapshot must retain the difference between a missing raw value and an explicit ESPN zero:
 
-| Case | `raw_projection` | `projection_status` | `effective_projection` | `effective_projection_source` |
+| Case | `raw_projection` | `projection_class` | `effective_projection` | `effective_source` |
 |---|---:|---|---:|---|
 | ESPN positive | ESPN numeric value | `present` | same numeric value | `espn` |
 | ESPN explicit zero | `0` | `explicit_zero` | `0` | `espn` |
@@ -76,5 +78,7 @@ The evidence supports zero as a conservative V1 effective value because 394 of 3
 The approved policy deliberately accepts the risk of assigning no modeled production to those exceptions. That risk must remain visible through missingness counts and can be evaluated during historical projection research and later sensitivity testing. No injury-return forecast, replacement projection, positional average, or other fallback is authorized.
 
 ## Implementation boundary
+
+Historical delivery boundary follows. The policy is now implemented by canonical validation/adapter translation and consumed by projected lineup selection; it is not awaiting M1/M2 implementation. Approved partial-week fixed actual scoring is a separate explicit contract and can preserve a completed starter even with a zero current projection. It does not change ordinary V1 selection. The source observations and original decision below remain historical evidence, not a new ESPN live check.
 
 M0.3 records the decision and evidence only. M1 must implement the separate raw/status/effective/source fields in the canonical player-week contract and validate their relationships. M2 must consume `effective_projection` for lineup availability and simulation without mutating the raw snapshot evidence. No M1 or M2 implementation is introduced by this follow-up.
