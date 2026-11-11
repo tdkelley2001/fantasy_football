@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import re
 from pathlib import Path
 
@@ -26,6 +27,42 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def read(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8-sig")
+
+
+def test_verification_guide_covers_current_release_steps_and_actual_test_modules() -> (
+    None
+):
+    guide = read("docs/development/verification.md")
+    script = read("scripts/verify-release.ps1")
+    default_steps = script.split("if ($IncludeWindowsProcessTests)", 1)[0]
+    names = re.findall(r'Invoke-ReleaseStep "([^"]+)"', default_steps)
+    assert names
+    assert all(name in guide for name in names)
+    modules = set(re.findall(r"tests/[a-z0-9_]+\.py", guide))
+    assert modules
+    assert all((ROOT / name).is_file() for name in modules)
+    assert '"-m", "pytest", "-m", "not windows_process"' in script
+    assert '-m "not windows_process"' in guide
+    assert '"--omit=dev", "--audit-level=high"' in script
+    assert "audit --omit=dev --audit-level=high" in guide
+
+
+def test_verification_frontend_commands_and_navigation_match_current_sources() -> None:
+    guide = read("docs/development/verification.md")
+    scripts = json.loads(read("frontend/package.json"))["scripts"]
+    commands = re.findall(r"npm\.cmd --prefix frontend run ([a-z-]+)", guide)
+    assert commands
+    assert all(command in scripts for command in commands)
+    assert scripts["test"] == "vitest run"
+    assert scripts["typecheck"] in guide
+    assert scripts["build"] in guide
+    for path in (
+        "CONTRIBUTING.md",
+        "docs/getting-started/development.md",
+        "docs/index.md",
+        "docs/RELEASE_CHECKLIST.md",
+    ):
+        assert "development/verification.md" in read(path)
 
 
 def test_canonical_reference_versions_match_current_publication_and_reads() -> None:

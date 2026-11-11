@@ -38,35 +38,16 @@ Open the printed Vite loopback URL (normally `http://127.0.0.1:5173/`). [vite.co
 
 ## Credential-free checks
 
-From the repository root after dependencies are installed:
+Use the consolidated [verification guide](../development/verification.md) for fast checks, targeted modules, broader Python/frontend regressions, the networked release gate and explicitly authorized integration tiers. Its [change matrix](../development/verification.md#change-based-verification-matrix) maps subsystem changes to compatibility, reference/golden, worker/batch, checkpoint/resume and privacy checks. Existing acceptance gates remain binding; report actual commands, results and exclusions.
 
-```powershell
-.venv\Scripts\python.exe -m pytest tests/test_documentation_links.py tests/test_contributor_documentation.py tests/test_repository_security.py -q -p no:cacheprovider
-.venv\Scripts\python.exe -m pytest -m "not windows_process"
-.venv\Scripts\python.exe -m ruff check --select E9,F63,F7,F82 .
-.venv\Scripts\python.exe -m pip check
-git diff --check
-npm.cmd --prefix frontend test
-npm.cmd --prefix frontend run typecheck
-npm.cmd --prefix frontend run build
-```
-
-Choose the relevant tier for the changed area and report actual commands/results. The broad Python tier uses mocks, synthetic fixtures and temporary stores; it excludes marked real Windows process tests. It does not validate live ESPN. Frontend typecheck/build can generate local metadata/assets. Keep generated output out of the PR. Use the narrow Ruff gate above rather than imposing a repository-wide style rewrite.
-
-The [release verification script](../../scripts/verify-release.ps1) additionally runs a **networked npm audit**. Its `-IncludeWindowsProcessTests` option intentionally controls disposable real processes. Live diagnostics/refresh, real-process shutdown/recovery and destructive database exercises require separately explicit scope. Historical browser captures may drive live refresh and assume a fixed Edge executable; do not run them as routine credential-free checks. `playwright-core` does not install a browser. See [release checks](../RELEASE_CHECKLIST.md).
+Build/typecheck can generate assets/metadata. The full release script includes a **networked npm audit**. Live ESPN, actual browser/clean-machine integration and Windows process/recovery need explicit scope; never use another contributor's private data or terminate an unverified process. These warnings and exact commands are maintained in the verification guide rather than duplicated here.
 
 ## Safe synthetic work
 
-Use the existing sanitized fixture modules [adapter_fixtures.py](../../tests/adapter_fixtures.py) and [canonical_fixtures.py](../../tests/canonical_fixtures.py) inside tests. For a concrete temporary-store/refresh exercise:
-
-```powershell
-.venv\Scripts\python.exe -m pytest tests/test_snapshot_refresh.py -q -p no:cacheprovider
-```
-
-That module injects synthetic adapter/settings dependencies and uses pytest temporary paths; it does not require `.env`, live retrieval or your default database. Add focused tests following that pattern and inspect injected boundaries before extending them. Never label fixture probabilities or synthetic ESPN fields as **Verified live**. There is no installed persistent demo loader; a blank browser database is expected until an authorized real refresh or separately approved fixture workflow. Do not publish a fixture into a contributor's private store or copy private payloads into tests just to populate the UI.
+Follow [credential-free synthetic verification](../development/verification.md#tier-3-credential-free-regression) using existing fixture modules and temporary stores. Never treat synthetic records/probabilities as live evidence, publish a fixture into a private store or run historical browser captures as ordinary tests. There is no installed persistent demo loader.
 
 ## Troubleshooting and evidence
 
 Use [operations](operations.md#common-failures) for Python/Node, port, ownership, path and configuration failures. For a dependency failure, verify interpreter/version and rerun locked setup; preserve the error instead of bypassing engines or updating locks. For missing snapshots, confirm the exact backend database before considering retrieval. API shape is exposed by local `/docs` and `/openapi.json`; credentials are unnecessary to inspect it.
 
-Source checks: [setup script](../../scripts/setup-local.ps1), [server](../../src/fantasy_football/app/server.py), [frontend scripts](../../frontend/package.json), [Vite config](../../frontend/vite.config.ts), [pytest markers](../../pyproject.toml) and [synthetic refresh tests](../../tests/test_snapshot_refresh.py). R2.2 exercised only the checks recorded in the [backlog](../BACKLOG.md#r22-verification-for-review); installation, Vite, browser flow, full regression and fresh-machine procedures above were source-verified, not newly executed. No dependency, configuration or runtime behavior changes are part of this package.
+Source checks: [setup script](../../scripts/setup-local.ps1), [server](../../src/fantasy_football/app/server.py), [frontend scripts](../../frontend/package.json), [Vite config](../../frontend/vite.config.ts), [pytest markers](../../pyproject.toml) and [synthetic refresh tests](../../tests/test_snapshot_refresh.py). Historical R2.2 execution evidence remains in the [backlog](../BACKLOG.md#r22-verification-for-review). Use the [verification guide](../development/verification.md) for current check selection and side effects. Setup/Vite/browser/fresh-machine procedures were source-checked, not newly exercised by R2.4; no runtime or dependency change is part of this consolidation.

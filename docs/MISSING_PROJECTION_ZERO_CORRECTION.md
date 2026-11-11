@@ -1,5 +1,7 @@
 # WR-022 missing-projection deterministic-zero correction
 
+Current disposition: **ACCEPTED**, merged at `28bf60589b6e6856ab8ec40d55486b4da2c62bdd` ([PR #117](https://github.com/tdkelley2001/fantasy_football/pull/117)), as confirmed by R2.4 authorization. The policy, implementation and collision follow-up are accepted. Review-state statements and measurements below are preserved delivery-time evidence; this status note does not change or reopen the numerical contract.
+
 Policy decision: explicitly approved by the Missing-Projection Deterministic-Zero Correction authorization following accepted R2.3 `79033ae`. Implementation is **In Review** on `fix/WR-022-missing-projection-zero`; independent implementation acceptance is not yet established. This separate modeling correction resolves R23-06 and does not begin another R2 documentation milestone.
 
 ## Root cause and rule

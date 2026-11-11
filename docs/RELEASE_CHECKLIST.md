@@ -2,6 +2,8 @@
 
 This checklist supports review; it does not declare a release.
 
+Use the [verification guide](development/verification.md#tier-4-release-verification) for exact script steps, environments and side effects, and its [integration tier](development/verification.md#tier-5-explicitly-authorized-integration) for separately authorized live/browser/clean-machine/process checks. This checklist retains the release gates; a change-based test recommendation cannot waive them.
+
 ## Automated credential-free gate
 
 After `setup-local.ps1`, run:
@@ -18,6 +20,8 @@ audit, documentation/API/security tests, and Git whitespace validation. It
 performs no ESPN request, starts no real application/launcher process, and does
 not alter user databases. The repository does not currently claim a full-style
 Ruff baseline.
+
+**Credential-free does not mean offline or read-only.** The production npm audit contacts the configured registry; compilation/tests/builds write bytecode, caches, temporary data and frontend artifacts. Its audit threshold is `--omit=dev --audit-level=high`, not a full dependency-security guarantee. Do not use `audit fix` or upgrade dependencies to bypass a failure without authorization. An earlier failing step prevents later checks; report which actually ran. Dated audit/test counts elsewhere are historical evidence.
 
 The disposable launcher/process tier is explicit because it creates and terminates launcher-owned test processes:
 
