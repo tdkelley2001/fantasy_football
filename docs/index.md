@@ -41,6 +41,8 @@ The engine owns league mechanics and numerical interpretation. The frontend pres
 
 ## Developing and testing
 
+- [Verification and documentation maintenance](development/verification.md): five tiers, change-based matrix, numerical standards, maintenance responsibilities and the proposed two-audit archive pilot.
+
 - [Developer setup](getting-started/development.md): locked dependencies, backend/Vite terminals, synthetic fixtures and verification tiers.
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md): original-repository and fork branches, upstream sync, overlap coordination, PR review and verification.
@@ -68,7 +70,7 @@ These references contain implementation layers and historical amendments. The st
 - [ESPN connectivity observations](ESPN_CONNECTIVITY.md), [future-data audit](ESPN_FUTURE_DATA_AUDIT.md), [historical projections](ESPN_HISTORICAL_PROJECTION_AUDIT.md), [league-rule audit](ESPN_LEAGUE_RULES_AUDIT.md) and [undroppable evidence](ESPN_UNDROPPABLE_AUDIT.md): dated findings with bounded verification.
 - [Missing-projection evidence/policy](MISSING_PROJECTION_POLICY.md) and [LW1 live-source evidence](LIVE_WEEK_SCORING.md): missing-versus-zero and source-authority distinctions.
 - [Accepted LW2.3A performance checkpoint](LW23A_PERFORMANCE_CHECKPOINT.md) and its [benchmark harness](../benchmarks/benchmark_partial_week.py): repeated synthetic measurements, exact-equivalence artifacts and the decision to retain production code.
-- [R2.3 reconciliation inventory](R23_DOCUMENTATION_RECONCILIATION.md): bounded technical drift, source/test evidence and an unresolved policy wording question.
+- [R2.3 reconciliation inventory](R23_DOCUMENTATION_RECONCILIATION.md): bounded technical drift, source/test evidence and the R23-06 question subsequently resolved by accepted WR-022.
 
 **Verified live**, **Verified by tests**, **Unverified** and **Unsupported** are different claims. Historical returned projections do not establish authenticated pregame vintages. Fixtures establish code behavior, not current ESPN availability or production-scale performance.
 
@@ -83,7 +85,7 @@ These references contain implementation layers and historical amendments. The st
 | [MASTER_SPEC](MASTER_SPEC.md) | Approved analytical requirements and modeling contracts. |
 | [Historical roadmap](ROADMAP.md) | Original milestone history, dependencies and preserved acceptance gates; not current priorities. |
 
-R2.0, R2.1 and R2.2 are independently accepted; R2.0 is recorded at `3391552`, R2.1 in [PR #113](https://github.com/tdkelley2001/fantasy_football/pull/113), and R2.2 at `a7c0ff4` ([PR #115](https://github.com/tdkelley2001/fantasy_football/pull/115)). The LW2.3A performance checkpoint (`d630887`) is also independently accepted. These acceptances do not declare V1 released: **M8.4 remains pending independent release disposition**. R2.3 is independently accepted at `79033ae`; the separate [WR-022 correction](MISSING_PROJECTION_ZERO_CORRECTION.md) awaits implementation review. Future features and model/source changes still need applicable approvals. Historical gates remain binding until an approved replacement explicitly supersedes them; unresolved gate migration remains WR-002, not discarded.
+R2.0, R2.1 and R2.2 are independently accepted; R2.0 is recorded at `3391552`, R2.1 in [PR #113](https://github.com/tdkelley2001/fantasy_football/pull/113), and R2.2 at `a7c0ff4` ([PR #115](https://github.com/tdkelley2001/fantasy_football/pull/115)). The LW2.3A performance checkpoint (`d630887`) is also independently accepted. These acceptances do not declare V1 released: **M8.4 remains pending independent release disposition**. R2.3 ([PR #116](https://github.com/tdkelley2001/fantasy_football/pull/116)) and [WR-022](MISSING_PROJECTION_ZERO_CORRECTION.md) are independently accepted through baseline `28bf605`. R2.4 verification guidance awaits review. Future features and model/source changes still need applicable approvals. Historical gates remain binding until an approved replacement explicitly supersedes them; unresolved gate migration remains WR-002, not discarded.
 
 ## Historical development records
 

@@ -111,6 +111,8 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/RUN_MANAGEMENT.md",
         "docs/architecture/overview.md",
         "docs/R23_DOCUMENTATION_RECONCILIATION.md",
+        "docs/development/verification.md",
+        "docs/RELEASE_CHECKLIST.md",
     ),
 )
 def test_contributor_links_and_fragments_resolve(document: str) -> None:

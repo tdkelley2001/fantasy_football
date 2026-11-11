@@ -59,27 +59,14 @@ Use the current [developer setup](docs/getting-started/development.md) for locke
 
 Python 3.12 and the tested Node 24.19.0 are the contributor baseline. The broader installer/locked-toolchain mismatch remains [WR-003](docs/BACKLOG.md#work-items). Launcher `WAR_ROOM_DATABASE`/`-Database` and Python CLI `SNAPSHOT_DB_PATH` differ; browser and CLI manual-rule configuration also differ. The configuration guide documents actual precedence without changing it.
 
-Choose checks proportional to the change and report the actual results. Useful Windows commands are:
+Use the [verification guide](docs/development/verification.md) for the change-based matrix, numerical/reference standards, exact tier commands and documentation maintenance. A quick documentation/privacy check is:
 
 ```powershell
-# Documentation and repository privacy checks
-.venv\Scripts\python.exe -m pytest tests/test_documentation_links.py tests/test_repository_security.py -q
-
-# Credential-free Python tier; uses synthetic/temp data, excludes real process recovery tests
-.venv\Scripts\python.exe -m pytest -m "not windows_process"
-
-# Established narrow correctness gate, not a repository-wide style rewrite
-.venv\Scripts\python.exe -m ruff check --select E9,F63,F7,F82 .
-.venv\Scripts\python.exe -m pip check
-git diff --check
-
-# For frontend changes
-npm.cmd --prefix frontend test
-npm.cmd --prefix frontend run typecheck
-npm.cmd --prefix frontend run build
+.venv\Scripts\python.exe -m pytest tests/test_documentation_links.py tests/test_contributor_documentation.py tests/test_technical_documentation.py tests/test_repository_security.py -q -p no:cacheprovider
+git diff --check HEAD
 ```
 
-The frontend typecheck/build commands can generate local build metadata/assets. The complete `scripts/verify-release.ps1` runs tests/builds and a **networked npm audit**; it is not a read-only/offline command. Its `-IncludeWindowsProcessTests` tier deliberately starts/stops disposable owned processes. Run process/recovery tests and live ESPN diagnostics only within an explicitly agreed scope; never point them at another contributor's private data or running service. Fresh-machine, live-access and visual verification must be reported separately from fixture tests. See [release checks](docs/RELEASE_CHECKLIST.md) and [R1 findings](docs/R1_REPOSITORY_AUDIT.md) for known tooling limits.
+Select targeted and broader regressions according to the changed contract and applicable gates; report actual results and exclusions. The default release script includes a **networked npm audit** and generated builds; it is not offline/read-only. Live ESPN, browser/clean-machine integration and Windows process/recovery checks require explicitly agreed scope. Keep private data and other contributors' processes/stores out of tests. Details and side effects are maintained in the verification guide and [release checklist](docs/RELEASE_CHECKLIST.md).
 
 Preserve raw missing versus explicit zero, immutable snapshots, source evidence, compatibility and deterministic path identities. Analytical/legality changes need focused adversarial tests and applicable reference-oracle, worker/batch/resume and fingerprint/golden regressions. Do not delete older schemas, tests or evidence merely because they are old. Do not commit `.env`, tokens, private league reports, databases/sidecars or user results; use sanitized fixtures and ignored local output.
 
