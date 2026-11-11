@@ -2,7 +2,7 @@
 
 **Archived historical evidence — compatibility location.** Read the [complete pre-M4 audit](archive/audits/PRE_M4_INTEGRATION_AUDIT.md#pre-m4-integration-and-consolidation-audit); it retains the full original narrative, measurements, caveats and acceptance evidence. Its development recommendations describe the historical baseline, not current implementation instructions. Relocation does not waive any applicable gate.
 
-For current behavior start with the [architecture overview](architecture/overview.md), [verification guide](development/verification.md) and [documentation index](index.md). The historical headings below preserve existing bookmarks and link to the corresponding full sections.
+For current behavior start with the [architecture overview](architecture/overview.md), [verification guide](../CONTRIBUTING.md#tier-1-fast-local-checks) and [documentation index](index.md). The historical headings below preserve existing bookmarks and link to the corresponding full sections.
 
 ## Outcome
 

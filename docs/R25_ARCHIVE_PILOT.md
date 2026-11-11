@@ -1,6 +1,6 @@
 # R2.5 historical audit archive pilot
 
-Baseline: independently accepted R2.4 `05165a8fbf4084fc9c2d56780335581c65006657` ([PR #118](https://github.com/tdkelley2001/fantasy_football/pull/118)). Scope is the explicitly authorized two-document WR-002 pilot, under [standing rules](../AGENTS.md), [verification guidance](development/verification.md) and the unchanged [R1 inventory](R1_REPOSITORY_AUDIT.md#7-file-by-file-documentation-migration-map). R2.5 awaits independent review. Relocation does not supersede analytical requirements, historical gates, findings or evidence.
+Baseline: independently accepted R2.4 `05165a8fbf4084fc9c2d56780335581c65006657` ([PR #118](https://github.com/tdkelley2001/fantasy_football/pull/118)). Scope is the explicitly authorized two-document WR-002 pilot, under [standing rules](../AGENTS.md), [verification guidance](../CONTRIBUTING.md#tier-1-fast-local-checks) and the unchanged [R1 inventory](R1_REPOSITORY_AUDIT.md#7-file-by-file-documentation-migration-map). R2.5 awaits independent review. Relocation does not supersede analytical requirements, historical gates, findings or evidence.
 
 ## Files and evidence preservation
 

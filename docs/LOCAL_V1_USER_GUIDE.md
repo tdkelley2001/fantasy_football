@@ -4,7 +4,7 @@ War Room is a locally hosted fantasy-football analysis web application. It reads
 
 ## Before you start
 
-Use the current [installation](getting-started/installation.md), [configuration](getting-started/configuration.md), [first-run walkthrough](getting-started/first-run.md) and [operations/troubleshooting](getting-started/operations.md) guides. They are the single current path for prerequisites, public/private ESPN setup, launcher storage, refresh, snapshot selection and safe shutdown. Contributors use [developer setup](getting-started/development.md).
+Use [OPERATIONS](OPERATIONS.md) for installation, public/private ESPN configuration, launcher storage, first refresh/analysis and safe shutdown. Contributors use [CONTRIBUTING](../CONTRIBUTING.md#development-environment-and-checks).
 
 Launcher storage uses `WAR_ROOM_DATABASE`/`-Database`; `SNAPSHOT_DB_PATH` controls Python settings/CLI defaults and does not move launcher data. Browser refresh uses automatic safe-week detection by default; an optional override cannot bypass live-evidence validation. The adapter/publication CLIs require an explicit week and `--manual-config` for manual rules; browser rules instead resolve the settings path. See the configuration guide for exact precedence.
 
@@ -12,11 +12,11 @@ Installation/startup needs no ESPN credentials. Refresh requires the configured 
 
 ## Configure ESPN access
 
-Follow [current configuration](getting-started/configuration.md#league-profile) for the public/private profile and [manual-rule guidance](getting-started/configuration.md#manual-league-rules). This heading is retained for existing bookmarks; setup instructions are maintained in the consolidated guide.
+Follow [current configuration](OPERATIONS.md#league-configuration) for the public/private profile and [manual-rule guidance](OPERATIONS.md#manual-league-rules). This heading is retained for existing bookmarks; setup instructions are maintained in the consolidated guide.
 
 ## Refresh and select a league snapshot
 
-Follow [the first-run snapshot steps](getting-started/first-run.md#refresh-and-select-a-snapshot), including automatic boundary validation, immutable publication and explicit snapshot selection. This heading remains available for existing bookmarks.
+Follow [the first-run snapshot steps](OPERATIONS.md#launch-and-first-use), including automatic boundary validation, immutable publication and explicit snapshot selection. This heading remains available for existing bookmarks.
 
 ## Run and interpret analyses
 
@@ -62,4 +62,4 @@ If a run or ESPN request stalls, cooperative shutdown can exceed the launcher ti
 - War Room never executes real transactions and cannot promise trade acceptance or waiver success.
 - League Insights and other post-V1 work remain deferred.
 
-For installation failures, launcher ownership and database recovery, use [current operations](getting-started/operations.md). Original [installation evidence](M8_1_LOCAL_INSTALLATION.md), [runtime and recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md), and [run management contracts](APPLICATION_SERVICE.md#analysis-lifecycle) remain available.
+For installation failures, launcher ownership and database recovery, use [current operations](OPERATIONS.md#local-data-and-privacy). [Runtime and recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md) and [application lifecycle contracts](APPLICATION_SERVICE.md#analysis-lifecycle) remain available; retired installation history is in Git.

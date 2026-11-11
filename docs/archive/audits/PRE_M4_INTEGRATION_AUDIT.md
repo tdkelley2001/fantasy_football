@@ -1,4 +1,4 @@
-> Archived historical evidence, relocated in R2.5 from `docs/PRE_M4_INTEGRATION_AUDIT.md`. Original findings, measurements and acceptance gates remain in force at their stated baseline; relocation does not supersede them. For current behavior use the [architecture overview](../../architecture/overview.md) and [verification guide](../../development/verification.md).
+> Archived historical evidence, relocated in R2.5 from `docs/PRE_M4_INTEGRATION_AUDIT.md`. Original findings, measurements and acceptance gates remain in force at their stated baseline; relocation does not supersede them. For current behavior use the [architecture overview](../../architecture/overview.md) and [verification guide](../../../CONTRIBUTING.md#tier-1-fast-local-checks).
 
 # Pre-M4 Integration and Consolidation Audit
 

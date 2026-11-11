@@ -84,9 +84,17 @@ def test_r1_map_and_completed_archive_compatibility_are_reconciled_without_new_w
     }
     assert done == expected
     for path in expected:
-        assert (ROOT / path).read_bytes().replace(b"\r\n", b"\n") == _tree()[
-            path
-        ].replace(b"\r\n", b"\n")
+        # Only the current-guide citation changes in D2; historical bodies,
+        # inventory rows and original evidence remain compared in full.
+        actual = (ROOT / path).read_text(encoding="utf-8")
+        prefix = "../../../" if "/archive/" in path else "../"
+        actual = actual.replace(
+            f"({prefix}CONTRIBUTING.md#tier-1-fast-local-checks)",
+            "(../../development/verification.md)"
+            if "/archive/" in path
+            else "(development/verification.md)",
+        )
+        assert actual == _tree()[path].decode("utf-8").replace("\r\n", "\n")
 
 
 def test_primary_package_scopes_are_exact_disjoint_and_not_approvals():

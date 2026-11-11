@@ -2,7 +2,9 @@
 
 This is the authoritative **current capability summary**, not a work queue or approval of a new model. Use [BACKLOG.md](BACKLOG.md) for outstanding work and [MASTER_SPEC.md](MASTER_SPEC.md) for approved analytical requirements. [CONTRIBUTING.md](../CONTRIBUTING.md) governs collaboration; [ROADMAP.md](ROADMAP.md) preserves historical milestones, dependencies and acceptance evidence. A summary cannot override an applicable specification or gate; resolve contradictions explicitly.
 
-R2.0–R2.5 consolidate navigation, setup, technical references, work tracking and the bounded historical archive only. They do not change code, source verification, API versions, stored artifacts, runtime settings or release disposition. Use the [documentation index](index.md), [architecture overview](architecture/overview.md), [verification and maintenance guide](development/verification.md) and current [getting-started guides](getting-started/installation.md). Historical delivery-time status lines in older documents are not a second live capability tracker.
+R2.0–R2.5 consolidate navigation, setup, technical references, work tracking and the bounded historical archive only. They do not change code, source verification, API versions, stored artifacts, runtime settings or release disposition. Use the [documentation index](index.md), [architecture overview](architecture/overview.md), [verification and maintenance guide](../CONTRIBUTING.md#tier-1-fast-local-checks) and current [operating reference](OPERATIONS.md#installation-and-prerequisites). Historical delivery-time status lines in older documents are not a second live capability tracker.
+
+D1 API/execution consolidation is independently accepted at `f933b74`; D2 operations/contributor consolidation is In Review. Neither changes application behavior or release disposition.
 
 ## Implemented and supported boundaries
 

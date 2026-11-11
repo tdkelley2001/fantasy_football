@@ -20,30 +20,11 @@ Ordinary V1 simulation requires a verified safe whole-week boundary. Opt-in part
 
 ## Requirements and quick start
 
-Use the current [installation guide](docs/getting-started/installation.md), [configuration reference](docs/getting-started/configuration.md), [first-run walkthrough](docs/getting-started/first-run.md) and [operations/troubleshooting guide](docs/getting-started/operations.md) for the complete user path. Contributors use the separate [developer setup](docs/getting-started/development.md).
+Follow [OPERATIONS](docs/OPERATIONS.md) for the complete Windows installation, ESPN configuration, launch, first analysis, private-data management and safe shutdown procedure. It records the tested Python/Node environment, locked setup and unresolved WR-003 version-policy mismatch. Installation/startup needs no ESPN credentials; private refresh needs the complete authorized cookie pair.
 
-The supplied launchers target Windows with PowerShell 5.1 or 7, 64-bit Python 3.12 with the `py` launcher, Git and Node.js/npm. Node 24.19.0 was verified in the existing contributor environment. The installer currently accepts a wider Node range than the complete locked test toolchain supports; see [contributor requirements](CONTRIBUTING.md#development-environment-and-checks) and WR-003 in the [backlog](docs/BACKLOG.md#work-items).
+The application serves its built frontend on loopback. Refresh the configured league explicitly, select a snapshot, then submit a bounded baseline or hypothetical analysis in Simulation Center. A manual start-week override cannot bypass evidence safety checks. Use the [application user guide](docs/LOCAL_V1_USER_GUIDE.md) for workspace details and interpretation.
 
-From a fresh checkout:
-
-```powershell
-git clone https://github.com/tdkelley2001/fantasy_football.git
-cd fantasy_football
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-local.ps1
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-```
-
-Edit the ignored `.env` with your `ESPN_LEAGUE_ID` and `ESPN_SEASON`. Public leagues need no cookies; private leagues require both `ESPN_S2` and `ESPN_SWID`. Never commit credentials, private reports, databases or user results. Installation and application startup themselves require no ESPN credentials.
-
-```powershell
-.\scripts\start-local.ps1
-# Later, stop the launcher-owned application:
-.\scripts\stop-local.ps1
-```
-
-Open `http://127.0.0.1:8000/`. The application serves the built frontend; no separate Vite server is needed for ordinary use. Refresh the configured league explicitly, select a snapshot, then submit a baseline or action analysis in Simulation Center. Automatic boundary detection can reject a live/unsettled week; a manual override cannot bypass that safety contract.
-
-For analytical interpretation and workspace details, use the [application user guide](docs/LOCAL_V1_USER_GUIDE.md). Launcher storage uses `WAR_ROOM_DATABASE`/`-Database`; Python settings/CLIs use `SNAPSHOT_DB_PATH`. The [configuration guide](docs/getting-started/configuration.md) explains precedence and browser/CLI differences. Original [installation evidence](docs/M8_1_LOCAL_INSTALLATION.md) remains preserved.
+Developers use [CONTRIBUTING](CONTRIBUTING.md#development-environment-and-checks) for the separate backend/Vite workflow and verification tiers. V1 release signoffs remain in [WR-021](docs/BACKLOG.md#wr-021-release-acceptance); historical implementation evidence remains in Git/PRs.
 
 ## Documentation and contribution
 

@@ -78,7 +78,7 @@ Default list and inspection output contains sanitized aggregates only. Detailed 
 
 Every committed snapshot is retained indefinitely by default, even when content resembles an earlier refresh. There is no automatic cleanup, rolling retention, deduplication, or update API.
 
-Python settings/CLI `SNAPSHOT_DB_PATH` defaults to `outputs/fantasy_football.sqlite3`; callers may pass another local path explicitly. Launcher `-Database`/`WAR_ROOM_DATABASE` is a separate configuration path; see [configuration](getting-started/configuration.md). `.gitignore` excludes SQLite, DB, WAL, and SHM artifacts. Raw payloads contain private league information, so the database is a private local artifact. Credentials, cookies, tokens, and headers are neither accepted as stored request metadata nor written by the adapter.
+Python settings/CLI `SNAPSHOT_DB_PATH` defaults to `outputs/fantasy_football.sqlite3`; callers may pass another local path explicitly. Launcher `-Database`/`WAR_ROOM_DATABASE` is a separate configuration path; see [configuration](OPERATIONS.md#league-configuration). `.gitignore` excludes SQLite, DB, WAL, and SHM artifacts. Raw payloads contain private league information, so the database is a private local artifact. Credentials, cookies, tokens, and headers are neither accepted as stored request metadata nor written by the adapter.
 
 ## Verification evidence and limitations
 
