@@ -53,6 +53,7 @@ For analytical interpretation and workspace details, use the [application user g
 - [Current capabilities](docs/status.md) — what is supported today and what remains provisional or unavailable.
 - [Master specification](docs/MASTER_SPEC.md) — approved analytical requirements, modeling contracts and architecture.
 - [Architecture overview](docs/architecture/overview.md) — subsystem/source map, data flow and extension boundaries.
+- [Application API and execution](docs/APPLICATION_SERVICE.md) — API 1.0, refresh, background lifecycle, retained results, ownership and local security.
 - [Historical roadmap](docs/ROADMAP.md) — preserved milestones, dependencies and acceptance gates, not an active work queue.
 - [Historical development records](docs/index.md#historical-development-records) — audits, source observations and visual/runtime evidence retained at their original paths.
 

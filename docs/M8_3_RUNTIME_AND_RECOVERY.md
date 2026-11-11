@@ -2,7 +2,7 @@
 
 Status: **COMPLETE AND ACCEPTED — 6 November 2026**
 
-Governing contracts: `MASTER_SPEC.md` M8.3, `RUN_MANAGEMENT.md`, and the accepted M0–M8.2 analytical contracts. This milestone measures and hardens the local application; it does not weaken exact valuation, transaction, postseason, probability, or candidate-coverage semantics.
+Governing contracts: `MASTER_SPEC.md` M8.3, `APPLICATION_SERVICE.md`, and the accepted M0–M8.2 analytical contracts. This milestone measures and hardens the local application; it does not weaken exact valuation, transaction, postseason, probability, or candidate-coverage semantics.
 
 ## Scope and method
 

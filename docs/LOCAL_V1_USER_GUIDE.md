@@ -62,4 +62,4 @@ If a run or ESPN request stalls, cooperative shutdown can exceed the launcher ti
 - War Room never executes real transactions and cannot promise trade acceptance or waiver success.
 - League Insights and other post-V1 work remain deferred.
 
-For installation failures, launcher ownership and database recovery, use [current operations](getting-started/operations.md). Original [installation evidence](M8_1_LOCAL_INSTALLATION.md), [runtime and recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md), and [run management contracts](RUN_MANAGEMENT.md) remain available.
+For installation failures, launcher ownership and database recovery, use [current operations](getting-started/operations.md). Original [installation evidence](M8_1_LOCAL_INSTALLATION.md), [runtime and recovery evidence](M8_3_RUNTIME_AND_RECOVERY.md), and [run management contracts](APPLICATION_SERVICE.md#analysis-lifecycle) remain available.

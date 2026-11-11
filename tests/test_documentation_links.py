@@ -55,8 +55,7 @@ def test_historical_milestone_contracts_remain_accessible_from_index() -> None:
     assert "Post-M7 consolidation [COMPLETE AND ACCEPTED" in roadmap
     assert "analytics-first" in roadmap.casefold()
     for reference in (
-        "BACKEND_READINESS.md",
-        "PRE_M7_REPOSITORY_AUDIT.md",
+        "APPLICATION_SERVICE.md",
         "M7_1_FRONTEND_FOUNDATION.md",
         "M7_2_LEAGUE_ANALYTICS.md",
         "M7_3_OPPORTUNITY_EXPLORER.md",
