@@ -1,5 +1,7 @@
 # War Room architecture
 
+[Season mechanics](../SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [Transactions](../TRANSACTIONS.md) owns evolving legality, operational acquisitions, V(R) and distinct independent references.
+
 War Room turns read-only ESPN observations into immutable league snapshots, then runs reproducible hypothetical season analyses. React presents retained engine results; it does not decide league mechanics or calculate a second probability model. Governing requirements are [MASTER_SPEC sections 2–4 and 8–9](../MASTER_SPEC.md#2-system-architecture-and-execution-lifecycle). [README capabilities](../../README.md#current-capabilities) describes current capabilities, [backlog](../BACKLOG.md) tracks work, and [roadmap](../ROADMAP.md) preserves historical gates.
 
 ```mermaid

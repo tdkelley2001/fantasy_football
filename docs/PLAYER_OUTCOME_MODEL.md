@@ -1,5 +1,7 @@
 # Provisional Player Outcome Models
 
+[Season mechanics](SEASON_SIMULATOR.md) selects/fixes lineups and resolves supplied outcomes; [Transactions](TRANSACTIONS.md) governs roster evolution and valuation. Outcome generation does not grant transaction or lineup permission.
+
 M2.6 introduces `PlayerOutcomeModel`, a deliberately small interface that turns
 the canonical player-week universe into one immutable
 `DeterministicScoreScenario`. It supplies scores only; M2.5 remains authoritative

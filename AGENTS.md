@@ -1,5 +1,7 @@
 # Standing Development Instructions
 
+[Season mechanics](docs/SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [TRANSACTIONS](docs/TRANSACTIONS.md) owns hypothetical roster evolution, legality and V(R). Canonical records remain source truth.
+
 These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/MASTER_SPEC.md) is authoritative for approved analytical requirements and modeling contracts. [BACKLOG.md](docs/BACKLOG.md) is authoritative for outstanding work; [README](README.md#current-capabilities) owns the product/capability summary. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main.
 
 [ROADMAP.md](docs/ROADMAP.md) is the preserved historical development and acceptance record, not a parallel active backlog. Its applicable dependencies and acceptance gates remain binding until explicitly superseded by an approved contract; do not discard requirements merely because their original location is historical. No GitHub Issues/Projects/labels/templates or repository-setting changes are needed for the repository-native work list.

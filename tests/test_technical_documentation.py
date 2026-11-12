@@ -266,3 +266,119 @@ def test_interface_preserves_request_and_accessibility_boundaries() -> None:
         "approval",
     ):
         assert term in followup
+
+
+def test_mechanics_interfaces_have_distinct_documented_owners() -> None:
+    owners = {
+        "docs/SEASON_SIMULATOR.md": {
+            "season_simulator": ("simulate_deterministic_season",),
+            "lineup_optimizer": (
+                "optimize_starting_lineup",
+                "optimize_candidate_lineup",
+            ),
+            "weekly_engine": ("resolve_regular_season_week", "rank_standings"),
+            "postseason": (
+                "generate_championship_graph",
+                "generate_consolation_graph",
+                "resolve_postseason_seeds",
+                "apply_postseason_team_scores",
+                "score_frozen_postseason_week",
+            ),
+        },
+        "docs/TRANSACTIONS.md": {
+            "evolving_state": (
+                "initialize_evolving_state",
+                "validate_evolving_state",
+                "validate_eligibility_evidence_artifact",
+            ),
+            "weekly_transactions": ("execute_weekly_essential_transactions",),
+            "roster_value": (
+                "value_roster",
+                "value_hypothetical_roster",
+                "compare_roster_values",
+                "exhaustive_allocation_oracle",
+            ),
+            "transaction_cycle": (
+                "enumerate_feasible_cycles",
+                "execute_sequential_policy_reference",
+                "validate_operational_policy_equivalence",
+                "compare_sequential_to_feasible",
+            ),
+        },
+    }
+    for document, modules in owners.items():
+        text = read(document)
+        for module, names in modules.items():
+            tree = ast.parse(read(f"src/fantasy_football/{module}.py"))
+            actual = {
+                node.name for node in tree.body if isinstance(node, ast.FunctionDef)
+            }
+            for name in names:
+                assert name in actual and f"{name}(" in text, (document, name)
+    oracle = "_exhaustive_small_correction_oracle"
+    assert f"`{oracle}()" in read("docs/TRANSACTIONS.md")
+    assert f"def {oracle}(" in read("tests/test_weekly_transactions.py")
+
+
+def test_mechanics_authority_and_reference_coverage_remain_discoverable() -> None:
+    canonical = read("docs/CANONICAL_MODEL.md")
+    assert "TRANSACTIONS.md#roster-state-and-legality" in canonical
+    assert "### Eligibility evidence trust boundary" not in canonical
+    transactions = read("docs/TRANSACTIONS.md")
+    for constraint in (
+        "### Eligibility evidence trust boundary",
+        "validated_fixture",
+        "maximize vacancies filled",
+        "minimize the target's best residual attainable lineup",
+        "CURRENT_WAIVER",
+        "reverse frozen opening priority",
+        "legal_enumeration_complete",
+        "determination_complete=False",
+        "not jointly attainable",
+        "independently disableable",
+        "None, never substituted",
+    ):
+        assert constraint in transactions
+    for path in (
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "docs/architecture/overview.md",
+    ):
+        assert "TRANSACTIONS.md" in read(path)
+        assert "SEASON_SIMULATOR.md" in read(path)
+    for path in ("docs/MANUAL_SCENARIOS.md", "docs/UNIFIED_ACTION_SEARCH.md"):
+        assert "TRANSACTIONS.md#resulting-roster-valuation" in read(path)
+
+
+def test_mechanics_limits_and_unimplemented_obligations_are_not_waived() -> None:
+    season = read("docs/SEASON_SIMULATOR.md")
+    for term in (
+        "higher original postseason seed",
+        "final_positions_by_ladder_position",
+        "championship_complete_placement_mapping",
+        "consolation_bye_reentry_mapping",
+        "all_teams_continue_essential_acquisitions_v1",
+        "independent round lists",
+        "negative projections",
+        "Decimal.from_float",
+        "math.fsum",
+    ):
+        assert term.casefold() in season.casefold()
+    detail = (
+        read("docs/BACKLOG.md")
+        .split("## Mechanics review obligations", 1)[1]
+        .split("\n## ", 1)[0]
+    )
+    for term in (
+        "WR-023",
+        "precision 28",
+        "Fraction",
+        "WR-014",
+        "guard",
+        "calibration",
+        "discount",
+        "independent",
+        "approval",
+    ):
+        assert term in detail

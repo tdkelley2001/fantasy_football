@@ -1,5 +1,7 @@
 # Unified immediate action search (M5.7)
 
+[Transactions](TRANSACTIONS.md) owns evolving legality and the [unified V(R) definition](TRANSACTIONS.md#resulting-roster-valuation). This reference owns action grammar, candidate identities and search-specific completion.
+
 Status: **COMPLETE AND ACCEPTED**.
 
 `fantasy_football.unified_actions` composes the accepted M5.1, M5.5, and M5.6

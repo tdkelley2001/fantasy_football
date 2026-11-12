@@ -1,5 +1,7 @@
 # Provisional Repeated Season Simulation and Probability Precision
 
+[Season mechanics](SEASON_SIMULATOR.md) and [Transactions](TRANSACTIONS.md) own per-path league behavior and independent correctness references; Monte Carlo reuses them without changing V(R), lineup or acquisition policy.
+
 M2.6 is implemented by `fantasy_football.monte_carlo`. It generates path-indexed
 score scenarios and passes each one to the existing `simulate_deterministic_season()`
 coordinator, including the accepted opt-in LW2.2B/LW2.3A pregame path described

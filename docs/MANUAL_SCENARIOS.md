@@ -1,5 +1,7 @@
 # Manual Generalized Scenario Evaluation
 
+The shared [V(R) definition](TRANSACTIONS.md#resulting-roster-valuation) and [state/legality primitives](TRANSACTIONS.md#roster-state-and-legality) are owned by Transactions. This document owns manual completion objectives, pins and its hypothetical pool/phase differences.
+
 M4 implements the `MASTER_SPEC.md` Section 8 counterfactual workflow. It creates
 one structurally legal hypothetical starting state, then compares it with the
 unchanged baseline over identical Monte Carlo path IDs and player-week random

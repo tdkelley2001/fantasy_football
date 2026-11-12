@@ -1,5 +1,7 @@
 # Contributing to War Room
 
+For mechanics changes use [SEASON_SIMULATOR](docs/SEASON_SIMULATOR.md) and [TRANSACTIONS](docs/TRANSACTIONS.md), preserving production versus independent-oracle objectives and recording unresolved [mechanics obligations](docs/BACKLOG.md#mechanics-review-obligations).
+
 `tdkelley2001/fantasy_football` is the authoritative repository for accepted code and documentation. Both regular contributors use reviewed pull requests into its `main` branch, whether the work branch is in the original repository or the existing fork. Keep the fork; no migration, remote replacement or permission change is needed.
 
 Start with the [development backlog](docs/BACKLOG.md), [current capabilities](README.md#current-capabilities), [approved analytical specification](docs/MASTER_SPEC.md) and [standing development rules](AGENTS.md). The [original roadmap](docs/ROADMAP.md) preserves historical milestones, dependencies and acceptance evidence; it is no longer a parallel work queue. Applicable acceptance gates remain binding until explicitly superseded by an approved contract.
