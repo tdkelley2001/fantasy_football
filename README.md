@@ -1,5 +1,7 @@
 # War Room
 
+[Transactions](docs/TRANSACTIONS.md) owns evolving roster legality, essential acquisitions, V(R) and distinct correctness references.
+
 War Room is a local web application for ESPN fantasy football managers who want to understand league-wide season outcomes and compare hypothetical roster changes. It preserves immutable league snapshots, simulates the remaining season and compares actions using matched player-week draws.
 
 ESPN access is **read-only**. War Room **never submits real transactions**, predicts manager acceptance or estimates waiver-claim success.
