@@ -1,6 +1,6 @@
 # Contributing to War Room
 
-Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 evidence-role contract](docs/DATA.md#m0-consumer-dependency) is offline historical verification: run `.venv\Scripts\python.exe -m fantasy_football.m0_verification --json` without credentials. Preserve role/section/interface checks and the distinction between recorded historical identity and unauthenticated historical bytes; the missing-projection document remains required through separately authorized D6 migration.
+Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 evidence-role contract](docs/DATA.md#m0-consumer-dependency) is offline historical verification: run `.venv\Scripts\python.exe -m fantasy_football.m0_verification --json` without credentials. Preserve role/section/interface checks and the distinction between recorded historical identity and unauthenticated historical bytes; the missing-projection document remains required pending a separately authorized verifier update.
 
 For mechanics changes use [SEASON_SIMULATOR](docs/SEASON_SIMULATOR.md) and [TRANSACTIONS](docs/TRANSACTIONS.md), preserving production versus independent-oracle objectives and recording unresolved [mechanics obligations](docs/BACKLOG.md#mechanics-review-obligations).
 
@@ -207,13 +207,15 @@ Partial changes also select `tests/test_partial_week.py`, `tests/test_partial_se
 
 ## Numerical verification standards
 
+[PLAYER_OUTCOME_MODEL](docs/PLAYER_OUTCOME_MODEL.md), [MONTE_CARLO](docs/MONTE_CARLO.md) and [PARTIAL_WEEK](docs/PARTIAL_WEEK.md) own the current numerical and evidence contracts. Preserve the M0-required missing-policy source until its separate consumer migration is reviewed.
+
 - Preserve immutable source evidence, raw/effective projections, snapshot IDs/bytes/checksums and historical compatibility. A valid schema is not proof of consumer permission.
 - Compare exact deterministic path-level scores, standings, postseason outcomes and shared path-indexed draws before only comparing aggregate probabilities. Match snapshot, seed, path indices, policies and outcome model; ownership/action order must not generate independent baseline/scenario samples.
 - Test worker counts, batch partitions/order and checkpoint/resume against the reference. Fixed-path equivalence differs from adaptive stopping: changing the look schedule can change how many paths execute. Checkpoint execution-policy compatibility can be stricter than draw equivalence.
 - Separate intentional approved model changes from regressions. Document expected changed outputs and identity consequences before changing goldens. **Never update golden outputs merely to obtain passing tests.** Retain historical reference evidence and use an independent oracle where the supported policy changes.
 - Version numerical identity when semantics change; test adversarial custom identifiers/parameters and old-checkpoint refusal without rewriting stored bytes. Preserve nonaffected random-key bytes, not just approximate distributions. Retained historical output is not automatically reproducible under a new model.
 
-[Accepted WR-022](docs/MISSING_PROJECTION_ZERO_CORRECTION.md) is the example, not a reopened decision: missing outcomes are deterministic zero, while nonmissing draws use original version/three draw parameters. Public Normal identity additionally includes `missing_projection_outcome="deterministic-zero-v1"`; a suffix alone could equal a historical custom version. Public serialization/configuration/run fingerprints now distinguish the policy and old checkpoints fail closed. The original golden constants remain protected by the historical test oracle. This guide changes none of that analytical meaning.
+[Accepted WR-022](docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility) is the example, not a reopened decision: missing outcomes are deterministic zero, while nonmissing draws use original version/three draw parameters. Public Normal identity additionally includes `missing_projection_outcome="deterministic-zero-v1"`; a suffix alone could equal a historical custom version. Public serialization/configuration/run fingerprints now distinguish the policy and old checkpoints fail closed. The original golden constants remain protected by the historical test oracle. This guide changes none of that analytical meaning.
 
 ## Documentation maintenance
 

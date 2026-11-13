@@ -97,7 +97,7 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/PLAYER_OUTCOME_MODEL.md",
         "docs/MONTE_CARLO.md",
         "docs/SEASON_SIMULATOR.md",
-        "docs/LW2_PARTIAL_WEEK_CONTRACT.md",
+        "docs/PARTIAL_WEEK.md",
         "docs/APPLICATION_SERVICE.md",
         "docs/architecture/overview.md",
         "docs/R23_DOCUMENTATION_RECONCILIATION.md",

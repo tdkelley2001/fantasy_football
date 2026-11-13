@@ -135,9 +135,9 @@ def test_partial_contract_keeps_distinct_opt_in_engine_entry_points() -> None:
         is None
     )
     assert MonteCarloConfig.__dataclass_fields__["partial_week"].default is None
-    document = read("docs/LW2_PARTIAL_WEEK_CONTRACT.md")
+    document = read("docs/PARTIAL_WEEK.md")
     current = document.split("## Current capability map", 1)[1].split(
-        "## Original LW2.1", 1
+        "## Companion identity", 1
     )[0]
     for name in (
         "DeterministicPartialWeekInput",
@@ -147,7 +147,6 @@ def test_partial_contract_keeps_distinct_opt_in_engine_entry_points() -> None:
         "Completed, in-progress, missing, nonparticipating or unresolved",
         "cutoff",
         "carry",
-        "locked",
     ):
         assert name in current
 
@@ -468,5 +467,187 @@ def test_data_research_authority_and_m0_role_checks_remain_discoverable() -> Non
     assert all(not row["historical_content_verified"] for row in report.evidence_roles)
     assert "docs/MISSING_PROJECTION_POLICY.md" in report.evidence_documents
     backlog = read("docs/BACKLOG.md")
-    assert "bounded M0 migration" in backlog
+    assert "M0 migration is independently accepted at `06b408f`" in backlog
     assert "In Review" in backlog
+
+
+def test_outcome_reference_separates_public_policy_from_frozen_draw_identity() -> None:
+    from fantasy_football.player_outcomes import (
+        PlayerOutcomeModel,
+        ProjectionEmpiricalResidualModel,
+        ProvisionalNormalModel,
+    )
+
+    document = read("docs/PLAYER_OUTCOME_MODEL.md")
+    model = ProvisionalNormalModel(2.0, 0.1)
+    for name in ("model_id", "parameters", "generate_scenario"):
+        assert hasattr(PlayerOutcomeModel, name)
+        assert name in document
+    assert len(model._draw_parameters) == 3
+    assert len(model.parameters) == 4
+    for name, _ in model.parameters:
+        assert name in document
+    for name in inspect.signature(model._standard_normal).parameters:
+        assert name in document
+    for contract in (
+        "fantasy-football-player-week-draw-v1",
+        "fantasy-football-empirical-quantile-v1",
+        "deterministic-zero-v1",
+        "MISSING",
+        "EXPLICIT_ZERO",
+        "skip dispersion and sampling",
+        "sigma = base_stddev",
+        "legacy-policy switch",
+    ):
+        assert contract.lower() in document.lower()
+    for field in fields(ProjectionEmpiricalResidualModel):
+        assert field.name in document, field.name
+    goldens = re.findall(r'"([0-9a-f]{64})"', read("tests/test_partial_monte_carlo.py"))
+    assert goldens
+    assert all(value in document for value in goldens)
+    assert "tests/legacy_normal_reference.py" in document
+
+
+def test_mc_reference_covers_current_inputs_estimators_and_recovery_scope() -> None:
+    from fantasy_football.monte_carlo import combine_monte_carlo_batches
+    from fantasy_football.monte_carlo_execution import (
+        MonteCarloCheckpointStore,
+        execute_monte_carlo_profile,
+    )
+    from fantasy_football.monte_carlo_parallel import ParallelExecutionConfiguration
+    from fantasy_football.monte_carlo_precision import PrecisionConfiguration
+    from fantasy_football.scenario_evaluator import compare_completed_scenario_batches
+    from fantasy_football.trade_search import evaluate_progressive_state_groups
+
+    document = read("docs/MONTE_CARLO.md")
+    for record in (
+        MonteCarloConfig,
+        PrecisionConfiguration,
+        ParallelExecutionConfiguration,
+    ):
+        assert all(field.name in document for field in fields(record))
+    for interface in (
+        combine_monte_carlo_batches,
+        execute_monte_carlo_profile,
+        compare_completed_scenario_batches,
+        evaluate_progressive_state_groups,
+    ):
+        assert callable(interface)
+        assert interface.__name__ + "()" in document
+    assert callable(MonteCarloCheckpointStore.load)
+    for obligation in (
+        "p_champ(t) = sum_i C_it / N",
+        "p_playoff(t) = sum_i Q_it / N",
+        "p_place(t,k) = sum_i F_itk / N",
+        "alpha_interval = (1 - C) / (M * L)",
+        "delta = fsum(d_i)/N",
+        "alpha_direction = (1-C)/(2*M)",
+        "paired_half_width = (delta_upper-delta_lower)/2",
+        "0.02 is +2",
+        "no complete-only denominator",
+        "incompatible for checkpoint resume",
+        "not add a planned-look or across-state multiplier",
+        "WR-025",
+        "not automatically delete successful checkpoints",
+    ):
+        assert obligation in document, obligation
+    for path in (
+        "docs/MANUAL_SCENARIOS.md",
+        "docs/UNIFIED_ACTION_SEARCH.md",
+        "docs/TRADE_CANDIDATES.md",
+    ):
+        assert "MONTE_CARLO.md#" in read(path)
+
+
+def test_partial_reference_matches_artifact_states_and_permission_interfaces() -> None:
+    from fantasy_football.monte_carlo import MonteCarloPartialWeekInput
+    from fantasy_football.partial_week import (
+        EvidenceAuthority,
+        LockState,
+        PlayerScoreState,
+        RemainingContributionStatus,
+        compose_partial_week_scores,
+        evidence_basis_digest,
+        require_executable_partial_week_evidence,
+        validate_partial_week_evidence,
+        validate_proposed_lineup,
+    )
+    from fantasy_football.season_simulator import DeterministicPartialWeekInput
+
+    document = read("docs/PARTIAL_WEEK.md")
+    assert (
+        f"PARTIAL_WEEK_ARTIFACT_VERSION = {PARTIAL_WEEK_ARTIFACT_VERSION}" in document
+    )
+    for enum in (
+        EvidenceAuthority,
+        LockState,
+        PlayerScoreState,
+        RemainingContributionStatus,
+    ):
+        assert all(member.value in document for member in enum)
+    for interface in (
+        compose_partial_week_scores,
+        evidence_basis_digest,
+        require_executable_partial_week_evidence,
+        validate_partial_week_evidence,
+        validate_proposed_lineup,
+    ):
+        assert callable(interface)
+        assert interface.__name__ + "()" in document
+    for record in (DeterministicPartialWeekInput, MonteCarloPartialWeekInput):
+        assert all(field.name in document for field in fields(record))
+    for boundary in (
+        "every rostered current player must be unstarted",
+        "including bench/reserve",
+        "not a sixth PlayerScoreState enum",
+        "including earlier weeks outside the simulation horizon",
+        "immediately before the first week",
+        "not aggregate carry again",
+        "not a hash of all companion content",
+        "subsequent weeks only",
+        "No first-week transactions",
+        "not automatic live ESPN translation",
+    ):
+        assert boundary.lower() in document.lower(), boundary
+
+
+def test_numerical_domain_owners_and_held_missing_policy_are_discoverable() -> None:
+    from fantasy_football.m0_verification import EVIDENCE_ROLES, build_report
+
+    for path in (
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "docs/architecture/overview.md",
+    ):
+        document = read(path)
+        for owner in ("PLAYER_OUTCOME_MODEL.md", "MONTE_CARLO.md", "PARTIAL_WEEK.md"):
+            assert owner in document, (path, owner)
+    report = build_report(ROOT)
+    role = next(
+        role for role in EVIDENCE_ROLES if role.role == "missing_projection_policy"
+    )
+    assert "docs/MISSING_PROJECTION_POLICY.md" in report.evidence_documents
+    assert set(role.sections) >= {
+        "docs/MISSING_PROJECTION_POLICY.md#decision",
+        "docs/MISSING_PROJECTION_POLICY.md#raw-classification-methodology",
+    }
+    assert "Retained complete M0 evidence-role dependency" in read(
+        "docs/MISSING_PROJECTION_POLICY.md"
+    )
+    detail = (
+        read("docs/BACKLOG.md")
+        .split("## Numerical and partial evidence obligations", 1)[1]
+        .split("\n## ", 1)[0]
+    )
+    for gate in (
+        "WR-002",
+        "WR-008",
+        "WR-019",
+        "WR-025",
+        "source-inspected",
+        "separate",
+        "no native wall-time",
+        "no new statistical/model implementation",
+    ):
+        assert gate.lower() in detail.lower(), gate

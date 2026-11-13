@@ -109,17 +109,7 @@ intermediate action. Counterparty thresholds across multi-party paths are
 currently unsupported and fail configuration validation rather than being
 silently approximated.
 
-`evaluate_unified_action_states` runs one fixed shared baseline batch, invokes the
-accepted M4 paired comparison once per unique completed state, and links every
-path to that result. It introduces
-no estimator, confidence interval, random draw, or ranking rule. Progressive
-sampling and multiplicity-aware finalist decisions are **not integrated by this
-adapter**. Its immutable state groups are the narrow input boundary for later
-M5.8 consumes these immutable groups through the accepted M5.4 progressive
-evaluator. The fixed-batch adapter itself still makes no ranking-resolution or
-precision-completeness claim. Conditional-waiver
-caveats remain path-level metadata and must not be presented as actionable
-certainty.
+`evaluate_unified_action_states` runs one fixed shared baseline batch, invokes the accepted paired comparison once per unique completed state and links every path to that result. [MONTE_CARLO](MONTE_CARLO.md#paired-scenario-inference) owns common-random-number inference, deltas and interval units. The fixed adapter makes no adaptive ranking-resolution/precision-completeness claim. M5.8 consumes the same immutable groups through the existing progressive evaluator; [MONTE_CARLO's progressive/multiplicity contract](MONTE_CARLO.md#progressive-search-and-multiplicity) owns its numerical rules and repeated-look review limitation. Conditional-waiver caveats remain path metadata, never actionable certainty.
 
 ## Coverage and limitations
 
