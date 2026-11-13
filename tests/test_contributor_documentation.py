@@ -93,7 +93,6 @@ def test_every_r1_candidate_has_exactly_one_valid_disposition() -> None:
         "docs/RESEARCH.md",
         "docs/INTERFACE.md",
         "docs/OPERATIONS.md",
-        "docs/MISSING_PROJECTION_POLICY.md",
         "docs/PLAYER_OUTCOME_MODEL.md",
         "docs/MONTE_CARLO.md",
         "docs/SEASON_SIMULATOR.md",

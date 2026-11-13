@@ -465,7 +465,8 @@ def test_data_research_authority_and_m0_role_checks_remain_discoverable() -> Non
     assert report.evidence_documents == EVIDENCE_DOCUMENTS
     assert len(report.evidence_roles) == 7
     assert all(not row["historical_content_verified"] for row in report.evidence_roles)
-    assert "docs/MISSING_PROJECTION_POLICY.md" in report.evidence_documents
+    assert "docs/PLAYER_OUTCOME_MODEL.md" in report.evidence_documents
+    assert "docs/MISSING_PROJECTION_POLICY.md" not in report.evidence_documents
     backlog = read("docs/BACKLOG.md")
     assert "M0 migration is independently accepted at `06b408f`" in backlog
     assert "In Review" in backlog
@@ -611,7 +612,7 @@ def test_partial_reference_matches_artifact_states_and_permission_interfaces() -
         assert boundary.lower() in document.lower(), boundary
 
 
-def test_numerical_domain_owners_and_held_missing_policy_are_discoverable() -> None:
+def test_numerical_domain_owners_and_missing_policy_role_are_discoverable() -> None:
     from fantasy_football.m0_verification import EVIDENCE_ROLES, build_report
 
     for path in (
@@ -627,14 +628,16 @@ def test_numerical_domain_owners_and_held_missing_policy_are_discoverable() -> N
     role = next(
         role for role in EVIDENCE_ROLES if role.role == "missing_projection_policy"
     )
-    assert "docs/MISSING_PROJECTION_POLICY.md" in report.evidence_documents
-    assert set(role.sections) >= {
-        "docs/MISSING_PROJECTION_POLICY.md#decision",
-        "docs/MISSING_PROJECTION_POLICY.md#raw-classification-methodology",
+    assert "docs/PLAYER_OUTCOME_MODEL.md" in report.evidence_documents
+    assert "docs/MISSING_PROJECTION_POLICY.md" not in report.evidence_documents
+    assert report.evidence_role_contract_version == 2
+    assert set(role.sections) == {
+        "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
+        "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#identity-rosters-and-player-weeks",
     }
-    assert "Retained complete M0 evidence-role dependency" in read(
-        "docs/MISSING_PROJECTION_POLICY.md"
-    )
+    assert not (ROOT / "docs/MISSING_PROJECTION_POLICY.md").exists()
     detail = (
         read("docs/BACKLOG.md")
         .split("## Numerical and partial evidence obligations", 1)[1]

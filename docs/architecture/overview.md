@@ -1,6 +1,6 @@
 # War Room architecture
 
-[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. Only the missing-policy source remains held by the accepted M0 role contract; D6 cannot delete it without separate verifier authorization.
+[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. M0 role contract 2 checks DATA, RESEARCH and PLAYER_OUTCOME_MODEL; retired historical filenames are not executable dependencies.
 
 [Season mechanics](../SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [Transactions](../TRANSACTIONS.md) owns evolving legality, operational acquisitions, V(R) and distinct independent references.
 

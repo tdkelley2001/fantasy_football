@@ -1,6 +1,6 @@
 # Contributing to War Room
 
-Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 evidence-role contract](docs/DATA.md#m0-consumer-dependency) is offline historical verification: run `.venv\Scripts\python.exe -m fantasy_football.m0_verification --json` without credentials. Preserve role/section/interface checks and the distinction between recorded historical identity and unauthenticated historical bytes; the missing-projection document remains required pending a separately authorized verifier update.
+Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 evidence-role contract](docs/DATA.md#m0-consumer-dependency) is offline historical verification: run `.venv\Scripts\python.exe -m fantasy_football.m0_verification --json` without credentials. Preserve role/section/interface checks and the distinction between recorded historical identity and unauthenticated historical bytes; contract 2 checks DATA, RESEARCH and PLAYER_OUTCOME_MODEL without retired-file dependencies.
 
 For mechanics changes use [SEASON_SIMULATOR](docs/SEASON_SIMULATOR.md) and [TRANSACTIONS](docs/TRANSACTIONS.md), preserving production versus independent-oracle objectives and recording unresolved [mechanics obligations](docs/BACKLOG.md#mechanics-review-obligations).
 
@@ -207,7 +207,7 @@ Partial changes also select `tests/test_partial_week.py`, `tests/test_partial_se
 
 ## Numerical verification standards
 
-[PLAYER_OUTCOME_MODEL](docs/PLAYER_OUTCOME_MODEL.md), [MONTE_CARLO](docs/MONTE_CARLO.md) and [PARTIAL_WEEK](docs/PARTIAL_WEEK.md) own the current numerical and evidence contracts. Preserve the M0-required missing-policy source until its separate consumer migration is reviewed.
+[PLAYER_OUTCOME_MODEL](docs/PLAYER_OUTCOME_MODEL.md), [MONTE_CARLO](docs/MONTE_CARLO.md) and [PARTIAL_WEEK](docs/PARTIAL_WEEK.md) own the current numerical and evidence contracts. M0 contract 2 checks the Outcome/DATA missing-policy sections; preserve its substantive/fence-aware and historical identity checks.
 
 - Preserve immutable source evidence, raw/effective projections, snapshot IDs/bytes/checksums and historical compatibility. A valid schema is not proof of consumer permission.
 - Compare exact deterministic path-level scores, standings, postseason outcomes and shared path-indexed draws before only comparing aggregate probabilities. Match snapshot, seed, path indices, policies and outcome model; ownership/action order must not generate independent baseline/scenario samples.

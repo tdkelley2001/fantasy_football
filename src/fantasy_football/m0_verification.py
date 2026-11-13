@@ -25,9 +25,9 @@ LOGGER = logging.getLogger(__name__)
 EVIDENCE_DOCUMENTS = (
     "docs/DATA.md",
     "docs/RESEARCH.md",
-    "docs/MISSING_PROJECTION_POLICY.md",
+    "docs/PLAYER_OUTCOME_MODEL.md",
 )
-EVIDENCE_ROLE_CONTRACT_VERSION = 1
+EVIDENCE_ROLE_CONTRACT_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,9 +169,10 @@ EVIDENCE_ROLES = (
     EvidenceRole(
         "missing_projection_policy",
         (
-            "docs/MISSING_PROJECTION_POLICY.md#decision",
-            "docs/MISSING_PROJECTION_POLICY.md#raw-classification-methodology",
+            "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
+            "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
             "docs/DATA.md#projection-contract",
+            "docs/DATA.md#identity-rosters-and-player-weeks",
         ),
         (
             "fantasy_football.canonical.model:ProjectionClass",

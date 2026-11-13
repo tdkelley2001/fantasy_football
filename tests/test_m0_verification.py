@@ -10,6 +10,7 @@ from fantasy_football.config import Settings, SettingsError
 from fantasy_football.m0_verification import (
     DIAGNOSTICS,
     EVIDENCE_DOCUMENTS,
+    EVIDENCE_ROLE_CONTRACT_VERSION,
     EVIDENCE_ROLES,
     M0VerificationError,
     _sections,
@@ -362,7 +363,8 @@ def test_duplicate_json_fields_and_duplicate_anchors_are_rejected(
     original = path.read_text(encoding="utf-8")
     path.write_text(
         original.replace(
-            '"schema_version": 1,', '"schema_version": 1, "schema_version": 1,'
+            f'"schema_version": {EVIDENCE_ROLE_CONTRACT_VERSION},',
+            f'"schema_version": {EVIDENCE_ROLE_CONTRACT_VERSION}, "schema_version": {EVIDENCE_ROLE_CONTRACT_VERSION},',
         ),
         encoding="utf-8",
     )
@@ -458,7 +460,7 @@ def test_default_and_json_are_stable_offline_without_credentials_or_git(
         == "recorded_historical_evidence_plus_credential_free_manifest_check"
     )
     assert expected.credential_free_test_command == "python -m pytest"
-    assert expected.evidence_role_contract_version == 1
+    assert expected.evidence_role_contract_version == 2
 
 
 def test_untrusted_evidence_values_and_config_exception_are_sanitized(
@@ -631,4 +633,223 @@ def test_numeric_zero_cannot_impersonate_false_in_evidence_limits(
 
     edit_contract(tmp_path, alter)
     with pytest.raises(M0VerificationError, match="identity mismatch: m0_handoff"):
+        build_report(tmp_path)
+
+
+def test_contract_two_checks_exact_current_documents_and_seventh_role(
+    tmp_path: Path,
+) -> None:
+    evidence_tree(tmp_path)
+    assert not (tmp_path / "docs/MISSING_PROJECTION_POLICY.md").exists()
+    report = build_report(tmp_path)
+    assert report.evidence_documents == (
+        "docs/DATA.md",
+        "docs/RESEARCH.md",
+        "docs/PLAYER_OUTCOME_MODEL.md",
+    )
+    assert report.evidence_role_contract_version == EVIDENCE_ROLE_CONTRACT_VERSION == 2
+    assert len(report.evidence_roles) == 7
+    row = report.evidence_roles[-1]
+    assert row["role"] == "missing_projection_policy"
+    assert row["sections"] == [
+        "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
+        "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+    ]
+    assert row["interfaces"] == [
+        "fantasy_football.canonical.model:ProjectionClass",
+        "fantasy_football.canonical.model:ProjectionSource",
+        "fantasy_football.canonical.model:PlayerWeek.effective_projection",
+    ]
+    assert row["evidence_limits"] == {
+        "raw_missing": "null",
+        "classification": "missing",
+        "effective_zero_source": "missing_projection_policy",
+        "explicit_zero_source": "espn",
+        "modeled_missing_outcome": "deterministic_zero",
+    }
+    assert row["historical_reference"] is None and row["historical_sha256"] is None
+    assert row["historical_content_verified"] is False
+    assert row["historical_content_status"] == "not_applicable_current_document"
+
+
+def test_other_six_role_records_match_accepted_d6_contract(tmp_path: Path) -> None:
+    import hashlib
+    from dataclasses import asdict
+
+    evidence_tree(tmp_path)
+    records = []
+    for role in EVIDENCE_ROLES[:6]:
+        row = asdict(role)
+        row["evidence_limits"] = dict(role.evidence_limits)
+        records.append(row)
+    # Captured from the first six JSON role records at accepted 4eea42d.
+    # No Git/network/history lookup is used by this test or the verifier.
+    digest = hashlib.sha256(
+        json.dumps(records, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert digest == "6e3633710150005a59ca53daaaf563fb06c66d407820fe948fa96f9d872e108c"
+    report = build_report(tmp_path)
+    assert all(
+        row["historical_identity_verified"] and not row["historical_content_verified"]
+        for row in report.evidence_roles[:6]
+    )
+
+
+@pytest.mark.parametrize(
+    "anchor", ["missing-zero-and-present-projections", "identity-and-compatibility"]
+)
+def test_required_outcome_sections_cannot_be_empty(tmp_path: Path, anchor: str) -> None:
+    evidence_tree(tmp_path)
+    path = tmp_path / "docs/PLAYER_OUTCOME_MODEL.md"
+    text = path.read_text(encoding="utf-8")
+    title = {
+        "missing-zero-and-present-projections": "Missing, zero and present projections",
+        "identity-and-compatibility": "Identity and compatibility",
+    }[anchor]
+    start = text.index("## " + title + "\n") + len("## " + title + "\n")
+    end = text.find("\n## ", start)
+    path.write_text(
+        text[:start] + "\n" + (text[end:] if end >= 0 else ""), encoding="utf-8"
+    )
+    with pytest.raises(
+        M0VerificationError,
+        match=f"missing_projection_policy requires nonempty section: docs/PLAYER_OUTCOME_MODEL.md#{anchor}",
+    ):
+        build_report(tmp_path)
+
+
+@pytest.mark.parametrize("fence", CLOSED_EVIDENCE_FENCES)
+def test_fenced_outcome_examples_are_not_missing_policy_evidence(
+    tmp_path: Path, fence: str
+) -> None:
+    evidence_tree(tmp_path)
+    path = tmp_path / "docs/PLAYER_OUTCOME_MODEL.md"
+    text = path.read_text(encoding="utf-8")
+    start = text.index("## Missing, zero and present projections\n") + len(
+        "## Missing, zero and present projections\n"
+    )
+    end = text.index("\n## Normal distribution", start)
+    path.write_text(text[:start] + "\n" + fence + text[end:], encoding="utf-8")
+    with pytest.raises(
+        M0VerificationError,
+        match="missing_projection_policy requires nonempty section: docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
+    ):
+        build_report(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda row: row.update(sections=["docs/RESEARCH.md#metrics-and-promotion"]),
+        lambda row: row.update(sections=["docs/PLAYER_OUTCOME_MODEL.md#wrong-anchor"]),
+        lambda row: row.update(sections=["docs/MISSING_PROJECTION_POLICY.md#decision"]),
+        lambda row: row.update(
+            historical_reference="https://example.test/self-authenticated"
+        ),
+    ],
+)
+def test_seventh_role_wrong_ownership_or_identity_is_rejected(
+    tmp_path: Path, mutation
+) -> None:
+    evidence_tree(tmp_path)
+    edit_contract(tmp_path, lambda c: mutation(c["roles"][-1]))
+    with pytest.raises(
+        M0VerificationError,
+        match="role mapping or historical identity mismatch: missing_projection_policy",
+    ):
+        build_report(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "limit",
+    [
+        "raw_missing",
+        "classification",
+        "effective_zero_source",
+        "explicit_zero_source",
+        "modeled_missing_outcome",
+    ],
+)
+def test_each_missing_policy_limit_is_preserved(tmp_path: Path, limit: str) -> None:
+    evidence_tree(tmp_path)
+    edit_contract(
+        tmp_path,
+        lambda c: c["roles"][-1]["evidence_limits"].update({limit: "altered-policy"}),
+    )
+    with pytest.raises(
+        M0VerificationError, match="identity mismatch: missing_projection_policy"
+    ):
+        build_report(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "symbol", ["ProjectionClass", "ProjectionSource", "PlayerWeek.effective_projection"]
+)
+def test_missing_policy_canonical_interfaces_cannot_be_omitted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, symbol: str
+) -> None:
+    import ast
+
+    import fantasy_football.m0_verification as m0
+
+    evidence_tree(tmp_path)
+    find_spec = m0.importlib.util.find_spec
+    text = Path(find_spec("fantasy_football.canonical.model").origin).read_text(
+        encoding="utf-8"
+    )
+    name, _, field = symbol.partition(".")
+    node = next(
+        node
+        for node in ast.parse(text).body
+        if isinstance(node, ast.ClassDef) and node.name == name
+    )
+    if field:
+        node = next(
+            node
+            for node in node.body
+            if isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == field
+        )
+    lines = text.splitlines(keepends=True)
+    path = tmp_path / "canonical-definition.py"
+    path.write_text(
+        "".join(lines[: node.lineno - 1] + lines[node.end_lineno :]), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        m0.importlib.util,
+        "find_spec",
+        lambda name: (
+            SimpleNamespace(origin=str(path))
+            if name == "fantasy_football.canonical.model"
+            else find_spec(name)
+        ),
+    )
+    with pytest.raises(
+        M0VerificationError,
+        match="interface definition unavailable: "
+        + re.escape("fantasy_football.canonical.model:" + symbol),
+    ):
+        build_report(tmp_path)
+
+
+def test_contract_one_register_is_rejected_explicitly(tmp_path: Path) -> None:
+    evidence_tree(tmp_path)
+    edit_contract(tmp_path, lambda c: c.update(schema_version=1))
+    with pytest.raises(
+        M0VerificationError, match="role contract has invalid schema or fields"
+    ):
+        build_report(tmp_path)
+
+
+def test_seventh_role_duplication_rejects_even_with_seven_records(
+    tmp_path: Path,
+) -> None:
+    evidence_tree(tmp_path)
+    edit_contract(tmp_path, lambda c: c["roles"].__setitem__(0, c["roles"][-1]))
+    with pytest.raises(
+        M0VerificationError, match="role missing or duplicated: connectivity"
+    ):
         build_report(tmp_path)
