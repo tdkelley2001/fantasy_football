@@ -12,7 +12,7 @@ import importlib.util
 import json
 import logging
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -265,23 +265,38 @@ def _read_document(root: Path, relative: str) -> str:
         ) from None
 
 
+def _unfenced_lines(text: str) -> Iterator[tuple[int, str]]:
+    """Yield original offsets/lines outside Markdown fences, excluding delimiters."""
+    fence: str | None = None
+    length = 0
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+        if fence is None:
+            # Backtick info strings cannot themselves contain backticks.
+            if match and not (match[1][0] == "`" and "`" in match[2]):
+                fence, length = match[1][0], len(match[1])
+            else:
+                yield offset, line
+        elif (
+            match
+            and match[1][0] == fence
+            and len(match[1]) >= length
+            and not match[2].strip(" \t")
+        ):
+            fence = None
+        offset += len(line)
+
+
 def _sections(text: str) -> dict[str, str]:
     """Index ATX sections, ignoring headings inside fenced examples."""
     headings = []
-    fence = None
-    offset = 0
-    for line in text.splitlines(keepends=True):
-        stripped = line.strip()
-        if stripped.startswith(("```", "~~~")):
-            token = stripped[:3]
-            fence = None if fence == token else token if fence is None else fence
-        if fence is None:
-            match = re.match(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", line.rstrip())
-            if match:
-                title = re.sub(r"[`*_]", "", match[2]).lower()
-                anchor = re.sub(r"[^\w -]", "", title).replace(" ", "-")
-                headings.append((len(match[1]), anchor, offset + len(line), offset))
-        offset += len(line)
+    for offset, line in _unfenced_lines(text):
+        match = re.match(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", line.rstrip())
+        if match:
+            title = re.sub(r"[`*_]", "", match[2]).lower()
+            anchor = re.sub(r"[^\w -]", "", title).replace(" ", "-")
+            headings.append((len(match[1]), anchor, offset + len(line), offset))
     sections = {}
     for index, (level, anchor, start, _) in enumerate(headings):
         if anchor in sections:
@@ -403,9 +418,7 @@ def _verify_roles(documents: dict[str, str]) -> tuple[dict[str, object], ...]:
             path, anchor = reference.split("#")
             content = indexed[path].get(anchor, "")
             # A title, role marker or fenced metadata alone cannot supply evidence.
-            prose = re.sub(
-                r"^(```|~~~).*?^\1[ \t]*$", "", content, flags=re.MULTILINE | re.DOTALL
-            )
+            prose = "".join(line for _, line in _unfenced_lines(content))
             prose = re.sub(r"<!--.*?-->", "", prose, flags=re.DOTALL)
             if not prose.strip():
                 raise M0VerificationError(

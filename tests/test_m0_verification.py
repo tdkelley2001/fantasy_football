@@ -12,6 +12,7 @@ from fantasy_football.m0_verification import (
     EVIDENCE_DOCUMENTS,
     EVIDENCE_ROLES,
     M0VerificationError,
+    _sections,
     build_report,
     main,
     render_summary,
@@ -210,6 +211,135 @@ def test_fenced_fake_headings_and_empty_sections_cannot_supply_evidence(
         M0VerificationError, match="historical_projections requires nonempty section"
     ):
         build_report(tmp_path)
+
+
+CLOSED_EVIDENCE_FENCES = (
+    pytest.param("```text\napparent evidence\n```\n", id="three-backticks"),
+    pytest.param("   ```text\napparent evidence\n   ```\n", id="three-space-indent"),
+    pytest.param("````text\napparent evidence\n````\n", id="four-backticks"),
+    pytest.param("~~~text\napparent evidence\n~~~\n", id="tilde"),
+    pytest.param(
+        "  ~~~~~ optional information\napparent evidence\n   ~~~~~~  \t\n",
+        id="longer-indented-tilde-close",
+    ),
+    pytest.param(
+        " ``` optional information\napparent evidence\n  `````  \t\n",
+        id="longer-indented-backtick-close",
+    ),
+    pytest.param(
+        "````text\n```\n## Fake heading\napparent evidence\n````\n",
+        id="shorter-close-stays-inside",
+    ),
+    pytest.param(
+        "~~~text\n```\n## Fake heading\napparent evidence\n~~~\n",
+        id="mismatched-close-stays-inside",
+    ),
+    pytest.param(
+        "```text\n``` not a closing fence\n## Fake heading\napparent evidence\n```\n",
+        id="close-with-info-stays-inside",
+    ),
+    pytest.param(
+        "```text\n    ```\n## Fake heading\napparent evidence\n```\n",
+        id="four-space-close-stays-inside",
+    ),
+    pytest.param(
+        "   `````text\n## Coverage and leakage\n## Metrics and promotion\n"
+        "apparent substantive evidence\n   `````\n",
+        id="fenced-evidence-headings",
+    ),
+)
+
+
+def replace_coverage_section(root: Path, body: str) -> None:
+    path = root / "docs/RESEARCH.md"
+    text = path.read_text(encoding="utf-8")
+    start = text.index("## Coverage and leakage\n")
+    end = text.index("## Temporal evaluation", start)
+    path.write_text(
+        text[:start] + "## Coverage and leakage\n\n" + body + "\n" + text[end:],
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("fence", CLOSED_EVIDENCE_FENCES)
+def test_required_section_containing_only_fenced_examples_is_rejected(
+    tmp_path: Path, fence: str
+) -> None:
+    evidence_tree(tmp_path)
+    replace_coverage_section(tmp_path, fence)
+    with pytest.raises(
+        M0VerificationError,
+        match="historical_projections requires nonempty section: docs/RESEARCH.md#coverage-and-leakage",
+    ):
+        build_report(tmp_path)
+
+
+def test_unclosed_fence_cannot_supply_required_evidence(tmp_path: Path) -> None:
+    evidence_tree(tmp_path)
+    path = tmp_path / "docs/RESEARCH.md"
+    text = path.read_text(encoding="utf-8")
+    start = text.index("## Coverage and leakage\n")
+    # End the document here so a later example cannot accidentally close this fence.
+    path.write_text(
+        text[:start] + "## Coverage and leakage\n\n   ````text\n"
+        "## Metrics and promotion\nApparent evidence through end of document.\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        M0VerificationError,
+        match="historical_projections requires nonempty section: docs/RESEARCH.md#coverage-and-leakage",
+    ):
+        build_report(tmp_path)
+
+
+def test_prose_before_unclosed_fence_still_supplies_evidence(tmp_path: Path) -> None:
+    evidence_tree(tmp_path)
+    expected = build_report(tmp_path).to_dict()
+    path = tmp_path / "docs/RESEARCH.md"
+    text = path.read_text(encoding="utf-8")
+    start = text.index("## Metrics and promotion\n")
+    path.write_text(
+        text[:start] + "## Metrics and promotion\n\nSubstantive prose.\n"
+        "   ~~~~text\n## Fake heading\nExample through end of document.\n",
+        encoding="utf-8",
+    )
+    assert build_report(tmp_path).to_dict() == expected
+
+
+@pytest.mark.parametrize("fence", CLOSED_EVIDENCE_FENCES)
+def test_prose_outside_closed_fences_preserves_evidence_roles(
+    tmp_path: Path, fence: str
+) -> None:
+    evidence_tree(tmp_path)
+    expected = build_report(tmp_path).to_dict()
+    replace_coverage_section(
+        tmp_path, fence + "\nSubstantive evidence outside the example.\n"
+    )
+    assert build_report(tmp_path).to_dict() == expected
+
+
+@pytest.mark.parametrize("fence", CLOSED_EVIDENCE_FENCES)
+def test_headings_after_closed_fences_remain_discoverable(fence: str) -> None:
+    sections = _sections("## Before\n" + fence + "## After\nActual prose.\n")
+    assert tuple(sections) == ("before", "after")
+    assert sections["after"] == "Actual prose.\n"
+
+
+@pytest.mark.parametrize(
+    "fence",
+    (
+        "```text\n",
+        "   ~~~~ information\n",
+        "````text\n```\n",
+        "~~~text\n```\n",
+    ),
+)
+def test_unclosed_or_invalidly_closed_fences_hide_following_headings(
+    fence: str,
+) -> None:
+    assert tuple(
+        _sections("## Before\n" + fence + "## Hidden\nApparent evidence.\n")
+    ) == ("before",)
 
 
 def test_role_register_detached_from_owning_section_is_rejected(tmp_path: Path) -> None:
