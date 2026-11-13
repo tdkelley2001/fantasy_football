@@ -60,3 +60,5 @@ Ordinary V1 uses a safe whole-week boundary and projected optimal lineups. Opt-i
 - Preserve private local stores, leases and ownership checks. Public/multi-user hosting remains unsupported; M8.4 has no independent release disposition.
 
 This is source/test reconciliation, not a new model or live validation. [R2.3 inventory](../R23_DOCUMENTATION_RECONCILIATION.md) records drift, evidence, unresolved wording and actual checks.
+
+The [M0 evidence-role verifier](../DATA.md#m0-consumer-dependency) checks current reference sections and inspectable implementation definitions offline, with recorded immutable historical identities. It does not execute diagnostics, authenticate retired historical bytes, or certify current ESPN/release readiness.

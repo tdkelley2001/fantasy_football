@@ -161,13 +161,175 @@ These are bounded historical observations, not newly executed checks or universa
 | Same diagnostic, prior configured period 9: 688 source-0/split-1 actuals, 358 explicit zeros; current period 10 no actuals, 686 projections | Verified live weekly actual/projection fields. No participation/lock/settlement/finality proof. |
 | Historical source-1/source-0 records and current scoring settings | Verified live retrieval, pregame timing and point-in-time player/scoring context Unverified; forecast vintages/revision sequence/horizon labels Unsupported. Research owns temporal authentication. |
 
-Investigated espn-api 1.0.1 rounded/defaulted weekly appliedTotal (collapsing missing/zero), misaligned sparse position_slot_counts by zipping labels/values, ignored droppable, and used lineup-slot labels for a different default-position namespace. Current adapter parses raw records instead. These are recorded library limitations, not fresh version-wide verification. Full archived counts/methods remain in held M0 sources and immutable accepted Git history; no credentials/private individual examples are reproduced here.
+Investigated espn-api 1.0.1 rounded/defaulted weekly appliedTotal (collapsing missing/zero), misaligned sparse position_slot_counts by zipping labels/values, ignored droppable, and used lineup-slot labels for a different default-position namespace. Current adapter parses raw records instead. These are recorded library limitations, not fresh version-wide verification. Full original counts/methods remain in immutable accepted Git history; no credentials/private individual examples are reproduced here.
 
 ## M0 consumer dependency
 
-The supported offline `python -m fantasy_football.m0_verification` remains unchanged. build_report requires seven exact local files and importable diagnostic modules, optionally validates settings, lists diagnostics without executing them, and reports live_verification_performed=False plus historical M1 GO_WITH_EXPLICIT_UNRESOLVED_METADATA. It checks existence/importability, **not content authenticity, coverage, current capability readiness or live facts**. Its static gap list includes subsequently resolved cases; do not present it as a current rule authority.
+`python -m fantasy_football.m0_verification` remains an offline historical evidence/diagnostic-availability verifier, never a current ESPN compatibility or release-readiness certificate. The original disposition is GO_WITH_EXPLICIT_UNRESOLVED_METADATA. Its static unresolved-rule list is historical (some cases are subsequently resolved); provisional M0/M1 permission never authorizes later unsupported capabilities. Current ESPN projections/no unapproved horizon adjustments and capability-specific evidence gates remain binding under the owning contracts.
 
-Six retained D5 historical sources are ESPN_CONNECTIVITY, ESPN_FUTURE_DATA_AUDIT, ESPN_LEAGUE_RULES_AUDIT, ESPN_HISTORICAL_PROJECTION_AUDIT, ESPN_DATA_DICTIONARY and M0_FEASIBILITY_AND_M1_HANDOFF (all .md under docs/). MISSING_PROJECTION_POLICY.md is the seventh, untouched for D6. Their complete historical bodies remain evidence/dependencies, not competing current guides. No file can be deleted while this executable requires it. [BACKLOG](BACKLOG.md#data-research-and-m0-migration-obligations) owns the separately authorized migration proposal; no manifest behavior/test change is included here.
+Evidence-role contract **1** below is executable metadata. Each of seven roles binds required authoritative sections to inspectable implementation definitions and, for the six retired sources, an immutable accepted Git reference plus SHA-256 of the original Git blob bytes at that revision. The verifier checks the exact role set/mapping/identity and declared evidence limits against its accepted contract, unique nonempty section anchors (excluding fenced examples), and Python definitions/annotated canonical fields without importing or running the listed diagnostic implementations. Keep the JSON block within this section; ordering/whitespace of records is immaterial. Changes to role ownership/interfaces or historical identities require a reviewed contract update, not an arbitrary prose phrase match.
+
+Local checks establish section structure, declared evidence limits and implementation-definition availability, not full natural-language correctness or ESPN semantics. Historical **identity/reference** is checked against the recorded pin; the old source bytes are **not inspected or authenticated offline**. No network, Git command, repository history or fallback is used. A shallow/source-only checkout can run with the installed Python source available. Original reports can be inspected separately through the immutable citations, but the verifier never claims to have fetched or authenticated them. The current missing-projection document remains local and is not retired by this migration.
+
+`evidence_documents` retains its meaning: the local files checked by this run, now DATA, RESEARCH and MISSING_PROJECTION_POLICY. It no longer lists retired files as though locally present. All other existing report fields/meanings, CLI flags --project-root/--check-config/--json, default offline behavior, optional settings validation and failure exit 2 remain. Additive evidence_role_contract_version/evidence_roles expose section/interface checks and distinguish historical_identity_verified from historical_content_verified=False and not_inspected_or_authenticated_offline. Historical evidence_state/m1_gate/unresolved_rules and live_verification_performed=False are preserved. Diagnostic module availability is checked; reproduction commands are listed, never executed. Config failures are sanitized; detailed local exception values are not echoed. No credentials are required by default.
+
+```json m0-evidence
+{
+  "schema_version": 1,
+  "roles": [
+    {
+      "role": "connectivity",
+      "sections": [
+        "docs/DATA.md#retrieval-and-provenance",
+        "docs/DATA.md#source-observations-and-limitations"
+      ],
+      "interfaces": [
+        "fantasy_football.espn_connectivity:audit_league",
+        "fantasy_football.espn_connectivity:PlayerOwnership"
+      ],
+      "historical_reference": "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/ESPN_CONNECTIVITY.md",
+      "historical_sha256": "fce1f7e584368c04867f47763e7bd6bf8fd561c8d0e0ce9eccdb93065cd96834",
+      "evidence_limits": {
+        "access": "read_only",
+        "ownership": "current_roster_reconciled",
+        "library_findings": "sparse_slots_and_signed_player_ids"
+      }
+    },
+    {
+      "role": "future_data",
+      "sections": [
+        "docs/DATA.md#retrieval-and-provenance",
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#calendar-brackets-and-nfl-evidence"
+      ],
+      "interfaces": [
+        "fantasy_football.future_data_audit:retrieve_player_pool",
+        "fantasy_football.future_data_audit:parse_player_cards",
+        "fantasy_football.future_data_audit:parse_pro_team_byes"
+      ],
+      "historical_reference": "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/ESPN_FUTURE_DATA_AUDIT.md",
+      "historical_sha256": "d981a8558ad8f3e4bb9373104dd0bb5bbe3e787d3ea3409cac51f24551e84fae",
+      "evidence_limits": {
+        "pagination": "complete_or_fail",
+        "ownership": "current_week_only",
+        "weekly_projection_source_split": "1/1",
+        "missing_and_explicit_zero": "distinct",
+        "bye": "explicit_source_only",
+        "horizon": "currently_returned_projections"
+      }
+    },
+    {
+      "role": "league_rules",
+      "sections": [
+        "docs/DATA.md#roster-scoring-and-transaction-settings",
+        "docs/DATA.md#rules-and-manual-authority",
+        "docs/DATA.md#live-and-temporal-evidence"
+      ],
+      "interfaces": [
+        "fantasy_football.league_rules_audit:audit_schedule",
+        "fantasy_football.espn_adapter:load_manual_rule_config"
+      ],
+      "historical_reference": "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/ESPN_LEAGUE_RULES_AUDIT.md",
+      "historical_sha256": "73e8ceb1f73e20be62c66f051c65358109f006517ce2c2d0de9dbead3ac4ddc3",
+      "evidence_limits": {
+        "rule_authority": "dynamic_source_or_audited_manual",
+        "ties": "dated_ui_confirmation_not_universal",
+        "bracket": "source_specific",
+        "unresolved": "capability_specific_fail_closed"
+      }
+    },
+    {
+      "role": "historical_projections",
+      "sections": [
+        "docs/RESEARCH.md#evidence-and-hypotheses",
+        "docs/RESEARCH.md#external-trust-and-exact-row-binding",
+        "docs/RESEARCH.md#coverage-and-leakage",
+        "docs/RESEARCH.md#metrics-and-promotion"
+      ],
+      "interfaces": [
+        "fantasy_football.historical_projection_audit:parse_historical_player_page",
+        "fantasy_football.historical_projection_audit:scoring_signature",
+        "fantasy_football.historical_dataset:validate_pregame_capture_manifest"
+      ],
+      "historical_reference": "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/ESPN_HISTORICAL_PROJECTION_AUDIT.md",
+      "historical_sha256": "d05581849b97cf133c1a64ed20019d3fe01e77b02653ab96813710478509d15c",
+      "evidence_limits": {
+        "pregame_provenance": "Unverified",
+        "forecast_vintages": "Unsupported",
+        "capture_authentication": "independent_manifest_payload_and_row_binding",
+        "scoring_sampling_revision": "limitations_retained",
+        "promotion": "independent_review_required"
+      }
+    },
+    {
+      "role": "data_dictionary",
+      "sections": [
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+        "docs/DATA.md#canonical-validation-and-serialization"
+      ],
+      "interfaces": [
+        "fantasy_football.canonical.model:SourceReference.payload_sha256",
+        "fantasy_football.canonical.model:PlayerWeek.raw_projection",
+        "fantasy_football.canonical.model:PlayerWeek.projection_class",
+        "fantasy_football.canonical.validation:validate_snapshot",
+        "fantasy_football.canonical.validation:require_understood_rules"
+      ],
+      "historical_reference": "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/ESPN_DATA_DICTIONARY.md",
+      "historical_sha256": "9e9e4ee895df6a73f37127a6b8513ea4a8cccb6eb9c89ea7e837cd731623a7f7",
+      "evidence_limits": {
+        "namespaces": "position_separate_from_lineup_slot",
+        "vocabulary": "implemented_not_historical_proposal",
+        "provenance": "source_identity_and_digest",
+        "structural_validity": "not_capability_permission"
+      }
+    },
+    {
+      "role": "m0_handoff",
+      "sections": [
+        "docs/DATA.md#m0-consumer-dependency",
+        "docs/DATA.md#projection-contract",
+        "docs/RESEARCH.md#metrics-and-promotion"
+      ],
+      "interfaces": [
+        "fantasy_football.m0_verification:build_report"
+      ],
+      "historical_reference": "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/M0_FEASIBILITY_AND_M1_HANDOFF.md",
+      "historical_sha256": "eb1d1e1ec2f186f11c7a674287253850868cf5be017a7dd777023066a1320cb2",
+      "evidence_limits": {
+        "disposition": "GO_WITH_EXPLICIT_UNRESOLVED_METADATA",
+        "live_verification": false,
+        "future_capabilities": "not_authorized_by_M0",
+        "projection_basis": "current_no_unapproved_horizon_adjustment",
+        "collection": "optional_not_prerequisite"
+      }
+    },
+    {
+      "role": "missing_projection_policy",
+      "sections": [
+        "docs/MISSING_PROJECTION_POLICY.md#decision",
+        "docs/MISSING_PROJECTION_POLICY.md#raw-classification-methodology",
+        "docs/DATA.md#projection-contract"
+      ],
+      "interfaces": [
+        "fantasy_football.canonical.model:ProjectionClass",
+        "fantasy_football.canonical.model:ProjectionSource",
+        "fantasy_football.canonical.model:PlayerWeek.effective_projection"
+      ],
+      "historical_reference": null,
+      "historical_sha256": null,
+      "evidence_limits": {
+        "raw_missing": "null",
+        "classification": "missing",
+        "effective_zero_source": "missing_projection_policy",
+        "explicit_zero_source": "espn",
+        "modeled_missing_outcome": "deterministic_zero"
+      }
+    }
+  ]
+}
+```
+
+Connectivity preserves read-only identity/ownership and library sparse-slot/signed-ID findings; future-data covers pagination/current authority/raw weekly matching/missing-zero/bye coverage; league-rules preserves settings/ties/bracket/manual provenance and gaps. Historical-projections binds vintage/scoring/selection/revision limitations to RESEARCH; dictionary binds implemented namespaces/provenance and structural-versus-capability validation. Handoff preserves the original provisional disposition/no-horizon assumptions and ongoing gates; the seventh role preserves the current missing policy. The source observations retain their original dates/classifications, not a fresh live verification. [BACKLOG](BACKLOG.md#data-research-and-m0-migration-obligations) retains future evidence gates and the independent review requirement.
 
 ## Source and verification
 

@@ -1,6 +1,6 @@
 # Contributing to War Room
 
-Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 consumer migration](docs/BACKLOG.md#data-research-and-m0-migration-obligations) remains separately gated; do not remove its required historical sources or weaken its tests.
+Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 evidence-role contract](docs/DATA.md#m0-consumer-dependency) is offline historical verification: run `.venv\Scripts\python.exe -m fantasy_football.m0_verification --json` without credentials. Preserve role/section/interface checks and the distinction between recorded historical identity and unauthenticated historical bytes; the missing-projection document remains required through separately authorized D6 migration.
 
 For mechanics changes use [SEASON_SIMULATOR](docs/SEASON_SIMULATOR.md) and [TRANSACTIONS](docs/TRANSACTIONS.md), preserving production versus independent-oracle objectives and recording unresolved [mechanics obligations](docs/BACKLOG.md#mechanics-review-obligations).
 
