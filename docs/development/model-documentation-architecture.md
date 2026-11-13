@@ -689,6 +689,8 @@ Source: [docs/architecture/overview.md](../../docs/architecture/overview.md). [f
 
 ## Verification and limits
 
+**Authorized inventory follow-up:** the exact path `docs/development/model-documentation-architecture.md` may coexist with all 17 permanent authorities during this planning/migration phase; no other additional Markdown path is exempt. At P9 final migration completion, retire the plan and run `_validate_inventory(actual_markdown_paths, migration_complete=True)` from `tests/test_domain_authority.py` against the independently accepted permanent set; completion mode rejects a retained plan. Remove the temporary allowance with that retirement. Architecture approval in principle is not migration completion or P1 authorization. The initial verification results below record the pre-follow-up conflict; the follow-up PR records the corrected checks.
+
 Verified against immutable accepted `bad7fca8331f27722db982ce9be2512cde673175`, not an assumed future layout:
 
 - `git ls-files '*.md'` at the baseline yields 17 documents. All 17 current files remain raw-byte identical to their recorded pre-plan SHA-256 values and newline-equivalent to their accepted Git blobs. No baseline document, source, test, script, dependency or artifact was edited.

@@ -31,6 +31,9 @@ PERMANENT = {
     "docs/UNIFIED_ACTION_SEARCH.md",
     "docs/architecture/overview.md",
 }
+# Authorized only during this architecture planning/migration phase. P9 must
+# remove the plan and check inventory with migration_complete=True before closure.
+TEMPORARY_PLAN = "docs/development/model-documentation-architecture.md"
 REQUIREMENTS = {
     "README.md": [
         "expected championship probability",
@@ -130,8 +133,18 @@ REQUIREMENTS = {
 }
 
 
+def _validate_inventory(paths: set[str], *, migration_complete: bool = False) -> None:
+    assert paths - {TEMPORARY_PLAN} == PERMANENT, (
+        "Missing/unexpected permanent authority"
+    )
+    if migration_complete:
+        assert TEMPORARY_PLAN not in paths, (
+            "Temporary architecture plan must retire at final migration completion"
+        )
+
+
 def _validate(documents: dict[str, str]) -> None:
-    assert documents.keys() == PERMANENT, "Missing/unexpected permanent authority"
+    _validate_inventory(set(documents))
     for path, fragments in REQUIREMENTS.items():
         for fragment in fragments:
             assert fragment in documents[path], (path, fragment)
@@ -160,6 +173,51 @@ def test_permanent_authority_and_acceptance_contracts() -> None:
         for p in [*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md")]
     }
     _validate(documents)
+
+
+@pytest.mark.parametrize(
+    ("include_plan", "migration_complete"),
+    [(False, False), (True, False), (False, True)],
+    ids=["permanent-only", "authorized-temporary-plan", "plan-retired-at-completion"],
+)
+def test_inventory_accepts_only_authorized_phase_contents(
+    include_plan: bool, migration_complete: bool
+) -> None:
+    paths = PERMANENT | ({TEMPORARY_PLAN} if include_plan else set())
+    _validate_inventory(paths, migration_complete=migration_complete)
+
+
+@pytest.mark.parametrize("missing", sorted(PERMANENT))
+def test_temporary_plan_cannot_replace_any_permanent_authority(missing: str) -> None:
+    paths = (PERMANENT - {missing}) | {TEMPORARY_PLAN}
+    with pytest.raises(AssertionError, match="Missing/unexpected permanent authority"):
+        _validate_inventory(paths)
+
+
+@pytest.mark.parametrize(
+    "unexpected",
+    [
+        "docs/development/another-plan.md",
+        "docs/development/model-documentation-architecture-copy.md",
+        "docs/UNEXPECTED.md",
+        "UNEXPECTED.md",
+    ],
+)
+@pytest.mark.parametrize("include_plan", [False, True])
+def test_inventory_rejects_additional_markdown_even_with_authorized_plan(
+    unexpected: str, include_plan: bool
+) -> None:
+    paths = PERMANENT | {unexpected} | ({TEMPORARY_PLAN} if include_plan else set())
+    with pytest.raises(AssertionError, match="Missing/unexpected permanent authority"):
+        _validate_inventory(paths)
+
+
+def test_final_migration_completion_rejects_unretired_temporary_plan() -> None:
+    with pytest.raises(
+        AssertionError,
+        match="Temporary architecture plan must retire at final migration completion",
+    ):
+        _validate_inventory(PERMANENT | {TEMPORARY_PLAN}, migration_complete=True)
 
 
 @pytest.mark.parametrize(
