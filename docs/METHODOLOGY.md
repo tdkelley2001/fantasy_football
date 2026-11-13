@@ -1,6 +1,6 @@
 # War Room methodology
 
-**P5 pilot: M1 through M7 are developed below.** The other chapters explicitly identify later scope. This is a quantitative reader's guide pending transfer review, not a new authority or a claim of empirical validation. Current [outcome](PLAYER_OUTCOME_MODEL.md), [data](DATA.md), [research](RESEARCH.md), [season](SEASON_SIMULATOR.md), [transaction](TRANSACTIONS.md) and [Monte Carlo](MONTE_CARLO.md) contracts remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence). No existing owner is retired or superseded. The [accepted architecture plan](development/model-documentation-architecture.md#reviewable-implementation-packages) defines subsequent packages; [BACKLOG](BACKLOG.md) retains open obligations. For operating procedures, use the [user guide pilot](USER_GUIDE.md).
+**P6 pilot: M1 through M9 are developed below.** The other chapters explicitly identify later scope. This is a quantitative reader's guide pending transfer review, not a new authority or a claim of empirical validation. Current [outcome](PLAYER_OUTCOME_MODEL.md), [data](DATA.md), [research](RESEARCH.md), [season](SEASON_SIMULATOR.md), [transaction](TRANSACTIONS.md) and [Monte Carlo](MONTE_CARLO.md) contracts remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence). No existing owner is retired or superseded. The [accepted architecture plan](development/model-documentation-architecture.md#reviewable-implementation-packages) defines subsequent packages; [BACKLOG](BACKLOG.md) retains open obligations. For operating procedures, use the [user guide pilot](USER_GUIDE.md).
 
 ## Contents
 
@@ -37,7 +37,14 @@
   - [Paired comparisons and probability units](#paired-comparisons-and-probability-units)
   - [Progressive selection, multiplicity and unresolved validity](#progressive-selection-multiplicity-and-unresolved-validity)
 - [M8: Manual scenarios and action-search methodology](#manual-scenarios-and-action-search-methodology)
+  - [Explicit scenarios and one-time completion](#explicit-scenarios-and-one-time-completion)
+  - [Finite action grammar and chronology](#finite-action-grammar-and-chronology)
+  - [Screening and complete-state equivalence](#screening-and-complete-state-equivalence)
+  - [Fixed versus progressive evaluation and coverage](#fixed-versus-progressive-evaluation-and-coverage)
 - [M9: Decision evaluation, ranking and limitations](#decision-evaluation-ranking-and-limitations)
+  - [Objective and all-team effects](#objective-and-all-team-effects)
+  - [Coverage, precision and ranking conditions](#coverage-precision-and-ranking-conditions)
+  - [Evidence and remaining decision limits](#evidence-and-remaining-decision-limits)
 
 ## Analytical framework and objective
 
@@ -771,8 +778,151 @@ Inspected baseline: accepted P4 `9f08b9a58258702d0b2b87fee345036c07812b7b`. Sour
 
 ## Manual scenarios and action-search methodology
 
-**M8 scope only, for P6.** [MANUAL_SCENARIOS](MANUAL_SCENARIOS.md) owns explicit hypothetical completion; [UNIFIED_ACTION_SEARCH](UNIFIED_ACTION_SEARCH.md) owns finite candidate/path enumeration and shared completed-state evaluation. Actions, sequences, states and numerical evaluations are distinct. Full enumeration/coverage and incomplete-result disclosure remain binding; a visible top row is not proof of exhaustive optimality. No new search method is specified here.
+[MANUAL_SCENARIOS](MANUAL_SCENARIOS.md) remains the explicit-scenario authority and [UNIFIED_ACTION_SEARCH](UNIFIED_ACTION_SEARCH.md) the grammar/search authority. M8 connects their hypothetical starting states to M3–M7 without creating another season engine, valuation rule or probability estimator. An **action path**, its **completed evolving state**, and its **numerical evaluation** are distinct objects. Hypothetical completion is not M5's operational future acquisition policy and does not establish ESPN execution or acceptance.
+
+### Explicit scenarios and one-time completion
+
+A manual scenario supplies exact ownership edits $(j,\text{from},\text{to})$ and protected player/team pins against a matching immutable baseline. A null source adds an unowned player; a null destination releases an owned player. Each player can be edited once, its source must match actual modeled ownership, teams/players must exist, and identical endpoints reject. Edits bind together, so a multi-team exchange does not need an artificial valid intermediate roster after every listed row. No duplicate ownership is permitted. Explicit releases need affirmative drop permission; an undroppable designation is not automatically a prohibition on transferring that player in a trade.
+
+Pins are checked **after edits**: a receiver may pin a newly acquired player; a pin naming its former owner rejects. They protect automatic completion drops, not a separate veto over binding explicit edits, and do not constrain later M5 weekly decisions. Canonical slot/position capacities and eligibility still govern structural occupancy; original reserve occupants are retained during automatic capacity repair. Occupying a starter slot here does not freeze a later optimized weekly lineup. Unsupported/contradictory ownership, pins, occupancy or completion fails with context rather than returning a plausible substitute state.
+
+The [one-time completion sequence](MANUAL_SCENARIOS.md#protected-pins-and-completion-chronology) is:
+
+```text
+bind all explicit ownership edits; validate post-edit pins
+identify overfull ordinary rosters in baseline current-priority order
+enumerate the Cartesian product of legal required-size drop combinations
+    exclude reserve occupants, pins and players lacking drop permission
+    construct each post-drop shared state; evaluate complete V for overfull teams
+choose greatest V tuple in that team order, then smaller dropped-player IDs
+apply ALL required drops before ANY refill
+repeat passes in baseline current waiver order:
+    give each team with ordinary capacity vacancies at most one addition
+    choose its highest resulting complete V, then smaller acquired-player ID
+until ordinary rosters are complete, or reject an unfillable vacancy
+```
+
+The drop objective is lexicographic across the ordered overfull teams, **not a sum of all managers' utilities**. It values candidate post-drop states before refills; subsequent refill is sequential, not exhaustive optimization over every future pickup history. All ordinary vacancies are filled, including untouched teams and bench capacity, whereas M5 only authorizes acquisitions strictly reducing a current mandatory starter vacancy. No arbitrary top-N drop cutoff replaces exhaustive legal combinations. Current loops skip illegal/erroring or incomplete-valued alternatives: this does not certify a maximum over unresolved alternatives or waive WR-024's governing fail-closed obligations.
+
+Completion uses a shared **structural** pool containing unowned players, including waiver/hold/unresolved availability, and explicit/forced releases. Named manual-structural and initial-waiver-lock-ignored assumptions permit this counterfactual without inventing clearance or claim success. Final state restores untouched unowned availability; scenario-released players remain hypothetical free agents. This construction preserves baseline counters/priority and clears the structural acquisition ledger rather than replaying authorized real add primitives. Retain forced-drop/add order, values and assumptions. Combined actions below separately carry their actual preceding acquisition effects into the next phase.
+
+**Synthetic manual example:** in the existing one-QB ordinary-capacity fixture, team 1 owns player 1 and team 2 owns player 2. Edit player 1 from team 1 to team 2 and pin player 1 there. Team 2 must drop player 2 before any refill; team 1 then adds that released player in pass 1. Final owners are player 1→team 2 and player 2→team 1, with no duplicate ownership. The baseline remains unchanged. This is a structural completion, not a prediction that ESPN permits immediate reacquisition of a released player. [Manual fixtures](../tests/test_scenario_evaluator.py) verify the exact drop/add sequence. M9 evaluates this same completed state rather than ranking the raw transfer before repair.
+
+### Finite action grammar and chronology
+
+Declare a requester, allowed counterparties/players, shapes, families/orderings and finite action/chain bounds. Derive capacities, eligibility, trade settings and acquisition restrictions from the snapshot. A single trade exchanges positive outgoing/incoming counts with one other team, using correctly owned players in the declared universe. Raw combinations are
+
+$$
+\sum_{q\in\mathcal P}\sum_{(o,r)\in\mathcal H}
+\binom{|U_{\mathrm{out}}|}{o}\binom{|U_{\mathrm{in},q}|}{r},
+$$
+
+where $\mathcal P$ is selected partners and $\mathcal H$ selected shapes. Stable traversal is partner, shape and sorted outgoing/incoming combinations. Every raw combination attempts structural completion, including asymmetric exchanges. Disabled trading, snapshot retrieval after the configured deadline or known zero trade limit rejects; unknown remaining usage/review/acceptance is a caveat, not invented permission.
+
+**Omitted is not empty.** In single-trade/chain optional outgoing/incoming filters, `None` permits all correctly owned members of the **declared** universe; `()` permits none on that side. For acquisitions, omitted eligible-drop/status filters differ from empty selections: no selected drops can still leave add-only candidates, and omitted status selection does not authorize unresolved statuses. Required partner/player universes are not optional wildcard filters: missing/empty required trade or acquisition selections reject the corresponding configuration. An unrestricted selection means explicitly selecting the full intended finite universe, not silently substituting every canonical player. Normalized search identity preserves these distinctions even where the same transaction can be discovered through different filters.
+
+An acquisition leaf includes **player, selected drop-or-None, and configured ordinary destination slot**. Distinct legal destinations remain distinct leaves. Each transition revalidates its actual predecessor's ownership, availability, holds/reentry, counts, IR/protection and priority. Immediate free-agent authorization differs from a traditional-waiver **successful-claim counterfactual** under the approved modeled boundary; the latter retains conditional status and priority movement, not a success probability. Unresolved boundary/clearance has no invented successful state. FAAB/unsupported systems receive no substitute policy.
+
+| Supported ordering | Methodological boundary |
+|---|---|
+| Standalone trade | One trade, then manual round-robin completion. |
+| Standalone chain | Dependent trades, then vacancy-ledger manager-first completion. |
+| Standalone acquisition | One add-only or selected drop-add leaf. |
+| Acquisition→trade | Use the acquisition's resulting availability/counters/priority as the trade baseline. |
+| Trade→acquisition or chain→acquisition | Preserve incomplete trade ownership/ledger, authorize the selected acquisition before final chain-style repair. |
+| Multiple acquisitions | Two through configured total-action limit; revalidate every predecessor and forbid improper repeat acquisition. |
+
+Trade→acquisition→trade, acquisitions inside a chain, standalone drops, future streaming and scheduling immediate chain steps into future scoring weeks are unsupported. Reject family/ordering contradictions or requested chain lengths exceeding the total-action bound rather than silently omitting them. Trade/chain→acquisition uses a capacity-neutral permission view retaining actual reserve, selected-player availability, counters, priority, holds, IR evidence and destination eligibility, with no proxy ordinary-roster drops. Independently check any selected drop, protect the acquired player during final repair, and retain `structural_intermediate_only` when intermediate overcapacity exists. Authorized acquisition permission does not turn an overcapacity trade sequence into transaction-authorized execution.
+
+For chain step $\ell$ with requester outgoing set $O_\ell$, incoming $I_\ell$ and partner $q_\ell$, update ownership after each trade and require
+
+$$
+O_\ell\cap I_{\ell-1}\ne\varnothing,\qquad
+q_\ell\ne q_{\ell-1}\quad(\ell>1).
+$$
+
+An acquisition earlier in the chain alone is insufficient; the dependency is the **immediately preceding trade**. A partner can return after an intervening partner. Chain pins protect explicit transfers on both sides as well as automatic drops, unlike post-edit manual completion pins. Intermediate imbalance is recorded, not repaired or pruned between trades; no speculative refill changes what is available for the next exchange.
+
+Before step one, record **all initial ordinary vacancies**, including uninvolved teams, with frozen initial-window priority and no transaction index. Subsequent events create/reduce gaps chronologically: partial reduction retains age, full resolution removes it, and a recreated gap receives new priority. Missing/conflicting final vacancy priority fails. At final completion, choose legal complete-V capacity-drop combinations in stable team-ID order, apply all drops first, then **fill all vacancies for one manager before the next** by earliest still-outstanding gap. Each pickup maximizes that manager's resulting complete V with smaller-ID ties. This is manager-first chronology, not manual round-robin or M5 waiver passes. [Chain authority](UNIFIED_ACTION_SEARCH.md#multi-trade-chains) retains exact rejection/ledger semantics.
+
+**Synthetic two-trade example:** requester team 1 starts with players (1,10), team 2 with (2,11), team 3 with (3,12); team 4's (4,13) stays untouched. Exchange 1 sends player 1 to team 2 for player 2; exchange 2 sends that player 2 to team 3 for player 3. Dependency is player 2, and no repair is needed: final teams are (3,10), (1,11), (2,12), (4,13). Reusing partner 2 consecutively, sending a player no longer owned, or sending only an older receipt instead of the last receipt rejects. With these six tradeable players, partners 2/3 and one-for-one shapes, the existing independent two-step enumeration has **16** legal completed chains. It checks full signatures, not just an example path or matching counts. [Chain/reference fixtures](../tests/test_trade_chains.py) also cover pre-existing/recreated vacancies and manager-first repair.
+
+### Screening and complete-state equivalence
+
+V(R) screening is optional and disabled by default. For completed state $E_c$ versus baseline $E_0$, projected proxy change is $g_t(c)=V_t(E_c)-V_t(E_0)$ in remaining-horizon fantasy points. Inclusive explicit thresholds retain candidates with $g_{\mathrm{requester}}\ge\tau_r$ and, where supported, $g_{\mathrm{partner}}\ge\tau_p$. A nonnegative-partner convenience option conflicts with a separate explicit partner threshold. Compare exact stored values without rounding a threshold boundary. Single-trade screening evaluates both sides in the **actual shared completed state** including drops/refills; unified combined-action screening supports requester final-state V only, and multi-party counterparty thresholds reject. No intermediate action's proxy substitutes for the completed path.
+
+Incomplete valuation/malformed provenance cannot become a successful complete screen. Retain diagnostics, overlapping reason counts and exclusive retained/excluded totals. A projected screen is neither an acceptance model nor championship evaluation; it may remove an eventual championship winner. Exhausted generation with a screen reports its exclusions, while evaluated recommendations cover only the disclosed retained subset, **not exhaustive coverage of the unscreened feasible universe**. Resource/candidate/state caps similarly require explicit partial coverage. An iterator prefix is not an exhausted universe or a materialized coverage report.
+
+Lossless reductions differ from screens: M3/M5's independently checked dominance/branch bounds preserve the declared assignment/effect universe and stable objectives; exact completed-state sharing preserves all structural paths. Neither licenses a hidden top-N rule. Retain independent enumeration and reductions-on/off comparisons, including materially distinct consumed pools/availability. WR-023 arithmetic and WR-024 unresolved-valuation limits still qualify exactness claims.
+
+Define $c\sim c'$ only when their authoritative snapshot and **complete evolving states are identical under the current canonical state representation**. Include all teams' ownership/slots, shared availability/holds, current/frozen priority, counters, week/cycle, IR policy/evidence, assumptions and ledger. The ledger is identity material because its sequence/audit effects are observable later. Equal requester rosters, equal V or equal championship estimates are insufficient, and floats are not rounded to manufacture equivalence.
+
+Keep every path, chronology and completion record, with a many-paths-to-one-state link. Scenario labels can change manual scenario identity; they do not by themselves change the completed-state group. Single-trade identity is discovery-filter independent, while acquisition/ordered-chain/unified identities retain their respective normalized configuration/path boundaries. Numerical evaluation additionally binds baseline/state pair, model/parameters, seed, range and precision from M6/M7. Validate actual state payloads and baseline/screening provenance before reuse; labels or a forged group summary cannot substitute. This is exact within-run sharing, not a global cache or cross-refresh reuse. [Identity authority](UNIFIED_ACTION_SEARCH.md#identities-and-state-equivalence) retains byte contracts.
+
+**Synthetic equivalence example:** in the existing QB-plus-bench fixture, team 1 owns (1,10), team 2 (2,11); backups 10–13 have explicit zero projections. Path A exchanges player 1 for players 2 and 11. During post-drop valuation the stable tie selects player 2 as team 1's forced drop; team 2 subsequently refills with that released player. Path B exchanges player 1 for player 11 without repair. Both end at team 1 (10,11), team 2 (1,2), other teams unchanged, with equal slots/availability/queues/counters/ledger and snapshot. Thus **two distinct paths, one completed state, one reusable numerical evaluation**. The pre-refill proxy/drop ordering is not a global optimization of every possible final refill history. [State-registry fixtures](../tests/test_trade_evaluation.py) check differing explicit edits, exact full state and one shared comparison; a changed queue or opponent owner must not merge just because the requester's roster matches.
+
+### Fixed versus progressive evaluation and coverage
+
+The fixed unified adapter shares a baseline batch, evaluates each exact completed state once using M6/M7's matched outcomes, and links the result back to all its candidate paths. Fixed orchestration can report descriptive all-team precision, but **leaves ranking_resolved=False**: it has not performed adaptive candidate-selection inference. Some older trade-registry interfaces perform per-state paired evaluations; do not assume every entry point executes only one baseline batch globally. Shared-state reuse is about one evaluation per exact group, not changing sampling mathematics.
+
+Progressive evaluation discovers eligible unique states first. A completed initial stage gives each selected state equal initial matched exposure; an insufficient explicit state budget selects canonical state-ID order and reports untested groups. Refine competitive states on disjoint common path prefixes against the shared baseline; precision-complete states may remain contenders without more draws. Unequal exposures compare their exact shared prefix. Retain minimum finalists plus every statistically competitive state, and keep separate selected-finalist and currently competitive identities. Full initial coverage and one remaining contender are necessary for the implemented ranking-resolution flag; caps/cancellation do not fabricate estimates for untested states.
+
+M7 owns paired deltas, candidate-versus-leader allocation, all-team championship precision and WR-025. Reuse those equations; no new estimator or confidence allocation belongs in search enumeration. A fixed or progressive result must distinguish generation, screening, evaluation, precision and ranking status. Report requested/effective budgets and actual exposure. Path budgets in current orchestration are **per state**, not total baseline-plus-all-state work; nominal deadlines are checked at safe boundaries and expensive active calls can overrun. Bounded generation/indexing does not mean constant total memory or concurrent statistical evaluation before discovery completes. Exact queues/index/export/checkpoint protocols remain in [orchestration](UNIFIED_ACTION_SEARCH.md#orchestration-and-resource-limits), not a new scheduler here.
 
 ## Decision evaluation, ranking and limitations
 
-**M9 scope only, for P6.** The requesting manager's championship objective coexists with all-team effects, legal execution assumptions and incomplete evidence. [Search ranking](UNIFIED_ACTION_SEARCH.md) and [research promotion](RESEARCH.md#component-specific-promotion) retain current ranking/decision-evidence boundaries. Model, data, sampling and selection uncertainty must not be conflated; no automatic acceptance probability or proven best real-world action follows from a model estimate. [BACKLOG](BACKLOG.md) retains unimplemented requirements and research proposals; neither this pilot nor its passing tests declares model promotion, migration completion or V1 release.
+M8 constructs and completes hypothetical actions; M9 interprets their season consequences. Legality, proxy value, probability estimate, precision and real-world desirability are separate claims. [Action search](UNIFIED_ACTION_SEARCH.md#fixed-and-progressive-evaluation), [paired inference](MONTE_CARLO.md#paired-scenario-inference) and [research promotion](RESEARCH.md#component-specific-promotion) remain current owners. This chapter introduces no acceptance probability, action policy or statistical guarantee.
+
+### Objective and all-team effects
+
+For requester $r$, action path $c$ completed to state $E_c$, the initial objective is conditional expected championship-probability change
+
+$$
+\Delta_r(c)=p_{\mathrm{champ},r}(E_c)-p_{\mathrm{champ},r}(E_0),\qquad
+\widehat\Delta_r(c)=\frac1N\sum_{i=1}^{N}\bigl[C_{ir}(E_c)-C_{ir}(E_0)\bigr].
+$$
+
+Use the same complete matched paths and score-content identities for both states. Legal completion and future M5 policies are part of the conditional experiment. The requester controls the ranking objective, **not which teams are simulated**. Retain every team's championship/qualification/placement effects and relevant lineup explanation. In complete compared leagues, exactly one champion per path implies mathematically $\sum_t\widehat\Delta_t(c)=0$; the requesting manager's gain changes somebody else's title probability. Other reported outcomes can explain mechanisms but do not silently replace championship value. Projected lineup differences are not a decomposition of win probability or realized scores.
+
+**Paired decision example:** reuse M8's one-QB manual completion (player 1→team 2, forced drop 2, refill 2→team 1). The fixture's three-week requester V(R) rises **18→21**, proxy delta +3 projected points. Under four existing prescribed complete seasons, requester championship frequency remains **0.5→0.5**: **2 improved, 2 worsened, 0 unchanged** paired outcomes, delta **0**. Team 2 has the same counts; teams 3/4 each have four unchanged title outcomes. The current four-team, 95%-family paired interval for the requester is approximately **[-0.853727316959,0.853727316959]**, not proof of zero real effect or of a beneficial trade. Exact paired math is M7's unchanged estimator, not a second ranking formula. [Manual paired fixtures](../tests/test_scenario_evaluator.py) and the pilot examples verify the completed state, proxy and these counts. The prescribed test outcomes are synthetic, not a proposed calibrated forecast model.
+
+This example shows why proxy screening and final evaluation differ. M5 V(R) prices projected lineup/replacement opportunity, while championship probability depends on opponents, schedule, seeding, later competition and realized outcomes. A positive V change need not create positive championship delta, and identical marginal frequencies can hide substantial pathwise changes. Neither the proxy nor the paired comparison predicts that team 2 will accept, a trade will pass review, or a waiver will succeed.
+
+| Decision quantity | Value |
+|---|---:|
+| Baseline requester V(R) | 18 |
+| Completed requester V(R) | 21 |
+| Proxy delta (projected points) | 3 |
+| Baseline championship frequency | 0.5 |
+| Completed championship frequency | 0.5 |
+| Improved paths | 2 |
+| Worsened paths | 2 |
+| Unchanged paths | 0 |
+| Paired delta (fraction) | 0 |
+| Paired lower (fraction) | -0.853727316959 |
+| Paired upper (fraction) | 0.853727316959 |
+
+### Coverage, precision and ranking conditions
+
+For declared finite universe $\mathcal A$, an estimated leader maximizes available $\widehat\Delta_r(c)$, with stable candidate-ID ties in the current ranking. The true model maximizer would maximize $\Delta_r(c)$, which finite Monte Carlo does not observe exactly. A leading row is therefore not automatically a defensible best candidate. Exact state sharing means several structural paths can carry the same evaluated delta without being the same offer/sequence.
+
+| Axis | What must be inspected |
+|---|---|
+| Candidate coverage | Declared partners/players/shapes/orderings, feasibility exclusions, screen removal, lazy prefix/materialization/cancellation and caps. Zero feasible paths can be a complete exhausted universe. |
+| State evaluation coverage | Every selected retained state evaluated versus explicit untested groups; candidate count can exceed unique numerical state count. No fabricated values/ranks for unevaluated states. |
+| Numerical precision | Matched exposure, intervals, all-team paired targets, actual stop reason and unmet widths. A completed run or one manager's narrow interval is insufficient. |
+| Ranking resolution | Full initial coverage and competitors excluded under the implemented candidate-selection rule, distinct from all-team precision and final-state coverage. Fixed evaluation does not resolve ranking. |
+
+Claims must name their universe and evidence. A screened/capped search cannot certify the unscreened finite universe; even all evaluated candidates cannot prove optimality over configurations never selected. Complete generation is not complete evaluation; complete evaluation is not precision convergence; precision convergence is not ranking resolution. Differences inside uncertainty can remain unresolved at a path cap. Reporting a currently competitive set is preferable to inventing a uniquely best result.
+
+**WR-025 still qualifies ranking/inference interpretation.** The implementation's ranking_resolved flag is a result of its documented selection rule, not independently certified simultaneous statistical best-action validity. Candidate-selection allocation does not establish the separate repeated paired stopping/display coverage. M7's independent-review requirement remains; no stricter/looser confidence rule, significance threshold or replacement ranking test is authorized here. A model-based best within a fully covered supported universe would still be conditional on source/model/manager-policy assumptions, not a proved optimal real-world decision.
+
+### Evidence and remaining decision limits
+
+Implemented capabilities include explicit structural completion, supported finite action paths, optional projected screens, exact state sharing, fixed paired evaluation and progressive selection. They remain **Verified by tests** with synthetic/reference evidence. This is not live ESPN transaction authorization, counterparty behavior modeling, calibrated claim success, unsupported current-week advice or an empirical decision-quality certificate. M4 source/lock/cutoff restrictions remain binding; action enumeration cannot bypass them.
+
+Retain [mechanics obligations](BACKLOG.md#mechanics-review-obligations) WR-023 extreme objective ordering, WR-024 unresolved valuation selection and WR-018 permission/rule gaps. Current manual/chain completion skips some erroring/incomplete alternatives; do not certify global resolved optimization over them. [WR-008](BACKLOG.md#wr-008-representative-performance-and-diagnostics) and [WR-019](BACKLOG.md#wr-019-scientific-promotion-and-deferred-research) retain independent proxy-versus-full-simulation, replacement-access, calibration/decision sensitivity and component-promotion requirements. Numerical agreement with an exhaustive small-universe oracle validates its declared method, not future football behavior or offer utility.
+
+[WR-017](BACKLOG.md#wr-017-query-export-and-unit-compatibility) retains query/UX and fraction-versus-probability-point compatibility; mathematical deltas use M7 units without changing the current wire/display. [WR-021](BACKLOG.md#wr-021-output-provenance-and-numerical-lifecycle) retains broader outcomes, provenance, resource/precision and release obligations, and [WR-026](BACKLOG.md#search-orchestration-cleanup-review) later-failure cleanup. Temporary result indexes, bounded application history, numerical checkpoints and explicit exports have separate owners; a saved or exported candidate does not authorize cross-refresh reuse or durable search resume. Future manager acceptance/waiver propensity, streaming, discretionary future trades and expanded workflows remain separately scoped proposals, not features supplied by structural feasibility.
+
+Inspected baseline: accepted P5 `b43263e42589cafacaa0aaa92838684ebb99cae2`. Method sources are [manual completion/evaluation](../src/fantasy_football/scenario_evaluator.py), [single trades](../src/fantasy_football/trade_candidates.py), [acquisitions](../src/fantasy_football/acquisition_candidates.py), [chains](../src/fantasy_football/trade_chains.py), [unified grammar](../src/fantasy_football/unified_actions.py), [screening](../src/fantasy_football/trade_screening.py), [state/evaluation sharing](../src/fantasy_football/trade_evaluation.py), [progressive selection](../src/fantasy_football/trade_search.py) and [orchestration](../src/fantasy_football/search_orchestration.py). Existing [single-trade references](../tests/test_trade_candidates.py), [acquisition adversaries](../tests/test_acquisition_candidates.py), [chain enumeration/chronology](../tests/test_trade_chains.py), [screening oracle](../tests/test_trade_screening.py), [registry adversaries](../tests/test_trade_evaluation.py), [unified parity](../tests/test_unified_actions.py), [progressive coverage](../tests/test_trade_search.py) and [bounded/reference orchestration](../tests/test_search_orchestration.py) retain independent checks. Exact interfaces/identities, storage/query/export protocols, API and source contracts stay in current authorities. All nine methodology chapters remain a pilot: P6 closes no backlog item, transfers no authority, starts no P7 work and declares neither migration completion nor model/V1 release readiness.
