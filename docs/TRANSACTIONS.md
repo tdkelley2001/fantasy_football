@@ -1,6 +1,6 @@
 # Transactions, evolving state and roster value
 
-This is the current reference for hypothetical roster-state evolution, primitive legality, operational essential acquisitions and resulting-roster V(R). Governing requirements: [MASTER_SPEC sections 5, 7 and M2.3b-e](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). [Canonical Data](CANONICAL_MODEL.md) owns source identity/schema/publication; [Season Simulation](SEASON_SIMULATOR.md) owns lineups, scoring/standings and postseason. Source ownership at retrieval and simulated ownership are different immutable values.
+This is the current reference for hypothetical roster-state evolution, primitive legality, operational essential acquisitions and resulting-roster V(R). Governing requirements: [MASTER_SPEC sections 5, 7 and M2.3b-e](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). [Canonical Data](DATA.md#canonical-validation-and-serialization) owns source identity/schema/publication; [Season Simulation](SEASON_SIMULATOR.md) owns lineups, scoring/standings and postseason. Source ownership at retrieval and simulated ownership are different immutable values.
 
 - [Roster state and legality](#roster-state-and-legality)
 - [Transaction and completion boundaries](#transaction-and-completion-boundaries)

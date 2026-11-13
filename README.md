@@ -17,7 +17,7 @@ ESPN access is **read-only**. War Room **never submits real transactions**, pred
 
 Ordinary V1 simulation requires a verified safe whole-week boundary. An explicit override or later unplayed games cannot bypass unresolved matchup-period membership, preceding contributions or standings evidence. NFL completion or score presence alone does not prove participation, fantasy settlement or stat-correction finality. Validated configuration determines league behavior; unknown rules and permissions fail closed.
 
-Canonical snapshots preserve source provenance and historical schema reads without rewriting bytes/IDs. Read compatibility does not guarantee every consumer capability. Missing projections, explicit ESPN zeros and policy-imputed zeros remain distinct; the approved deterministic-zero correction preserves nonmissing draws while distinguishing numerical policy identity. See [data contracts](docs/CANONICAL_MODEL.md) and [outcome models](docs/PLAYER_OUTCOME_MODEL.md).
+Canonical snapshots preserve source provenance and historical schema reads without rewriting bytes/IDs. Read compatibility does not guarantee every consumer capability. Missing projections, explicit ESPN zeros and policy-imputed zeros remain distinct; the approved deterministic-zero correction preserves nonmissing draws while distinguishing numerical policy identity. See [data contracts](docs/DATA.md#canonical-validation-and-serialization) and [outcome models](docs/PLAYER_OUTCOME_MODEL.md).
 
 ## Limitations and release status
 
@@ -37,8 +37,8 @@ The service binds to loopback on a trusted local machine. Host/Origin checks are
 ## Understand the system
 
 - [Architecture map](docs/architecture/overview.md) and [application API/execution](docs/APPLICATION_SERVICE.md): source ownership, runtime boundaries and public contracts.
-- [Canonical data](docs/CANONICAL_MODEL.md), [ESPN adapter](docs/ESPN_CANONICAL_ADAPTER.md) and [snapshot storage](docs/SNAPSHOT_STORAGE.md): evidence, configuration and immutable persistence.
+- [Data lifecycle](docs/DATA.md): ESPN sources, canonical structures/validation, league-rule evidence and immutable snapshot storage.
 - [Season simulation](docs/SEASON_SIMULATOR.md), [outcome models](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo](docs/MONTE_CARLO.md): mechanics, provisional mathematics and reproducibility. [Partial-week contracts](docs/LW2_PARTIAL_WEEK_CONTRACT.md) define the separate evidence boundary.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) and [action search](docs/UNIFIED_ACTION_SEARCH.md): counterfactual completion, selected universes and paired comparison.
-- [Research](docs/OUTCOME_DISTRIBUTION_RESEARCH.md) and [live-source evidence](docs/LIVE_WEEK_SCORING.md): provenance, verification classes and unresolved capabilities. Fixtures prove code behavior, not live ESPN semantics.
+- [Research](docs/RESEARCH.md) and [live-source evidence](docs/DATA.md#live-and-temporal-evidence): temporal trust, evaluation/promotion gates and unresolved capabilities. Fixtures prove code behavior, not live ESPN semantics.
 - [MASTER_SPEC](docs/MASTER_SPEC.md) remains authoritative for approved analytical requirements until a separately reviewed transfer. [ROADMAP](docs/ROADMAP.md) preserves historical milestones and applicable gates, not a second work queue. Ordinary history and retired reports remain in Git/PRs; retained evidence applies at its stated revision.

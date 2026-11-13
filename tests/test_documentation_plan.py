@@ -99,6 +99,11 @@ def test_r1_map_and_completed_archive_compatibility_are_reconciled_without_new_w
             "[documentation index](../README.md#understand-the-system)",
             "[documentation index](index.md)",
         )
+        # D5 moves only the current configuration owner; preserve audit body.
+        actual = actual.replace(
+            "(../../DATA.md#rules-and-manual-authority)",
+            "(../../LEAGUE_CONFIGURATION_AUDIT.md)",
+        )
         assert actual == _tree()[path].decode("utf-8").replace("\r\n", "\n")
 
 

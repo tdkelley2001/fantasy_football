@@ -1,5 +1,7 @@
 # Contributing to War Room
 
+Use [DATA](docs/DATA.md) and [RESEARCH](docs/RESEARCH.md) for current ingestion/storage/research contracts. The [M0 consumer migration](docs/BACKLOG.md#data-research-and-m0-migration-obligations) remains separately gated; do not remove its required historical sources or weaken its tests.
+
 For mechanics changes use [SEASON_SIMULATOR](docs/SEASON_SIMULATOR.md) and [TRANSACTIONS](docs/TRANSACTIONS.md), preserving production versus independent-oracle objectives and recording unresolved [mechanics obligations](docs/BACKLOG.md#mechanics-review-obligations).
 
 `tdkelley2001/fantasy_football` is the authoritative repository for accepted code and documentation. Both regular contributors use reviewed pull requests into its `main` branch, whether the work branch is in the original repository or the existing fork. Keep the fork; no migration, remote replacement or permission change is needed.
