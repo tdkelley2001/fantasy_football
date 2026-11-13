@@ -555,7 +555,6 @@ def test_mc_reference_covers_current_inputs_estimators_and_recovery_scope() -> N
     for path in (
         "docs/MANUAL_SCENARIOS.md",
         "docs/UNIFIED_ACTION_SEARCH.md",
-        "docs/TRADE_CANDIDATES.md",
     ):
         assert "MONTE_CARLO.md#" in read(path)
 
@@ -654,3 +653,172 @@ def test_numerical_domain_owners_and_missing_policy_role_are_discoverable() -> N
         "no new statistical/model implementation",
     ):
         assert gate.lower() in detail.lower(), gate
+
+
+def test_action_reference_tracks_public_grammar_and_permission_contracts() -> None:
+    from fantasy_football.acquisition_candidates import (
+        AcquisitionDisposition,
+        ImmediateAcquisitionSearchConfiguration,
+        enumerate_immediate_acquisition_candidates,
+        iter_immediate_acquisition_candidates,
+    )
+    from fantasy_football.trade_candidates import (
+        SingleTradeSearchConfiguration,
+        enumerate_single_trade_candidates,
+        iter_single_trade_candidates,
+    )
+    from fantasy_football.trade_chains import (
+        TradeChainRejectionCode,
+        TradeChainSearchConfiguration,
+        enumerate_multi_trade_chains,
+        iter_multi_trade_chains,
+    )
+    from fantasy_football.unified_actions import (
+        ActionFamily,
+        ActionOrdering,
+        UnifiedAcquisitionStatus,
+        UnifiedExecutionStatus,
+    )
+
+    document = read("docs/UNIFIED_ACTION_SEARCH.md")
+    for enum in (
+        ActionFamily,
+        ActionOrdering,
+        AcquisitionDisposition,
+        UnifiedExecutionStatus,
+        UnifiedAcquisitionStatus,
+        TradeChainRejectionCode,
+    ):
+        assert all(member.value in document for member in enum), enum.__name__
+    for interface in (
+        enumerate_single_trade_candidates,
+        iter_single_trade_candidates,
+        enumerate_immediate_acquisition_candidates,
+        iter_immediate_acquisition_candidates,
+        enumerate_multi_trade_chains,
+        iter_multi_trade_chains,
+    ):
+        assert interface.__name__ + "()" in document
+    for record in (
+        SingleTradeSearchConfiguration,
+        ImmediateAcquisitionSearchConfiguration,
+        TradeChainSearchConfiguration,
+    ):
+        assert record.__name__ in document
+        # Omitted and empty are distinct public input values, not defaults to merge.
+        for field in fields(record):
+            if field.default is None:
+                assert field.name in document, field.name
+    for boundary in (
+        "None and empty filters differ",
+        "destination_slot",
+        "immediately preceding trade",
+        "initial_window_waiver_priority",
+        "fill all vacancies for one manager before the next",
+        "no ordinary-roster proxy drops",
+        "resulting_state",
+        "competitive_claim_behavior_resolved",
+        "WR-024",
+        "WR-025",
+    ):
+        assert boundary in document, boundary
+
+
+def test_scenario_and_search_ownership_preserves_distinct_completion_and_identity() -> (
+    None
+):
+    from fantasy_football.scenario_evaluator import (
+        CompletedManualScenario,
+        ExplicitRosterChange,
+        ManualScenario,
+        ProtectedPlayerPin,
+        complete_manual_scenario,
+    )
+    from fantasy_football.trade_evaluation import (
+        build_candidate_state_registry,
+        completed_state_fingerprint,
+        evaluation_fingerprint,
+        validate_candidate_state_registry,
+    )
+
+    manual = read("docs/MANUAL_SCENARIOS.md")
+    search = read("docs/UNIFIED_ACTION_SEARCH.md")
+    for record in (
+        ManualScenario,
+        ExplicitRosterChange,
+        ProtectedPlayerPin,
+        CompletedManualScenario,
+    ):
+        assert record.__name__ in manual
+    assert complete_manual_scenario.__name__ + "()" in manual
+    for interface in (
+        build_candidate_state_registry,
+        validate_candidate_state_registry,
+        completed_state_fingerprint,
+        evaluation_fingerprint,
+    ):
+        assert interface.__name__ + "()" in search
+    for boundary in (
+        "after explicit edits",
+        "round-robin in current waiver order",
+        "expire before subsequent weekly",
+        "all required drops before any automatic addition",
+        "changed_scoring_weeks",
+        "projected legal-lineup explanations",
+    ):
+        assert boundary.lower() in manual.lower(), boundary
+    for boundary in (
+        "same roster ownership alone is insufficient",
+        "excludes path labels/descriptions",
+        "acquisition ledger",
+        "equal initial exposure",
+        "exact common prefix",
+        "ranking_resolved=False",
+        "generation finishing does not imply evaluation finishing",
+    ):
+        assert boundary.lower() in search.lower(), boundary
+    for name in ("MANUAL_SCENARIOS", "UNIFIED_ACTION_SEARCH"):
+        document = read(f"docs/{name}.md")
+        for owner in (
+            "TRANSACTIONS.md",
+            "MONTE_CARLO.md#",
+            "APPLICATION_SERVICE.md",
+            "INTERFACE.md",
+        ):
+            assert owner in document
+
+
+def test_search_reference_explains_source_resource_and_index_lifetime_boundaries() -> (
+    None
+):
+    from fantasy_football.search_orchestration import (
+        SearchResourceConfiguration,
+        SearchResultIndex,
+        execute_search_orchestration,
+    )
+
+    document = read("docs/UNIFIED_ACTION_SEARCH.md")
+    assert execute_search_orchestration.__name__ + "()" in document
+    for field in fields(SearchResourceConfiguration):
+        assert field.name in document, field.name
+    for name in ("iter_candidates", "state_ids", "close"):
+        assert callable(getattr(SearchResultIndex, name))
+        assert name + "()" in document
+    for boundary in (
+        "per state",
+        "not total baseline-plus-all-state work",
+        "temporary SQLite",
+        "bounded backpressure",
+        "last ID",
+        "garbage collection is only a safety net",
+        "Later evaluation/observer/export failures",
+        "WR-026",
+        "no promise of constant total memory",
+        "not a durable checkpoint",
+        "not a hash of every resource/export setting",
+        "wall_clock_overrun_seconds",
+    ):
+        assert boundary in document, boundary
+    backlog = read("docs/BACKLOG.md")
+    assert "## Search orchestration cleanup review" in backlog
+    assert "separately approve" in backlog.lower()
