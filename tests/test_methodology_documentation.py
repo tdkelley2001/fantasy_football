@@ -66,16 +66,35 @@ from fantasy_football.postseason import (
 )
 from fantasy_football.roster_value import ReplacementAccessContext, value_roster
 from fantasy_football.scenario_evaluator import (
+    ExplicitRosterChange,
     ManualScenario,
+    ProtectedPlayerPin,
     ScenarioEvaluationError,
     _paired_metric,
     compare_completed_scenario_batches,
     complete_manual_scenario,
+    evaluate_completed_manual_scenario,
 )
 from fantasy_football.season_simulator import (
     DeterministicScoreScenario,
     SeasonCompletionStatus,
     SeasonSimulationError,
+)
+from fantasy_football.trade_candidates import enumerate_single_trade_candidates
+from fantasy_football.trade_chains import (
+    TradeChainRejectionCode,
+    enumerate_multi_trade_chains,
+)
+from fantasy_football.trade_evaluation import (
+    TradeEvaluationError,
+    build_candidate_state_registry,
+    completed_state_fingerprint,
+    evaluate_trade_candidate_states,
+    validate_candidate_state_registry,
+)
+from fantasy_football.trade_screening import (
+    TradeScreeningConfiguration,
+    screen_trade_candidates,
 )
 from fantasy_football.transaction_cycle import validate_operational_policy_equivalence
 from fantasy_football.weekly_engine import RealizedPlayerScore, initialize_standings
@@ -93,13 +112,28 @@ from tests.test_roster_value import (
     _state,
     _valuation_snapshot,
 )
-from tests.test_scenario_evaluator import _scenario_snapshot
+from tests.test_scenario_evaluator import _config as _scenario_simulation
+from tests.test_scenario_evaluator import (
+    _scenario_snapshot,
+    _scenario_snapshot_with_bench,
+)
 from tests.test_scenario_evaluator import _state as _manual_state
 from tests.test_season_simulator import (
     _fourteen_team_postseason_snapshot,
     _run,
     _snapshot,
 )
+from tests.test_trade_candidates import _config as _single_trade_config
+from tests.test_trade_chains import (
+    _config as _chain_config,
+)
+from tests.test_trade_chains import (
+    _independent_two_step_oracle,
+)
+from tests.test_trade_chains import (
+    _signature as _chain_signature,
+)
+from tests.test_trade_evaluation import _equivalent_paths_screening, _screening
 from tests.test_trade_search import _run as _progressive_run
 from tests.test_trade_search import _search
 from tests.test_weekly_transactions import _policy
@@ -1190,3 +1224,322 @@ def test_p5_preserves_math_and_unresolved_statistical_gates() -> None:
 def test_p5_rejects_incorrect_sequential_validity_claim(claim: str) -> None:
     with pytest.raises(AssertionError, match="Unsupported sequential validity claim"):
         _validate_inference_methodology(_guide() + "\n" + claim)
+
+
+def _p6_manual_example():
+    snapshot = _scenario_snapshot()
+    state = _manual_state(snapshot)
+    scenario = ManualScenario(
+        "p6-completion",
+        (ExplicitRosterChange(1, 1, 2),),
+        (ProtectedPlayerPin(2, 1),),
+    )
+    return snapshot, state, complete_manual_scenario(snapshot, state, scenario)
+
+
+def test_p6_manual_completion_and_published_paired_decision_values() -> None:
+    snapshot, state, completed = _p6_manual_example()
+    assert tuple((item.team_id, item.player_id) for item in completed.forced_drops) == (
+        (2, 2),
+    )
+    assert tuple(
+        (item.team_id, item.player_id, item.pass_number)
+        for item in completed.automatic_additions
+    ) == ((1, 2, 1),)
+    owners = {item.player_id: item.team_id for item in completed.state.roster_entries}
+    assert owners[1] == 2 and owners[2] == 1
+    assert completed.state.season_acquisition_counts == state.season_acquisition_counts
+    assert completed.state.current_waiver_priority == state.current_waiver_priority
+    assert state.ledger == completed.state.ledger == ()
+    before = repr((snapshot, state))
+    comparison = evaluate_completed_manual_scenario(
+        snapshot,
+        state,
+        completed,
+        _scenario_simulation(4),
+        PrescribedModel(),
+        PrecisionConfiguration(0.95, 0.9, 1, 4, 1),
+    )
+    team = next(item.championship for item in comparison.teams if item.team_id == 1)
+    base_value = value_roster(snapshot, state, 1).total_value
+    final_value = value_roster(snapshot, completed.state, 1).total_value
+    shown = _published_numeric_table("| Decision quantity | Value |")
+    assert tuple(shown.values()) == pytest.approx(
+        (
+            base_value,
+            final_value,
+            final_value - base_value,
+            team.baseline_probability,
+            team.scenario_probability,
+            team.improved_paths,
+            team.worsened_paths,
+            team.unchanged_paths,
+            team.difference,
+            team.interval.lower,
+            team.interval.upper,
+        ),
+        rel=0,
+        abs=5e-13,
+    )
+    assert all(item.championship.difference == 0 for item in comparison.teams)
+    assert all(
+        item.championship.unchanged_paths == 4
+        for item in comparison.teams
+        if item.team_id in {3, 4}
+    )
+    assert (
+        comparison.baseline.batch.path_indices
+        == comparison.hypothetical.batch.path_indices
+    )
+    assert all(
+        left.scenario_sha256 == right.scenario_sha256
+        for left, right in zip(
+            comparison.baseline.batch.paths,
+            comparison.hypothetical.batch.paths,
+            strict=True,
+        )
+    )
+    assert repr((snapshot, state)) == before
+
+
+def test_p6_dependent_chain_example_matches_complete_independent_reference() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _manual_state(snapshot)
+    config = _chain_config()
+    result = enumerate_multi_trade_chains(snapshot, state, config)
+    expected = _independent_two_step_oracle(state, config)
+    assert {_chain_signature(item) for item in result.candidates} == expected
+    assert len(expected) == 16 and result.coverage.complete
+    signature = ((2, (1,), (2,)), (3, (2,), (3,)))
+    example = next(
+        item for item in result.candidates if _chain_signature(item) == signature
+    )
+    assert example.trades[1].dependency_player_ids == (2,)
+    assert {
+        team: tuple(
+            sorted(
+                item.player_id
+                for item in example.completed_scenario.state.roster_entries
+                if item.team_id == team
+            )
+        )
+        for team in (1, 2, 3, 4)
+    } == {1: (3, 10), 2: (1, 11), 3: (2, 12), 4: (4, 13)}
+    assert (
+        not example.completed_scenario.forced_drops
+        and not example.completed_scenario.automatic_additions
+    )
+    pinned = enumerate_multi_trade_chains(
+        snapshot, state, replace(config, protected_pins=(ProtectedPlayerPin(1, 1),))
+    )
+    assert signature not in {_chain_signature(item) for item in pinned.candidates}
+    # The old requester players alone cannot satisfy the immediate-receipt rule.
+    blocked = enumerate_multi_trade_chains(
+        snapshot, state, replace(config, allowed_outgoing_player_ids=(1, 10))
+    )
+    assert blocked.coverage.complete and not blocked.candidates
+    assert (
+        dict(blocked.coverage.rejection_code_counts)[
+            TradeChainRejectionCode.IMMEDIATE_DEPENDENCY_MISSING
+        ]
+        > 0
+    )
+    assert (
+        dict(result.coverage.rejection_code_counts)[
+            TradeChainRejectionCode.CONSECUTIVE_COUNTERPARTY
+        ]
+        > 0
+    )
+    capped = enumerate_multi_trade_chains(
+        snapshot, state, replace(config, maximum_completed_paths=1)
+    )
+    assert not capped.coverage.complete and len(capped.candidates) == 1
+
+
+def test_p6_optional_filters_do_not_turn_empty_into_unrestricted() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _manual_state(snapshot)
+    config = _single_trade_config()
+    omitted = enumerate_single_trade_candidates(snapshot, state, config)
+    explicit = enumerate_single_trade_candidates(
+        snapshot,
+        state,
+        replace(
+            config,
+            allowed_outgoing_player_ids=(1, 10),
+            allowed_incoming_player_ids=(2, 11),
+        ),
+    )
+    assert {item.candidate_id for item in omitted.candidates} == {
+        item.candidate_id for item in explicit.candidates
+    }
+    assert omitted.search_configuration_sha256 != explicit.search_configuration_sha256
+    for field in ("allowed_outgoing_player_ids", "allowed_incoming_player_ids"):
+        empty = enumerate_single_trade_candidates(
+            snapshot, state, replace(config, **{field: ()})
+        )
+        assert empty.coverage.complete and not empty.candidates
+
+
+def test_p6_screen_matches_independent_completed_state_threshold_calculation() -> None:
+    snapshot = _scenario_snapshot_with_bench()
+    state = _manual_state(snapshot)
+    candidates = enumerate_single_trade_candidates(
+        snapshot, state, _single_trade_config()
+    )
+    disabled = screen_trade_candidates(snapshot, state, candidates)
+    assert len(disabled.retained_candidate_ids) == len(candidates.candidates)
+    baseline = {
+        team: value_roster(snapshot, state, team).total_value for team in (1, 2)
+    }
+    expected = {
+        item.candidate_id
+        for item in candidates.candidates
+        if value_roster(snapshot, item.completed_scenario.state, 1).total_value
+        - baseline[1]
+        >= 0
+        and value_roster(snapshot, item.completed_scenario.state, 2).total_value
+        - baseline[2]
+        >= -4
+    }
+    screened = screen_trade_candidates(
+        snapshot,
+        state,
+        candidates,
+        TradeScreeningConfiguration(
+            True, minimum_requester_delta=0.0, minimum_counterparty_delta=-4.0
+        ),
+    )
+    assert set(screened.retained_candidate_ids) == expected
+    assert (
+        screened.coverage.retained_candidate_count
+        + screened.coverage.excluded_candidate_count
+        == len(candidates.candidates)
+    )
+
+
+def test_p6_equivalent_example_preserves_paths_and_shares_one_evaluation(
+    monkeypatch,
+) -> None:
+    import fantasy_football.trade_evaluation as evaluation_module
+
+    snapshot, state, _ = _screening()
+    registry = build_candidate_state_registry(
+        snapshot, _equivalent_paths_screening(snapshot, state)
+    )
+    changes = {
+        tuple(
+            (x.player_id, x.from_team_id, x.to_team_id)
+            for x in path.screening_outcome.candidate.explicit_changes
+        )
+        for path in registry.paths
+    }
+    assert changes == {((1, 1, 2), (2, 2, 1), (11, 2, 1)), ((1, 1, 2), (11, 2, 1))}
+    assert len(registry.paths) == 2 and len(registry.states) == 1
+    common = registry.states[0]
+    assert {
+        item.player_id: item.team_id
+        for item in common.state.roster_entries
+        if item.team_id in {1, 2}
+    } == {10: 1, 11: 1, 1: 2, 2: 2}
+    calls = []
+    original = evaluation_module.evaluate_completed_manual_scenario
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        evaluation_module, "evaluate_completed_manual_scenario", counted
+    )
+    result = evaluate_trade_candidate_states(
+        snapshot,
+        state,
+        registry,
+        _scenario_simulation(1),
+        PrescribedModel(),
+        PrecisionConfiguration(0.95, 0.9, 1, 1, 1),
+    )
+    assert len(calls) == len(result.evaluations) == 1
+    assert len({link.evaluation_sha256 for link in result.candidate_links}) == 1
+    different = replace(
+        common.state,
+        current_waiver_priority=tuple(reversed(common.state.current_waiver_priority)),
+    )
+    assert (
+        completed_state_fingerprint(snapshot, different)
+        != common.completed_state_sha256
+    )
+    forged = replace(registry, states=(replace(common, state=different),))
+    with pytest.raises(TradeEvaluationError, match="completed-state content conflicts"):
+        validate_candidate_state_registry(snapshot, forged)
+
+
+def test_p6_capped_state_exposure_cannot_certify_a_best_candidate() -> None:
+    result = _progressive_run(_search(budget=1, target=0.99))
+    assert result.coverage.initially_evaluated_states == 1
+    assert result.coverage.unevaluated_states > 0
+    assert not result.coverage.candidate_coverage_complete
+    assert not result.coverage.statistical_precision_complete
+    assert not result.coverage.ranking_resolved
+    untested = [
+        item
+        for item in result.candidates
+        if item.requester_championship_difference is None
+    ]
+    assert untested and all(item.rank is None for item in untested)
+
+
+def _validate_decision_methodology(text: str) -> None:
+    text = text.split("## Manual scenarios and action-search methodology\n", 1)[1]
+    for contract in (
+        "all drops first",
+        "fill all vacancies for one manager before the next",
+        r"O_\ell\cap I_{\ell-1}\ne\varnothing",
+        "not exhaustive coverage of the unscreened feasible universe",
+        "two distinct paths, one completed state, one reusable numerical evaluation",
+        "leaves ranking_resolved=False",
+        "WR-025 still qualifies ranking/inference interpretation",
+        r"\Delta_r(c)=p_{\mathrm{champ},r}(E_c)-p_{\mathrm{champ},r}(E_0)",
+        "transfers no authority",
+        "MANUAL_SCENARIOS.md#protected-pins-and-completion-chronology",
+        "UNIFIED_ACTION_SEARCH.md#identities-and-state-equivalence",
+    ):
+        assert contract in text, f"Missing decision-method contract: {contract}"
+    for false_claim in (
+        "A V(R) gain guarantees championship improvement.",
+        "Structural feasibility guarantees ESPN execution.",
+    ):
+        assert false_claim not in text, "Unsupported decision claim"
+
+
+def test_p6_preserves_method_boundaries_and_pending_review() -> None:
+    _validate_decision_methodology(_guide())
+
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "A V(R) gain guarantees championship improvement.",
+        "Structural feasibility guarantees ESPN execution.",
+    ),
+)
+def test_p6_rejects_false_proxy_or_execution_guarantee(claim: str) -> None:
+    with pytest.raises(AssertionError, match="Unsupported decision claim"):
+        _validate_decision_methodology(_guide() + "\n" + claim)
+
+
+@pytest.mark.parametrize(
+    "lost",
+    (
+        r"O_\ell\cap I_{\ell-1}\ne\varnothing",
+        "not exhaustive coverage of the unscreened feasible universe",
+        "leaves ranking_resolved=False",
+        "WR-025 still qualifies ranking/inference interpretation",
+    ),
+)
+def test_p6_rejects_lost_dependency_coverage_or_inference_boundary(lost: str) -> None:
+    text = _guide()
+    assert lost in text
+    with pytest.raises(AssertionError, match="Missing decision-method contract"):
+        _validate_decision_methodology(text.replace(lost, "REMOVED"))
