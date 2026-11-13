@@ -1,6 +1,6 @@
 # Standing Development Instructions
 
-[DATA](docs/DATA.md) owns retrieval, canonical evidence/validation and immutable storage; [RESEARCH](docs/RESEARCH.md) owns temporal trust, research evaluation and promotion evidence. The M0 verifier checks seven evidence roles against current sections/interfaces and recorded historical identities; it does not authenticate historical bytes offline. The missing-projection document remains required pending a separately authorized M0 role migration.
+[DATA](docs/DATA.md) owns retrieval, canonical evidence/validation and immutable storage; [RESEARCH](docs/RESEARCH.md) owns temporal trust, research evaluation and promotion evidence. The M0 verifier checks seven evidence roles against current sections/interfaces and recorded historical identities; it does not authenticate historical bytes offline. Contract 2 checks DATA, RESEARCH and PLAYER_OUTCOME_MODEL; no retired historical Markdown file is an executable dependency.
 
 [Outcome models](docs/PLAYER_OUTCOME_MODEL.md) own generated-score policy and numerical model identity; [Monte Carlo](docs/MONTE_CARLO.md) owns estimators, paired inference and numerical recovery; [Partial Week](docs/PARTIAL_WEEK.md) owns current-week evidence/permission and composition.
 
