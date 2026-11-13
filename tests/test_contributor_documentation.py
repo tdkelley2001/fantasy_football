@@ -99,6 +99,8 @@ def test_backlog_ids_and_work_metadata_are_unambiguous() -> None:
         "docs/OPERATIONS.md",
         "docs/USER_GUIDE.md",
         "docs/METHODOLOGY.md",
+        "docs/VALIDATION.md",
+        "docs/TECHNICAL_REFERENCE.md",
         "docs/PLAYER_OUTCOME_MODEL.md",
         "docs/MONTE_CARLO.md",
         "docs/SEASON_SIMULATOR.md",
