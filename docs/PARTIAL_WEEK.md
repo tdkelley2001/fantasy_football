@@ -1,5 +1,7 @@
 # Partial-week evidence and execution
 
+This reference owns temporal evidence and partial-week execution permission. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
+
 ## Current capability map
 
 All partial execution below is **engine-only, Verified by tests** with synthetic evidence. It is not automatic live ESPN translation, public HTTP support, browser execution or new **Verified live** calibration. [DATA](DATA.md#live-and-temporal-evidence) owns actual field observations; this reference owns evidence permission and current-week composition.
@@ -12,7 +14,7 @@ All partial execution below is **engine-only, Verified by tests** with synthetic
 | Narrow partial Monte Carlo | `MonteCarloPartialWeekInput`; every rostered current player must be unstarted with approved matching nonmissing canonical projection | Completed, in-progress, missing, nonparticipating or unresolved relevant current-player evidence fails. Supplied legal lineup is preserved. |
 | Application/browser | Ordinary V1 and factual nullable live-state summaries | No public partial request fields, automatic companion creation, current-week action/lineup recommendations or conditional remainder sampler. |
 
-Governing contracts remain [MASTER_SPEC live-week addendum, sections 1.3 and 10](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). [Season](SEASON_SIMULATOR.md) owns deterministic weekly/bracket resolution, [Outcome Model](PLAYER_OUTCOME_MODEL.md) owns draws, [Monte Carlo](MONTE_CARLO.md) owns numerical identity/aggregation, and [Transactions](TRANSACTIONS.md) owns hypothetical ownership/legality. This is one coordinator with an opt-in input, not a second simulator.
+[Season](SEASON_SIMULATOR.md) owns deterministic weekly/bracket resolution, [Outcome Model](PLAYER_OUTCOME_MODEL.md) owns draws, [Monte Carlo](MONTE_CARLO.md) owns numerical identity/aggregation, and [Transactions](TRANSACTIONS.md) owns hypothetical ownership/legality. This is one coordinator with an opt-in input, not a second simulator.
 
 - [Companion identity and preservation](#companion-identity-and-preservation)
 - [Observed assignments and locks](#observed-assignments-and-locks)

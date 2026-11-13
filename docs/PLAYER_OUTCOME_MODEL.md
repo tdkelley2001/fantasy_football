@@ -1,6 +1,6 @@
 # Player outcome generation and numerical identity
 
-This reference owns accepted outcome generation, public model identity and generated-score missingness policy. [DATA](DATA.md#projection-contract) owns raw classification/provenance; [RESEARCH](RESEARCH.md) owns temporal authenticity, calibration and promotion; [Season](SEASON_SIMULATOR.md) and [Transactions](TRANSACTIONS.md) own lineup and transaction permission. Governing requirements remain [MASTER_SPEC sections 4, 10–11](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). Both supported families are **provisional**, not authenticated pregame-calibrated forecasts or a V1 release.
+This reference owns accepted outcome generation, public model identity and generated-score missingness policy. [DATA](DATA.md#projection-contract) owns raw classification/provenance; [RESEARCH](RESEARCH.md) owns temporal authenticity, calibration and promotion; [Season](SEASON_SIMULATOR.md) and [Transactions](TRANSACTIONS.md) own lineup and transaction permission. Both supported families are **provisional**, not authenticated pregame-calibrated forecasts or a V1 release. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 - [Interfaces and execution boundary](#current-execution-boundary)
 - [Missing, zero and present projections](#missing-zero-and-present-projections)

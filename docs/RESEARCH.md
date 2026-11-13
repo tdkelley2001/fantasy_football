@@ -1,6 +1,6 @@
 # Historical data and outcome research
 
-This is the current historical-dataset, temporal-trust and outcome-research reference. [DATA](DATA.md) owns ESPN parsing/source interpretation/canonical storage; [PLAYER_OUTCOME_MODEL](PLAYER_OUTCOME_MODEL.md) owns actual generation policy; [MONTE_CARLO](MONTE_CARLO.md) owns execution/statistical aggregation. Governing requirements remain [MASTER_SPEC sections 3-4, 7 and M3](MASTER_SPEC.md) and [ROADMAP gates](ROADMAP.md). Research recommendations are not production promotion or release acceptance.
+This is the current historical-dataset, temporal-trust and outcome-research reference. [DATA](DATA.md) owns ESPN parsing/source interpretation/canonical storage; [PLAYER_OUTCOME_MODEL](PLAYER_OUTCOME_MODEL.md) owns actual generation policy; [MONTE_CARLO](MONTE_CARLO.md) owns execution/statistical aggregation. Research recommendations are not production promotion or release acceptance. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 - [Evidence and hypotheses](#evidence-and-hypotheses)
 - [Dataset and authenticated captures](#dataset-and-authenticated-captures)

@@ -643,7 +643,7 @@ def test_numerical_domain_owners_and_missing_policy_role_are_discoverable() -> N
         .split("\n## ", 1)[0]
     )
     for gate in (
-        "WR-002",
+        "Contract 2",
         "WR-008",
         "WR-019",
         "WR-025",

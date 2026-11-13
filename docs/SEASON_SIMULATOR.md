@@ -1,6 +1,6 @@
 # Season mechanics and deterministic simulation
 
-This is the current reference for lineup choice, weekly scoring/standings and postseason progression. Governing requirements: [MASTER_SPEC sections 5-6 and M2.1/M2.2/M2.4/M2.5](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). [TRANSACTIONS](TRANSACTIONS.md) owns evolving roster legality, essential acquisitions and V(R); [canonical data](DATA.md#canonical-validation-and-serialization) owns source truth. These authorities do not turn unsupported league semantics into defaults.
+This is the current reference for lineup choice, weekly scoring/standings and postseason progression. [TRANSACTIONS](TRANSACTIONS.md) owns evolving roster legality, essential acquisitions and V(R); [canonical data](DATA.md#canonical-validation-and-serialization) owns source truth. These authorities do not turn unsupported league semantics into defaults. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 - [Inputs and boundaries](#inputs-and-boundaries)
 - [Weekly progression](#weekly-progression)
