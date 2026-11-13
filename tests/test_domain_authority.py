@@ -189,20 +189,63 @@ def test_reject_retired_master_as_current_authority() -> None:
         _validate(documents)
 
 
-def test_historical_numerical_artifacts_remain_byte_identical() -> None:
+def _canonical_artifact_digest(payload: bytes) -> str:
+    """Ignore only CRLF versus LF checkout conversion; retain every other byte."""
+    return hashlib.sha256(payload.replace(b"\r\n", b"\n")).hexdigest()
+
+
+def test_historical_numerical_artifacts_preserve_canonical_bytes() -> None:
     # Pre-WR-022 evidence, not a current performance or numerical replay claim.
+    # Expected digests are SHA-256 of the LF Git blobs at accepted C13 revision
+    # 14fd6dba46cfe5827c0b3da110bfefa4a683b647 (git show <revision>:<path>).
+    # No runtime Git dependency or JSON parsing/reserialization is required.
     hashes = {
-        "lw23a_baseline_four.json": "3ca901d90dcef6636746454720b103426525a74637b204d6ea350753a8e29ab0",
-        "lw23a_baseline_fourteen.json": "fcf15d9cb52296d7f53b5fb4e214231c5492ed51d88f98f8e13d9faec1c6690a",
-        "lw23a_verify_four_team_reference.json": "80b2ce8cf8a774e000ee400e4d97c409985ad058501789e479f053cbae1d7f80",
-        "lw23a_verify_four_team_retained.json": "21eb41eb794929a650f4107755dfc53b82da766324b505187c8b1c213f1a4458",
-        "lw23a_verify_fourteen_team_reference.json": "05257296df2fb025700bc92d4e264d227b7945c1ae1dd6b9deef047b71a0a27f",
-        "lw23a_verify_fourteen_team_retained.json": "9cc13af7b558d058f8bdd1172c9760fb11c24f4736cd04abb1ca1e7e030c2013",
+        "lw23a_baseline_four.json": "91b46a7e4026775315af1cb803096f544dc0f7ee35ea095338a3293689d1c9bf",
+        "lw23a_baseline_fourteen.json": "de8bb6f56cca68a65cc9d1d961a2ab471b9bc04a416cdd0bc116b3ece2027dfb",
+        "lw23a_verify_four_team_reference.json": "5b8526be634d874a01e235476453a91d4ac5a40db9d6f3be6f8fab346862c708",
+        "lw23a_verify_four_team_retained.json": "7ec442eae95681046124692d20d1b07ffd5287a8409eb4936f88299fb414a10a",
+        "lw23a_verify_fourteen_team_reference.json": "8f815549da544a9f7edc873d8d02bf6aeaf98beddd9375c16f0ff9ee32bac3f6",
+        "lw23a_verify_fourteen_team_retained.json": "7c36e7809c226a1376f1d8450c25448e55c18e1267ff2116c9c3007e5c78ca12",
     }
     for name, expected in hashes.items():
-        assert (
-            hashlib.sha256(
-                (ROOT / "benchmarks/results" / name).read_bytes()
-            ).hexdigest()
-            == expected
-        )
+        payload = (ROOT / "benchmarks/results" / name).read_bytes()
+        lf = payload.replace(b"\r\n", b"\n")
+        for representation in (payload, lf, lf.replace(b"\n", b"\r\n")):
+            assert _canonical_artifact_digest(representation) == expected, name
+
+
+def test_canonical_artifact_digest_preserves_lf_blob_digest_for_crlf_checkout() -> None:
+    lf = b'{\n  "points": 1,\n  "label": "historical"\n}\n'
+    expected = hashlib.sha256(lf).hexdigest()
+    assert _canonical_artifact_digest(lf) == expected
+    assert _canonical_artifact_digest(lf.replace(b"\n", b"\r\n")) == expected
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        b'{\n  "points": 2,\n  "label": "historical"\n}\n',
+        b'{\n  "points": 1,\n  "label": "changed"\n}\n',
+        b'{\n "points": 1,\n  "label": "historical"\n}\n',
+        b'{\n  "label": "historical",\n  "points": 1\n}\n',
+        b'{\r  "points": 1,\r  "label": "historical"\r}\r',
+        b'{\n  "points": 1,\n  "label": "historical"\n}',
+        b'{\n  "points": 1,\n  "label": "historical"\n}\n\n',
+        b'{\n  "points": 1,\n  "label": "historical\\r\\n"\n}\n',
+    ],
+    ids=[
+        "value",
+        "string",
+        "indentation",
+        "field-order",
+        "lone-cr",
+        "missing-final-newline",
+        "extra-newline",
+        "escaped-string-content",
+    ],
+)
+def test_canonical_artifact_digest_rejects_other_byte_changes(changed: bytes) -> None:
+    lf = b'{\n  "points": 1,\n  "label": "historical"\n}\n'
+    expected = hashlib.sha256(lf).hexdigest()
+    assert _canonical_artifact_digest(changed) != expected
+    assert _canonical_artifact_digest(changed.replace(b"\n", b"\r\n")) != expected
