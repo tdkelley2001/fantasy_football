@@ -295,7 +295,8 @@ def test_d1_d6_and_deferred_mapping_preserve_existing_owners() -> None:
     for name in ("VALIDATION.md", "TECHNICAL_REFERENCE.md"):
         text = _read(name)
         assert "RESEARCH.md" in text and "M0" in text and "BACKLOG.md" in text
-        assert "P7a pilot:" in text
+        expected_phase = "P7b" if name == "VALIDATION.md" else "P7a"
+        assert f"{expected_phase} pilot:" in text
     assert "The other chapters explicitly identify later scope" not in _read(
         "METHODOLOGY.md"
     )
