@@ -1,6 +1,6 @@
 # Install and operate War Room
 
-War Room runs on a trusted local Windows machine and retrieves ESPN data **read-only**. It never executes league transactions. V1 is **not formally released**; [WR-021](BACKLOG.md#wr-021-release-acceptance) retains the release requirements. This is the user/operator procedure; developers use [CONTRIBUTING](../CONTRIBUTING.md). [APPLICATION_SERVICE](APPLICATION_SERVICE.md) owns the technical lifecycle, not a second operating recipe.
+War Room runs on a trusted local Windows machine and retrieves ESPN data **read-only**. It never executes league transactions. V1 is **not formally released**; [WR-021](BACKLOG.md#wr-021-release-acceptance) retains the release requirements. This is the user/operator procedure; developers use [CONTRIBUTING](../CONTRIBUTING.md). [APPLICATION_SERVICE](APPLICATION_SERVICE.md) owns the technical lifecycle, not a second operating recipe. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 - [Install](#installation-and-prerequisites)
 - [Configure ESPN](#league-configuration), [choose paths](#launcher-paths-and-precedence), [manual rules](#manual-league-rules)
@@ -136,7 +136,7 @@ If the grace expires, or the authenticated process has already lost its listener
 
 This diagnostic option preserves a pending authenticated process. Inspect its private logs, then rerun ordinary stop when ready to recover. Start recognizes an already healthy matching instance, but directs you to stop/recovery when the owned process is alive without its listener. PID reuse, foreign listeners, changed commands or ambiguous identity fail closed. Do not delete runtime metadata, bypass a live lease or kill guessed PIDs. Preserve evidence and seek diagnosis if ownership cannot be established. Legacy metadata lacks some schema-2 identity evidence; do not invent it.
 
-Foreground development servers are not launcher-owned: stop them with Ctrl+C in their own terminal, following [development workflow](../CONTRIBUTING.md#backend-and-vite). Detailed ownership, lease limitations and terminal-write contracts are in [APPLICATION_SERVICE](APPLICATION_SERVICE.md#process-ownership-shutdown-and-recovery); dated certification remains in [M8.3](M8_3_RUNTIME_AND_RECOVERY.md).
+Foreground development servers are not launcher-owned: stop them with Ctrl+C in their own terminal, following [development workflow](../CONTRIBUTING.md#backend-and-vite). Detailed ownership, lease limitations and terminal-write contracts are in [APPLICATION_SERVICE](APPLICATION_SERVICE.md#process-ownership-shutdown-and-recovery); dated certification remains in [M8.3](https://github.com/tdkelley2001/fantasy_football/blob/14fd6dba46cfe5827c0b3da110bfefa4a683b647/docs/M8_3_RUNTIME_AND_RECOVERY.md).
 
 ## Common failures
 

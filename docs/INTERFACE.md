@@ -1,6 +1,6 @@
 # Interface and user workflows
 
-This is the current user-workflow and frontend reference. [README](../README.md) owns product capabilities/release status; [OPERATIONS](OPERATIONS.md) owns setup, configuration, private data and shutdown. Governing analytical requirements remain [MASTER_SPEC §§8–10 and M7](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). Presentation does not own estimators, legality, API definitions or process recovery.
+This is the current user-workflow and frontend reference. [README](../README.md) owns product capabilities/release status; [OPERATIONS](OPERATIONS.md) owns setup, configuration, private data and shutdown. Presentation does not own estimators, legality, API definitions or process recovery. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 - [Visual standards](#visual-first-design-standard), [journey](#user-journey-and-navigation)
 - [Identity and requests](#identity-and-request-isolation), [interpretation and units](#analytical-presentation-and-units)
@@ -150,7 +150,7 @@ Axe/component tests supplement manual keyboard, screen-reader, contrast, respons
 
 See [README](../README.md#current-capabilities) for availability and [BACKLOG dispositions](BACKLOG.md#interface-follow-up-disposition) for follow-up. Contextual-help glossary, denominator-backed progress bars and runtime estimation remain unimplemented; estimates would need approved current-hardware evidence and uncertainty, not old timings or stage-name inference. League Insights, Weekly Deep Dive and scenario comparison are deferred.
 
-Visual/trade/waiver improvements remain exploratory under WR-017. Superseded spatial concepts are not commitments. Helper duplication, old prototype selectors and possible virtualization require scoped evidence/approval under WR-005/007; no cleanup/redesign is authorized here. Approved undelivered query/benchmark/analytical obligations remain in governing/domain/backlog owners until D8.
+Visual/trade/waiver improvements remain exploratory under WR-017. Superseded spatial concepts are not commitments. Helper duplication, old prototype selectors and possible virtualization require scoped evidence/approval under WR-005/007; no cleanup/redesign is authorized here. Approved undelivered query/benchmark/analytical obligations remain in their owning domains and BACKLOG.
 
 ## Source, tests and visual evidence
 

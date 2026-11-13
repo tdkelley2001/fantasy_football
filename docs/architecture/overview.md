@@ -1,12 +1,12 @@
 # War Room architecture
 
-[Manual scenarios](../MANUAL_SCENARIOS.md) owns explicit hypothetical completion; [Unified action search](../UNIFIED_ACTION_SEARCH.md) owns candidate grammar, state grouping and search orchestration. Shared legality/V(R) remains in TRANSACTIONS and numerical inference in MONTE_CARLO.
+[Manual scenarios](../MANUAL_SCENARIOS.md) owns explicit hypothetical completion; [Unified action search](../UNIFIED_ACTION_SEARCH.md) owns candidate grammar, state grouping and search orchestration. Shared legality/V(R) remains in TRANSACTIONS and numerical inference in MONTE_CARLO. Approved requirements in this domain and linked [BACKLOG](../BACKLOG.md) obligations remain binding under [engineering governance](../../AGENTS.md#authority-and-precedence).
 
 [DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. M0 role contract 2 checks DATA, RESEARCH and PLAYER_OUTCOME_MODEL; retired historical filenames are not executable dependencies.
 
 [Season mechanics](../SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [Transactions](../TRANSACTIONS.md) owns evolving legality, operational acquisitions, V(R) and distinct independent references.
 
-War Room turns read-only ESPN observations into immutable league snapshots, then runs reproducible hypothetical season analyses. React presents retained engine results; it does not decide league mechanics or calculate a second probability model. Governing requirements are [MASTER_SPEC sections 2–4 and 8–9](../MASTER_SPEC.md#2-system-architecture-and-execution-lifecycle). [README capabilities](../../README.md#current-capabilities) describes current capabilities, [backlog](../BACKLOG.md) tracks work, and [roadmap](../ROADMAP.md) preserves historical gates.
+War Room turns read-only ESPN observations into immutable league snapshots, then runs reproducible hypothetical season analyses. React presents retained engine results; it does not decide league mechanics or calculate a second probability model. [README capabilities](../../README.md#current-capabilities) describes current capabilities, [backlog](../BACKLOG.md) tracks work.
 
 ```mermaid
 flowchart TD
@@ -80,6 +80,6 @@ Ordinary V1 uses a safe whole-week boundary and projected optimal lineups. Opt-i
 - Let the engine enforce rules and completeness; the API/UI validate and present them. API version 1.0 does not imply that every engine interface is exposed.
 - Preserve private local stores, leases and ownership checks. Public/multi-user hosting remains unsupported; M8.4 has no independent release disposition.
 
-This is source/test reconciliation, not a new model or live validation. [R2.3 inventory](../R23_DOCUMENTATION_RECONCILIATION.md) records drift, evidence, unresolved wording and actual checks.
+This is source/test reconciliation, not a new model or live validation. [R2.3 inventory](https://github.com/tdkelley2001/fantasy_football/blob/14fd6dba46cfe5827c0b3da110bfefa4a683b647/docs/R23_DOCUMENTATION_RECONCILIATION.md) records drift, evidence, unresolved wording and actual checks.
 
 The [M0 evidence-role verifier](../DATA.md#m0-consumer-dependency) checks current reference sections and inspectable implementation definitions offline, with recorded immutable historical identities. It does not execute diagnostics, authenticate retired historical bytes, or certify current ESPN/release readiness.

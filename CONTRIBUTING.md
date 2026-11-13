@@ -8,7 +8,7 @@ For mechanics changes use [SEASON_SIMULATOR](docs/SEASON_SIMULATOR.md) and [TRAN
 
 `tdkelley2001/fantasy_football` is the authoritative repository for accepted code and documentation. Both regular contributors use reviewed pull requests into its `main` branch, whether the work branch is in the original repository or the existing fork. Keep the fork; no migration, remote replacement or permission change is needed.
 
-Start with the [development backlog](docs/BACKLOG.md), [current capabilities](README.md#current-capabilities), [approved analytical specification](docs/MASTER_SPEC.md) and [standing development rules](AGENTS.md). The [original roadmap](docs/ROADMAP.md) preserves historical milestones, dependencies and acceptance evidence; it is no longer a parallel work queue. Applicable acceptance gates remain binding until explicitly superseded by an approved contract.
+Start with the [development backlog](docs/BACKLOG.md), [current capabilities](README.md#current-capabilities), [domain authorities](README.md#understand-the-system) and [authority precedence](AGENTS.md#authority-and-precedence). Independently accepted analytical requirements, dependencies and acceptance gates remain binding in their owning references; historical milestones are Git/PR evidence, not a parallel work queue.
 
 Use [README navigation](README.md#understand-the-system) to find user guides, architecture, domain/API references and historical evidence without following the original implementation chronology.
 
@@ -100,7 +100,7 @@ Use Vite's printed loopback URL (normally `http://127.0.0.1:5173/`). Its `/api` 
 
 ### Evidence and reporting
 
-The governing verification contracts include MASTER_SPEC sections 2, 8-9 and 12 and applicable ROADMAP gates. The tiers below select checks, not waive gates. Report revision/working tree, every verification command/result, warnings, skipped tiers/reasons and limitations in the PR. Preserve environment failures and any permitted rerun outcome; do not modify production behavior to bypass sandbox/temp/worker restrictions.
+Verification requirements live in the owning domain contracts, this guide and BACKLOG release/scientific gates under AGENTS authority precedence. The tiers below select checks, not waive gates. Report revision/working tree, every verification command/result, warnings, skipped tiers/reasons and limitations in the PR. Preserve environment failures and any permitted rerun outcome; do not modify production behavior to bypass sandbox/temp/worker restrictions.
 
 Distinguish **Verified by tests**, **Verified live**, **Unverified** and **Unsupported**. Installed-checkout tests do not prove clean-machine setup, source semantics, browser behavior, process recovery or release acceptance. Keep `.env`, credentials, rule files, databases/sidecars, logs and private results out of Git; local config is unnecessary for injected credential-free tests. Do not point fixtures at a user's store. A real browser refresh requires an intentionally configured authorized profile and separate scope.
 
@@ -233,8 +233,8 @@ When implementing an enhancement, update its authoritative domain reference and 
 | [INTERFACE](docs/INTERFACE.md) | Workspace interactions, visual/accessibility standards and request isolation change. Distinguish design standards from implemented behavior. |
 | [backlog](docs/BACKLOG.md) | Work is proposed/claimed/blocked/reviewed/completed. Follow its existing ordinary-PR workflow; retain stable IDs and actual decision references. |
 | Technical references | Public shape, behavior, source authority, versioning or extension boundaries change. Cite source/tests and distinguish fixture claims from live evidence. |
-| [MASTER_SPEC](docs/MASTER_SPEC.md) | Approved analytical requirements change under explicit authorization. Explain rationale and preserve compatibility/gates; an editorial cleanup cannot adopt a new model. |
-| Historical audits/delivery records and [ROADMAP](docs/ROADMAP.md) | Preserve necessary evidence and applicable acceptance gates. Ordinary development history belongs in Git/PRs; authorized consolidation can retire redundant reports after unique requirements transfer. Do not overwrite historical measurements with current counts. |
+| Owning domain references | Approved current/future analytical requirements change only under explicit authorization. Explain rationale, coordinate related owners and preserve compatibility/gates; an editorial cleanup cannot adopt a model. |
+| Immutable Git revisions / reviewed PRs | Retain ordinary history and selected historical citations there. Preserve source-authentication contracts, required numerical artifacts/oracles and applicable acceptance gates in current owners; do not overwrite historical measurements with current counts. |
 
 Use an ordinary reviewed PR; no extra committee, tracker, template or workflow is required. Cross-check edited commands against their executable source and update affected links/anchors. For source/evidence changes, record raw field/endpoint, transformations, retrieval context and verification class as required by AGENTS. Report actual checks in the PR/backlog; avoid duplicating execution logs across multiple current guides. Currentness should come from README/domain references, not maintaining parallel milestone catalogs.
 

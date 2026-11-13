@@ -8,21 +8,26 @@
 
 [Season mechanics](docs/SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [TRANSACTIONS](docs/TRANSACTIONS.md) owns hypothetical roster evolution, legality and V(R). Canonical records remain source truth.
 
-These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/MASTER_SPEC.md) is authoritative for approved analytical requirements and modeling contracts. [BACKLOG.md](docs/BACKLOG.md) is authoritative for outstanding work; [README](README.md#current-capabilities) owns the product/capability summary. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main.
+These rules apply to all future work in this repository. The owning [domain references](README.md#understand-the-system) define approved analytical requirements and modeling contracts; [BACKLOG](docs/BACKLOG.md) owns outstanding work. Follow [CONTRIBUTING](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main. No GitHub Issues/Projects/labels/templates or repository-setting changes are needed for the repository-native work list.
 
-[ROADMAP.md](docs/ROADMAP.md) is the preserved historical development and acceptance record, not a parallel active backlog. Its applicable dependencies and acceptance gates remain binding until explicitly superseded by an approved contract; do not discard requirements merely because their original location is historical. No GitHub Issues/Projects/labels/templates or repository-setting changes are needed for the repository-native work list.
+## Authority and precedence
+
+1. Independently accepted decisions and requirements remain binding, including applicable dependencies and acceptance gates. Only an explicitly approved successor may supersede them; a code discrepancy does not waive a requirement.
+2. Each owning domain reference defines its current technical contract, approved constraints and limitations. Link related owners rather than duplicating or overriding another domain's rules.
+3. BACKLOG preserves approved unimplemented requirements, unresolved defects, proposals and their evidence/approval gates. A proposal is not implementation authorization.
+4. AGENTS and CONTRIBUTING define engineering, verification and review discipline. A passing test or documentation edit does not approve a model, relax a technical constraint or release V1.
+5. README owns product scope/navigation and the architecture overview owns system boundaries. Neither silently authorizes new functionality or overrides a technical owner.
+6. Ordinary implementation history and former governing/audit sources live in immutable Git revisions and reviewed PRs. Retiring a report does not discard its transferred requirements, source evidence, independent oracles or release/scientific obligations.
 
 ## Scope and sequencing
 
-The transferred domain requirements are under D8.2 independent review. MASTER_SPEC and applicable ROADMAP gates remain governing; this is not an authority-link switch. Do not retire either source while a requirement-authority conflict or the transfer acceptance gate remains open. An already accepted technical successor needs traceability, not invented reapproval; a binding requirement with an implementation defect must retain its remediation and acceptance conditions rather than be rewritten to describe the defect as acceptable.
-
-Every implemented component's owning reference must state its purpose, actual algorithm/formulas or pseudocode, input/output and invalid-input contracts, parameters, source provenance, assumptions, edge cases, limitations, regressions, empirical evidence and last validated implementation/model version. Preserve proposed replacements and approval/evidence gates while research is open. Run a minimal end-to-end smoke path after each relevant change; a runnable vertical slice, reference-equivalence check and truthful evidence precede completion. Ordinary dated test totals and rollout history remain in Git/PRs. During transfer, keep the governing references and owning-domain explanation consistent without making another master addendum or silently changing an analytical requirement.
+Every implemented component's owning reference must state its purpose, actual algorithm/formulas or pseudocode, input/output and invalid-input contracts, parameters, source provenance, assumptions, edge cases, limitations, regressions, empirical evidence and last validated implementation/model version. Preserve proposed replacements and approval/evidence gates while research is open. Run a minimal end-to-end smoke path after each relevant change; a runnable vertical slice, reference-equivalence check and truthful evidence precede completion. Ordinary dated test totals and rollout history remain in Git/PRs. Keep related domain contracts consistent without creating a replacement master specification or silently changing an analytical requirement.
 
 User/operator procedures are in [OPERATIONS](docs/OPERATIONS.md); developer setup, verification tiers and documentation maintenance are in [CONTRIBUTING](CONTRIBUTING.md). Enhancements must update the owning domain reference and affected operating procedures; future obligations belong in BACKLOG and ordinary history in Git/PRs.
 
 Product navigation is in [README](README.md); workspace/presentation contracts are in [INTERFACE](docs/INTERFACE.md); this does not replace the authorities above or approve future work.
 
-1. Implement from the specification, not from memory, prior code, or convenience. Cite the governing specification section in each task or pull request.
+1. Implement from the specification, not from memory, prior code, or convenience. Cite the owning domain section and applicable BACKLOG gate in each task or pull request.
 2. Preserve a clean-sheet architecture. Legacy code is historical reference only and must not shape interfaces or behavior merely because it exists.
 3. Work in small, independently testable tasks. Do not combine work packages unless their interfaces and acceptance gates have already been verified; a backlog proposal is not implementation approval.
 4. Respect applicable milestone dependencies, approved scope and acceptance gates. Never mark a backlog item or milestone complete until its documented acceptance gate passes with inspectable evidence and review.

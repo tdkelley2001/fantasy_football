@@ -1,6 +1,6 @@
 # Manual scenarios
 
-This reference owns explicit hypothetical roster changes, one-time structural completion and their evaluation. [TRANSACTIONS](TRANSACTIONS.md#resulting-roster-valuation) owns legality, evolving state, essential acquisitions and V(R); [SEASON_SIMULATOR](SEASON_SIMULATOR.md) owns weekly lineup/scoring behavior. [Action search](UNIFIED_ACTION_SEARCH.md) constructs finite candidate universes using these contracts. Governing requirements remain [MASTER_SPEC](MASTER_SPEC.md), especially sections 7–10, and applicable preserved [ROADMAP](ROADMAP.md) gates.
+This reference owns explicit hypothetical roster changes, one-time structural completion and their evaluation. [TRANSACTIONS](TRANSACTIONS.md#resulting-roster-valuation) owns legality, evolving state, essential acquisitions and V(R); [SEASON_SIMULATOR](SEASON_SIMULATOR.md) owns weekly lineup/scoring behavior. [Action search](UNIFIED_ACTION_SEARCH.md) constructs finite candidate universes using these contracts. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 ## Public contracts
 

@@ -1,6 +1,6 @@
 # Transactions, evolving state and roster value
 
-This is the current reference for hypothetical roster-state evolution, primitive legality, operational essential acquisitions and resulting-roster V(R). Governing requirements: [MASTER_SPEC sections 5, 7 and M2.3b-e](MASTER_SPEC.md) and applicable [ROADMAP gates](ROADMAP.md). [Canonical Data](DATA.md#canonical-validation-and-serialization) owns source identity/schema/publication; [Season Simulation](SEASON_SIMULATOR.md) owns lineups, scoring/standings and postseason. Source ownership at retrieval and simulated ownership are different immutable values.
+This is the current reference for hypothetical roster-state evolution, primitive legality, operational essential acquisitions and resulting-roster V(R). [Canonical Data](DATA.md#canonical-validation-and-serialization) owns source identity/schema/publication; [Season Simulation](SEASON_SIMULATOR.md) owns lineups, scoring/standings and postseason. Source ownership at retrieval and simulated ownership are different immutable values. Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
 - [Roster state and legality](#roster-state-and-legality)
 - [Transaction and completion boundaries](#transaction-and-completion-boundaries)
@@ -138,7 +138,7 @@ Reference trees terminate through finite player movement and irreversible holds,
 
 ## Review obligations
 
-[BACKLOG mechanics obligations](BACKLOG.md#mechanics-review-obligations) preserves exact approval/evidence distinctions and acceptance criteria. MASTER_SPEC section 7's proxy/full-simulation validation, access uncertainty and foreseeable pool-change obligations are not established by current allocation/cycle oracles. No calibrated numeric discount or persistent pool forecast is implemented; D4 neither waives those obligations nor invents factors.
+[BACKLOG mechanics obligations](BACKLOG.md#mechanics-review-obligations) preserves exact approval/evidence distinctions and acceptance criteria. The governing proxy/full-simulation validation, access uncertainty and foreseeable pool-change obligations are not established by current allocation/cycle oracles. No calibrated numeric discount or persistent pool forecast is implemented; D4 neither waives those obligations nor invents factors.
 
 **WR-023:** exact objective requirements remain binding, but Decimal.from_float additions use ambient precision, also in reference scoring helpers. The documented finite 1e30/1/2 synthetic counterexample demonstrates lost objective ordering at precision 28. Matching those helpers is not independent arbitrary-precision proof. No arithmetic, golden or numerical policy changes here.
 
