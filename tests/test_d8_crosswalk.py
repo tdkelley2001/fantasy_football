@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from copy import deepcopy
 from itertools import pairwise
 from pathlib import Path
@@ -71,6 +71,221 @@ OWNERS = {
         )
     ),
 }
+TRANSFERS = {
+    "already_covered",
+    "requires_domain_transfer",
+    "requires_backlog_expansion",
+    "requires_decision",
+    "historical_only",
+}
+PRESERVED_KEYS = (
+    "accepted_revision",
+    "sources",
+    "source_groups",
+    "clauses",
+    "historical_findings",
+    "assessments",
+    "section_titles",
+)
+PRESERVED_INVENTORY_SHA256 = (
+    "030a5133e9a8beef2aa7b1ebad01e6977fa9ce057c963faf8d41c7fed175dacc"
+)
+
+
+def _effective(register: dict, clause: dict, *, baseline: bool = False) -> dict:
+    """Resolve only explicit clause fields; assessment conflict prose is context."""
+    assessment = register["assessments"][clause["assessment"]]
+    result = {
+        "classification": clause["classification_override"]
+        or assessment["classification"],
+        "implementation_status": clause["status_override"]
+        or assessment["implementation_status"],
+        "transfer_disposition": assessment["transfer_disposition"],
+        "conflict_references": [],
+    }
+    if not baseline:
+        override = register["clause_overrides"].get(clause["id"], {})
+        result.update({key: value for key, value in override.items() if key in result})
+    return result
+
+
+def _validate_clause_decisions(register: dict, clauses: list[dict]) -> None:
+    # Explicitly preserve the accepted f7e347e inventory, not the flawed inherited
+    # decisions. No network/history lookup or assertion of semantic completeness.
+    preserved = {key: register[key] for key in PRESERVED_KEYS}
+    digest = _hash(
+        json.dumps(preserved, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    )
+    assert digest == PRESERVED_INVENTORY_SHA256
+    assert register["preserved_inventory_sha256"] == digest
+    by_id = {clause["id"]: clause for clause in clauses}
+    audits = register["conflict_audit"]
+    assert set(audits) == {f"C{number:02d}" for number in range(1, 20)}
+    relations = {
+        "accepted_supersession",
+        "implementation_gap",
+        "reference_contract",
+        "remaining_evidence_gate",
+        "open_scope_decision",
+        "authority_transfer_gate",
+        "independent_acceptance_gate",
+    }
+    assert (
+        set(register["clause_override_resolution"]["relationship_kinds"]) == relations
+    )
+    overrides = register["clause_overrides"]
+    assert overrides.keys() <= by_id.keys()
+    for cid, override in overrides.items():
+        assert set(override) <= {
+            "classification",
+            "implementation_status",
+            "transfer_disposition",
+            "conflict_references",
+            "reason_ref",
+            "reviewer_disposition",
+        }
+        assert override["reviewer_disposition"] == "pending_review"
+        assert len(register["clause_override_reasons"][override["reason_ref"]]) > 30
+        effective = _effective(register, by_id[cid])
+        assert effective["classification"] in CLASSIFICATIONS
+        assert effective["implementation_status"] in STATUSES
+        assert effective["transfer_disposition"] in TRANSFERS
+        refs = effective["conflict_references"]
+        assert isinstance(refs, list)
+        assert len({ref["group"] for ref in refs}) == len(refs)
+        for ref in refs:
+            assert set(ref) == {"group", "relationship"}
+            assert ref["group"] in audits
+            assert ref["relationship"] in relations
+            if ref["relationship"] in {
+                "implementation_gap",
+                "open_scope_decision",
+                "independent_acceptance_gate",
+            }:
+                assert effective["classification"] in {
+                    "conditional_approval_or_constraint",
+                    "approved_unimplemented_requirement",
+                    "unresolved_conflict_or_decision",
+                }, cid
+                assert effective["implementation_status"] in {
+                    "partially_implemented",
+                    "approved_but_unimplemented",
+                    "contradicted_by_current_behavior",
+                    "pending_source_verification",
+                }, cid
+            if ref["relationship"] == "accepted_supersession":
+                assert ref["group"] in {"C01", "C02", "C04", "C08", "C11"}
+                assert effective["classification"] != "unresolved_conflict_or_decision"
+                assert effective["transfer_disposition"] != "requires_decision"
+
+    for group, audit in audits.items():
+        assert audit["reviewer_disposition"] == "pending_review"
+        expected_assessments = sorted(
+            key
+            for key, value in register["assessments"].items()
+            if group in re.findall(r"\bC\d{2}\b", value["conflict_or_supersession"])
+        )
+        assert audit["audited_assessments"] == expected_assessments
+        assert audit["audited_clause_ids"] == sorted(
+            clause["id"]
+            for clause in clauses
+            if clause["assessment"] in expected_assessments
+        )
+        assert audit["related_clause_ids"] == sorted(
+            clause["id"]
+            for clause in clauses
+            if any(
+                ref["group"] == group
+                for ref in _effective(register, clause)["conflict_references"]
+            )
+        )
+
+    # Independent obligation anchors: fields cannot hide actual defects, missing
+    # scientific evidence, unimplemented lifecycle, or unfinished release gates.
+    guards = {
+        "D8-MS-L0061-C01": ("C03", "open_scope_decision"),
+        "D8-MS-L0033-C08": ("C02", "remaining_evidence_gate"),
+        "D8-MS-L0123-C01": ("C05", "remaining_evidence_gate"),
+        "D8-MS-L0173-C01": ("C06", "implementation_gap"),
+        "D8-MS-L0179-C05": ("C07", "implementation_gap"),
+        "D8-MS-L0237-C05": ("C08", "remaining_evidence_gate"),
+        "D8-MS-L0223-C02": ("C09", "implementation_gap"),
+        "D8-MS-L0227-C01": ("C10", "implementation_gap"),
+        "D8-MS-L0311-C06": ("C12", "implementation_gap"),
+        "D8-MS-L0311-C12": ("C13", "open_scope_decision"),
+        "D8-MS-L0507-C03": ("C14", "implementation_gap"),
+        "D8-MS-L0335-C05": ("C15", "implementation_gap"),
+        "D8-MS-L0335-C02": ("C16", "open_scope_decision"),
+        "D8-MS-L0361-C04": ("C17", "implementation_gap"),
+        "D8-MS-L0541-C03": ("C18", "implementation_gap"),
+        "D8-MS-L0547-C02": ("C19", "independent_acceptance_gate"),
+        "D8-MS-L0549-C01": ("C19", "independent_acceptance_gate"),
+        "D8-MS-L0543-C01": ("C19", "independent_acceptance_gate"),
+        "D8-MS-L0007-C05": ("C01", "authority_transfer_gate"),
+    }
+    for cid, (group, relationship) in guards.items():
+        effective = _effective(register, by_id[cid])
+        assert effective["classification"] not in {
+            "historical_or_superseded",
+            "proposal_not_yet_authorized",
+            "current_implemented_contract",
+        }, cid
+        assert effective["implementation_status"] in {
+            "partially_implemented",
+            "approved_but_unimplemented",
+            "contradicted_by_current_behavior",
+            "pending_source_verification",
+        }, cid
+        assert effective["transfer_disposition"] != "historical_only", cid
+        assert {"group": group, "relationship": relationship} in effective[
+            "conflict_references"
+        ], cid
+
+    # These are accepted rules, not new WR-024/dependency/statistical decisions.
+    unaffected = (
+        "D8-MS-L0179-C02",
+        "D8-MS-L0299-C03",
+        "D8-MS-L0499-C04",
+        "D8-MS-L0173-C03",
+        "D8-MS-L0061-C02",
+    )
+    for cid in unaffected:
+        effective = _effective(register, by_id[cid])
+        assert effective == {
+            "classification": "current_implemented_contract",
+            "implementation_status": "implemented_and_supported_by_tests",
+            "transfer_disposition": "already_covered",
+            "conflict_references": [],
+        }, cid
+
+    changed = []
+    status_only = []
+    transitions = Counter()
+    fields = ("classification", "implementation_status", "transfer_disposition")
+    for clause in clauses:
+        old = _effective(register, clause, baseline=True)
+        new = _effective(register, clause)
+        if any(old[field] != new[field] for field in fields):
+            changed.append(clause["id"])
+            transitions[
+                (old[fields[0]], new[fields[0]], old[fields[2]], new[fields[2]])
+            ] += 1
+            if old[fields[0]] == new[fields[0]] and old[fields[2]] == new[fields[2]]:
+                status_only.append(clause["id"])
+    summary = register["followup_change_summary"]
+    assert summary["baseline_commit"] == "f7e347e04618edf2ad05f85ac48f9b783f69920e"
+    assert summary["changed_clause_ids"] == changed
+    assert summary["status_only_clause_ids"] == status_only
+    assert summary["grouped_transitions"] == [
+        {
+            "old_classification": a,
+            "new_classification": b,
+            "old_transfer": c,
+            "new_transfer": d,
+            "count": n,
+        }
+        for (a, b, c, d), n in sorted(transitions.items())
+    ]
 
 
 def _read(path: str) -> str:
@@ -183,6 +398,7 @@ def _validate(register: dict) -> None:
     assert len({item["id"] for item in clauses}) == len(clauses), (
         "duplicate crosswalk ID"
     )
+    _validate_clause_decisions(register, clauses)
     for clause in clauses:
         group_id = clause["id"].removeprefix("D8-").rsplit("-C", 1)[0]
         assert group_id in expected, clause["id"]
@@ -240,6 +456,75 @@ def test_d8_inventory_has_exact_declared_source_coverage_and_pending_destination
     None
 ):
     _validate(_register())
+
+
+def test_clause_override_precedence_is_explicit_and_does_not_inherit_context() -> None:
+    register = _register()
+    clauses = {row["id"]: row for row in _rows(register, "clauses")}
+    clause = deepcopy(clauses["D8-MS-L0179-C02"])
+    # Even a conflicting row-level value loses to the named clause override.
+    clause["classification_override"] = "historical_or_superseded"
+    clause["status_override"] = "historical_or_superseded"
+    effective = _effective(register, clause)
+    assert effective["classification"] == "current_implemented_contract"
+    assert effective["implementation_status"] == "implemented_and_supported_by_tests"
+    assert effective["transfer_disposition"] == "already_covered"
+    assert effective["conflict_references"] == []
+    assert "C07" in register["assessments"]["essential"]["conflict_or_supersession"]
+
+
+@pytest.mark.parametrize(
+    ("cid", "group"),
+    (("D8-MS-L0295-C03", "C11"), ("D8-MS-L0115-C01", "C04")),
+)
+def test_accepted_successor_confirmation_is_not_a_new_decision(
+    cid: str, group: str
+) -> None:
+    register = _register()
+    clause = next(row for row in _rows(register, "clauses") if row["id"] == cid)
+    effective = _effective(register, clause)
+    assert effective["transfer_disposition"] != "requires_decision"
+    assert effective["classification"] != "unresolved_conflict_or_decision"
+    assert {"group": group, "relationship": "accepted_supersession"} in effective[
+        "conflict_references"
+    ]
+
+
+@pytest.mark.parametrize(
+    "defect",
+    (
+        "history",
+        "implemented",
+        "missing_reference",
+        "false_successor",
+        "unrelated_conflict",
+        "approved",
+        "unknown_reference",
+    ),
+)
+def test_overrides_cannot_hide_open_requirements_or_invent_conflicts(
+    defect: str,
+) -> None:
+    register = deepcopy(_register())
+    override = register["clause_overrides"]["D8-MS-L0179-C05"]
+    if defect == "history":
+        override["classification"] = "historical_or_superseded"
+    elif defect == "implemented":
+        override["implementation_status"] = "implemented_and_supported_by_tests"
+    elif defect == "missing_reference":
+        override["conflict_references"] = []
+    elif defect == "false_successor":
+        override["conflict_references"][0]["relationship"] = "accepted_supersession"
+    elif defect == "unrelated_conflict":
+        register["clause_overrides"]["D8-MS-L0179-C02"]["classification"] = (
+            "unresolved_conflict_or_decision"
+        )
+    elif defect == "approved":
+        override["reviewer_disposition"] = "approved"
+    else:
+        override["conflict_references"][0]["group"] = "C99"
+    with pytest.raises(AssertionError):
+        _validate(register)
 
 
 @pytest.mark.parametrize(
