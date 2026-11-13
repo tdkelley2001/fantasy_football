@@ -39,7 +39,11 @@ TEMPORARY_PLAN = "docs/development/model-documentation-architecture.md"
 USER_GUIDE_PILOT = "docs/USER_GUIDE.md"
 # P2 pilot under the same explicit final transfer-review gate as the user guide.
 METHODOLOGY_PILOT = "docs/METHODOLOGY.md"
-PILOTS = {USER_GUIDE_PILOT, METHODOLOGY_PILOT}
+# P7a scoped V3/T2 pilots; current domain owners and M0 bindings remain.
+# Final migration review must explicitly accept their permanent roles.
+VALIDATION_PILOT = "docs/VALIDATION.md"
+TECHNICAL_PILOT = "docs/TECHNICAL_REFERENCE.md"
+PILOTS = {USER_GUIDE_PILOT, METHODOLOGY_PILOT, VALIDATION_PILOT, TECHNICAL_PILOT}
 REQUIREMENTS = {
     "README.md": [
         "expected championship probability",
@@ -145,6 +149,8 @@ def _validate_inventory(paths: set[str], *, migration_complete: bool = False) ->
     )
     assert USER_GUIDE_PILOT in paths, "Missing authorized USER_GUIDE pilot"
     assert METHODOLOGY_PILOT in paths, "Missing authorized METHODOLOGY pilot"
+    assert VALIDATION_PILOT in paths, "Missing authorized VALIDATION pilot"
+    assert TECHNICAL_PILOT in paths, "Missing authorized TECHNICAL_REFERENCE pilot"
     if migration_complete:
         assert TEMPORARY_PLAN not in paths, (
             "Temporary architecture plan must retire at final migration completion"
@@ -223,6 +229,10 @@ def test_p2_inventory_requires_the_exact_methodology_pilot() -> None:
         "docs/development/model-documentation-architecture-copy.md",
         "docs/USER_GUIDE_COPY.md",
         "docs/METHODOLOGY_COPY.md",
+        "docs/VALIDATION_COPY.md",
+        "docs/TECHNICAL_REFERENCE_COPY.md",
+        "docs/development/VALIDATION.md",
+        "docs/development/TECHNICAL_REFERENCE.md",
         "docs/development/METHODOLOGY.md",
         "docs/UNEXPECTED.md",
         "UNEXPECTED.md",
@@ -240,6 +250,12 @@ def test_inventory_rejects_additional_markdown_even_with_authorized_plan(
     )
     with pytest.raises(AssertionError, match="Missing/unexpected permanent authority"):
         _validate_inventory(paths)
+
+
+@pytest.mark.parametrize("missing", [VALIDATION_PILOT, TECHNICAL_PILOT])
+def test_p7a_inventory_requires_each_exact_scoped_pilot(missing: str) -> None:
+    with pytest.raises(AssertionError, match="Missing authorized .* pilot"):
+        _validate_inventory((PERMANENT | PILOTS | {TEMPORARY_PLAN}) - {missing})
 
 
 def test_final_migration_completion_rejects_unretired_temporary_plan() -> None:
