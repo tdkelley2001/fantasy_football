@@ -71,7 +71,8 @@ def test_complete_archived_evidence_matches_accepted_r24_with_only_reviewed_chan
     if name == NAMES[0]:
         assert original.count("(LEAGUE_CONFIGURATION_AUDIT.md)") == 1
         expected = original.replace(
-            "(LEAGUE_CONFIGURATION_AUDIT.md)", "(../../LEAGUE_CONFIGURATION_AUDIT.md)"
+            "(LEAGUE_CONFIGURATION_AUDIT.md)",
+            "(../../DATA.md#rules-and-manual-authority)",
         )
     # Full text comparison: no summaries, filtered prose or broad normalization.
     assert actual == _notice(name) + expected

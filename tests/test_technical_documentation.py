@@ -67,16 +67,13 @@ def test_verification_frontend_commands_and_navigation_match_current_sources() -
 
 
 def test_canonical_reference_versions_match_current_publication_and_reads() -> None:
-    canonical = read("docs/CANONICAL_MODEL.md")
-    storage = read("docs/SNAPSHOT_STORAGE.md")
-    assert f"Schema Version {SCHEMA_VERSION}" in canonical
+    data = read("docs/DATA.md")
     versions = ", ".join(map(str, SUPPORTED_SCHEMA_VERSIONS))
-    assert f"supported document reads are **{versions}**" in canonical
-    assert f"New publication requires **{SCHEMA_VERSION}**" in canonical
-    assert f"canonical schema **{SCHEMA_VERSION}**" in storage
-    assert f"canonical schemas **{versions}**" in storage
-    assert f"SQLite remains schema **{DATABASE_SCHEMA_VERSION}**" in storage
-    assert f"artifact version **{PARTIAL_WEEK_ARTIFACT_VERSION}**" in canonical
+    assert f"canonical schema **{SCHEMA_VERSION}**" in data
+    assert f"supported document reads **{versions}**" in data
+    assert f"new publication requires **{SCHEMA_VERSION}**" in data
+    assert f"SQLite snapshot schema **{DATABASE_SCHEMA_VERSION}**" in data
+    assert f"companion artifact **{PARTIAL_WEEK_ARTIFACT_VERSION}**" in data
 
 
 def test_documented_api_inventory_matches_every_implemented_versioned_route() -> None:
@@ -321,8 +318,8 @@ def test_mechanics_interfaces_have_distinct_documented_owners() -> None:
 
 
 def test_mechanics_authority_and_reference_coverage_remain_discoverable() -> None:
-    canonical = read("docs/CANONICAL_MODEL.md")
-    assert "TRANSACTIONS.md#roster-state-and-legality" in canonical
+    canonical = read("docs/DATA.md")
+    assert "TRANSACTIONS.md" in canonical
     assert "### Eligibility evidence trust boundary" not in canonical
     transactions = read("docs/TRANSACTIONS.md")
     for constraint in (
@@ -382,3 +379,95 @@ def test_mechanics_limits_and_unimplemented_obligations_are_not_waived() -> None
         "approval",
     ):
         assert term in detail
+
+
+def test_data_reference_preserves_source_semantics_and_publication_boundary() -> None:
+    from fantasy_football.canonical.model import (
+        InterpretationStatus,
+        ProjectionClass,
+        ProjectionSource,
+        SourceReference,
+    )
+    from fantasy_football.snapshot_store import SnapshotStore
+
+    data = read("docs/DATA.md")
+    for enum in (ProjectionClass, ProjectionSource, InterpretationStatus):
+        for member in enum:
+            assert member.value in data
+    for field in fields(SourceReference):
+        assert field.name in data
+    for method in ("publish", "load", "verify", "check_database_integrity"):
+        assert callable(getattr(SnapshotStore, method))
+        assert f"{method}(" in data
+    for contract in (
+        "Present exactly zero",
+        "Present finite negative",
+        "effective_projection > 0",
+        "Structural validity is not execution permission",
+        "original canonical_json",
+        "post-commit failure",
+        "undroppable_player_mapping stays unverified",
+        "false alone -> unknown",
+        "matchup_period_configuration",
+    ):
+        assert contract in data
+
+
+def test_research_reference_preserves_trust_and_scientific_promotion_gates() -> None:
+    from fantasy_football.historical_dataset import (
+        DATASET_SCHEMA_VERSION,
+        ProjectionTemporalProvenance,
+        ProjectionValueKind,
+        validate_pregame_capture_manifest,
+    )
+    from fantasy_football.outcome_distribution_research import (
+        EvidencePolicy,
+        TemporalSplit,
+    )
+
+    research = read("docs/RESEARCH.md")
+    assert f"HistoricalResearchDataset schema **{DATASET_SCHEMA_VERSION}**" in research
+    for enum in (ProjectionTemporalProvenance, ProjectionValueKind):
+        for member in enum:
+            assert member.value in research
+    assert EvidencePolicy.AUTHENTICATED_ONLY.value == "authenticated_only"
+    assert "EvidencePolicy.AUTHENTICATED_ONLY" in research
+    for field in fields(TemporalSplit):
+        assert field.name in research
+    assert (
+        "independently_trusted_manifest_sha256"
+        in inspect.signature(validate_pregame_capture_manifest).parameters
+    )
+    for gate in (
+        "independently_trusted_manifest_sha256",
+        "exact captured payload bytes",
+        "player ID, season, week, raw projection, default position and NFL team",
+        "not independent real-world authentication",
+        "not a third sealed final-test set",
+        "research recommendation pending independent review",
+        "zero authenticated-pregame pairs",
+        "sparse_partially_pooled_rows",
+    ):
+        assert gate in research
+
+
+def test_data_research_authority_and_held_m0_sources_remain_discoverable() -> None:
+    from fantasy_football.m0_verification import EVIDENCE_DOCUMENTS
+
+    for path in (
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "docs/architecture/overview.md",
+    ):
+        text = read(path)
+        assert "DATA.md" in text and "RESEARCH.md" in text
+    for path in EVIDENCE_DOCUMENTS:
+        assert (ROOT / path).is_file()
+        if path != "docs/MISSING_PROJECTION_POLICY.md":
+            text = read(path)
+            assert "Retained historical M0 evidence" in text
+            assert "[DATA](DATA.md)" in text and "[RESEARCH](RESEARCH.md)" in text
+    backlog = read("docs/BACKLOG.md")
+    assert "separate authorization required" in backlog
+    assert "not merely DATA existence" in backlog

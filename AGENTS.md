@@ -1,5 +1,7 @@
 # Standing Development Instructions
 
+[DATA](docs/DATA.md) owns retrieval, canonical evidence/validation and immutable storage; [RESEARCH](docs/RESEARCH.md) owns temporal trust, research evaluation and promotion evidence. Six historical M0 sources remain executable dependencies until separately authorized migration.
+
 [Season mechanics](docs/SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [TRANSACTIONS](docs/TRANSACTIONS.md) owns hypothetical roster evolution, legality and V(R). Canonical records remain source truth.
 
 These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/MASTER_SPEC.md) is authoritative for approved analytical requirements and modeling contracts. [BACKLOG.md](docs/BACKLOG.md) is authoritative for outstanding work; [README](README.md#current-capabilities) owns the product/capability summary. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for feature-branch/fork synchronization and reviewed pull requests into the original repository's `main`. Do not push changes directly to authoritative main.

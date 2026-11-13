@@ -1,3 +1,5 @@
+> Retained historical M0 evidence required by the unchanged executable manifest. Current data contracts are in [DATA](DATA.md); temporal trust and evaluation are in [RESEARCH](RESEARCH.md). Original observations, classifications and handoff decisions below apply at their stated baseline, not as current capability guidance. Deletion requires separately authorized consumer migration.
+
 # ESPN Historical Projection Availability and As-Of Integrity Audit
 
 ## Executive summary

@@ -1,5 +1,7 @@
 # War Room architecture
 
+[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. M0 manifest dependencies remain held until a separate consumer change.
+
 [Season mechanics](../SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [Transactions](../TRANSACTIONS.md) owns evolving legality, operational acquisitions, V(R) and distinct independent references.
 
 War Room turns read-only ESPN observations into immutable league snapshots, then runs reproducible hypothetical season analyses. React presents retained engine results; it does not decide league mechanics or calculate a second probability model. Governing requirements are [MASTER_SPEC sections 2–4 and 8–9](../MASTER_SPEC.md#2-system-architecture-and-execution-lifecycle). [README capabilities](../../README.md#current-capabilities) describes current capabilities, [backlog](../BACKLOG.md) tracks work, and [roadmap](../ROADMAP.md) preserves historical gates.
@@ -28,7 +30,7 @@ flowchart TD
 
 [config.py](../../src/fantasy_football/config.py) loads league/season, paired private credentials and optional rule-file path. Launcher storage settings have different precedence; use [configuration](../OPERATIONS.md#league-configuration). The [adapter](../../src/fantasy_football/espn_adapter.py) retrieves complete paginated evidence, reconciles identities/context and distinguishes unavailable data from explicit zeros. Audited manual rules can fill permitted source gaps; they cannot override known ESPN facts or authorize unsupported mechanics. Missing evidence stays unresolved.
 
-[Canonical models/validation](../../src/fantasy_football/canonical/model.py) separate stable entities, ownership, player-week projections, source references and rule interpretations. Current document schema is **4**; reads support **2, 3, 4**. A valid document can still lack a consumer-specific capability. [SnapshotStore](../../src/fantasy_football/snapshot_store.py) assigns publication identity, validates deterministic canonical/raw representations and commits atomically in snapshot SQLite schema **1**. Later refreshes append new UUIDs. Stored exact bytes/checksums and source provenance remain authoritative; parsed raw-response representations are not HTTP wire bytes. See [canonical](../CANONICAL_MODEL.md) and [storage](../SNAPSHOT_STORAGE.md).
+[Canonical models/validation](../../src/fantasy_football/canonical/model.py) separate stable entities, ownership, player-week projections, source references and rule interpretations. Current document schema is **4**; reads support **2, 3, 4**. A valid document can still lack a consumer-specific capability. [SnapshotStore](../../src/fantasy_football/snapshot_store.py) assigns publication identity, validates deterministic canonical/raw representations and commits atomically in snapshot SQLite schema **1**. Later refreshes append new UUIDs. Stored exact bytes/checksums and source provenance remain authoritative; parsed raw-response representations are not HTTP wire bytes. See [canonical](../DATA.md#canonical-validation-and-serialization) and [storage](../DATA.md#immutable-storage).
 
 ## One season engine, multiple outcome inputs
 

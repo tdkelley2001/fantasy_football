@@ -89,7 +89,7 @@ identified as historical evidence rather than rewritten as current executions.
 
 ## 5. League-configurability findings
 
-The standing detailed inventory is [LEAGUE_CONFIGURATION_AUDIT.md](../../LEAGUE_CONFIGURATION_AUDIT.md).
+The standing detailed inventory is [LEAGUE_CONFIGURATION_AUDIT.md](../../DATA.md#rules-and-manual-authority).
 The review covered team counts, slot capacity/eligibility, scoring, waiver type
 and priority, IR, limits, periods, seeding, brackets, consolation and placements.
 

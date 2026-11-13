@@ -79,11 +79,11 @@ The Python server's `--database` default is a literal path, not `SNAPSHOT_DB_PAT
 
 ## Manual league rules
 
-Use only independently supported rules for capabilities ESPN cannot sufficiently establish. See the [configuration audit](LEAGUE_CONFIGURATION_AUDIT.md) and [adapter](ESPN_CANONICAL_ADAPTER.md). Do not copy fixture league settings, invent defaults, override known ESPN facts or authorize unsupported mechanics.
+Use only independently supported rules for capabilities ESPN cannot sufficiently establish. See the [configuration audit](DATA.md#rules-and-manual-authority) and [adapter](DATA.md#raw-to-canonical-map). Do not copy fixture league settings, invent defaults, override known ESPN facts or authorize unsupported mechanics.
 
 For browser refresh, use an ignored file such as `config/league_rules.local.yaml`, set `FANTASY_FOOTBALL_RULE_CONFIG_PATH`, then restart. Relative rule paths resolve from settings' working directory (the repository under the launcher), **not the `.env` file's parent**. Profile availability is reported only after YAML parses and validates for the configured league/season; it does not prove a rule was applied. Inspect published rule provenance/capabilities.
 
-The `espn_adapter` and `snapshot_store` CLIs require **`--manual-config` explicitly**; they do not substitute that environment variable. Both also require `--first-simulation-week` explicitly. Browser refresh defaults to automatic safe-week detection. An override in either interface still obeys authoritative boundary validation: timestamps, a later unplayed week or missing scores cannot justify skipping unresolved period contributions. Unsupported membership, carry or standings evidence fails closed. See [live scoring](LIVE_WEEK_SCORING.md).
+The `espn_adapter` and `snapshot_store` CLIs require **`--manual-config` explicitly**; they do not substitute that environment variable. Both also require `--first-simulation-week` explicitly. Browser refresh defaults to automatic safe-week detection. An override in either interface still obeys authoritative boundary validation: timestamps, a later unplayed week or missing scores cannot justify skipping unresolved period contributions. Unsupported membership, carry or standings evidence fails closed. See [live scoring](DATA.md#live-and-temporal-evidence).
 
 Those retrieval CLIs are live network operations requiring separate scope when used for development verification. The adapter validates in memory; the store CLI publishes atomically and verifies afterward. A reported post-commit failure may already have published a snapshot; do not delete a database to retry.
 
