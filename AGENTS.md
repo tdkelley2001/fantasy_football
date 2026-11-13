@@ -1,5 +1,7 @@
 # Standing Development Instructions
 
+[Manual scenarios](docs/MANUAL_SCENARIOS.md) owns explicit hypothetical completion; [Unified action search](docs/UNIFIED_ACTION_SEARCH.md) owns candidate grammar, state grouping and search orchestration. Shared legality/V(R) remains in TRANSACTIONS and numerical inference in MONTE_CARLO.
+
 [DATA](docs/DATA.md) owns retrieval, canonical evidence/validation and immutable storage; [RESEARCH](docs/RESEARCH.md) owns temporal trust, research evaluation and promotion evidence. The M0 verifier checks seven evidence roles against current sections/interfaces and recorded historical identities; it does not authenticate historical bytes offline. Contract 2 checks DATA, RESEARCH and PLAYER_OUTCOME_MODEL; no retired historical Markdown file is an executable dependency.
 
 [Outcome models](docs/PLAYER_OUTCOME_MODEL.md) own generated-score policy and numerical model identity; [Monte Carlo](docs/MONTE_CARLO.md) owns estimators, paired inference and numerical recovery; [Partial Week](docs/PARTIAL_WEEK.md) owns current-week evidence/permission and composition.

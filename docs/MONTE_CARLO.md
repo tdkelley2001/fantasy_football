@@ -98,7 +98,7 @@ This paired_discordance_wilson_bonferroni_familywise_v1 interval preserves small
 
 Engine probabilities, deltas and widths are fractions: delta 0.02 is +2 **probability points**; h=0.005 is 0.5 probability points. Multiply estimates/endpoints/half-widths by 100 exactly once for probability-point presentation. API baseline target_half_width_probability uses a fraction; action target_paired_half_width_probability_points is already in probability-point units and is converted at the boundary. Keep [INTERFACE](INTERFACE.md) formatting and [APPLICATION_SERVICE](APPLICATION_SERVICE.md) DTO contracts separate from these estimators.
 
-Every scenario reports all teams' championship/qualification/placement deltas. The requesting manager controls the ranking objective, not which teams are sampled or the all-team convergence requirement. [Manual scenarios](MANUAL_SCENARIOS.md#identity-and-paired-statistics) own roster completion/transaction meaning, not another estimator.
+Every scenario reports all teams' championship/qualification/placement deltas. The requesting manager controls the ranking objective, not which teams are sampled or the all-team convergence requirement. [Manual scenarios](MANUAL_SCENARIOS.md#identity-and-evaluation) own roster completion/transaction meaning, not another estimator.
 
 ## Progressive search and multiplicity
 
