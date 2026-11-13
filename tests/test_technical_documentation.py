@@ -451,8 +451,8 @@ def test_research_reference_preserves_trust_and_scientific_promotion_gates() -> 
         assert gate in research
 
 
-def test_data_research_authority_and_held_m0_sources_remain_discoverable() -> None:
-    from fantasy_football.m0_verification import EVIDENCE_DOCUMENTS
+def test_data_research_authority_and_m0_role_checks_remain_discoverable() -> None:
+    from fantasy_football.m0_verification import EVIDENCE_DOCUMENTS, build_report
 
     for path in (
         "README.md",
@@ -462,12 +462,11 @@ def test_data_research_authority_and_held_m0_sources_remain_discoverable() -> No
     ):
         text = read(path)
         assert "DATA.md" in text and "RESEARCH.md" in text
-    for path in EVIDENCE_DOCUMENTS:
-        assert (ROOT / path).is_file()
-        if path != "docs/MISSING_PROJECTION_POLICY.md":
-            text = read(path)
-            assert "Retained historical M0 evidence" in text
-            assert "[DATA](DATA.md)" in text and "[RESEARCH](RESEARCH.md)" in text
+    report = build_report(ROOT)
+    assert report.evidence_documents == EVIDENCE_DOCUMENTS
+    assert len(report.evidence_roles) == 7
+    assert all(not row["historical_content_verified"] for row in report.evidence_roles)
+    assert "docs/MISSING_PROJECTION_POLICY.md" in report.evidence_documents
     backlog = read("docs/BACKLOG.md")
-    assert "separate authorization required" in backlog
-    assert "not merely DATA existence" in backlog
+    assert "bounded M0 migration" in backlog
+    assert "In Review" in backlog

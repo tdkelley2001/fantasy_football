@@ -37,7 +37,7 @@ The service binds to loopback on a trusted local machine. Host/Origin checks are
 ## Understand the system
 
 - [Architecture map](docs/architecture/overview.md) and [application API/execution](docs/APPLICATION_SERVICE.md): source ownership, runtime boundaries and public contracts.
-- [Data lifecycle](docs/DATA.md): ESPN sources, canonical structures/validation, league-rule evidence and immutable snapshot storage.
+- [Data lifecycle](docs/DATA.md): ESPN sources, canonical structures/validation, league-rule evidence and immutable snapshot storage. The [offline M0 verifier](docs/DATA.md#m0-consumer-dependency) checks historical evidence roles and diagnostic availability; it does not certify current live readiness.
 - [Season simulation](docs/SEASON_SIMULATOR.md), [outcome models](docs/PLAYER_OUTCOME_MODEL.md) and [Monte Carlo](docs/MONTE_CARLO.md): mechanics, provisional mathematics and reproducibility. [Partial-week contracts](docs/LW2_PARTIAL_WEEK_CONTRACT.md) define the separate evidence boundary.
 - [Manual scenarios](docs/MANUAL_SCENARIOS.md) and [action search](docs/UNIFIED_ACTION_SEARCH.md): counterfactual completion, selected universes and paired comparison.
 - [Research](docs/RESEARCH.md) and [live-source evidence](docs/DATA.md#live-and-temporal-evidence): temporal trust, evaluation/promotion gates and unresolved capabilities. Fixtures prove code behavior, not live ESPN semantics.

@@ -1,6 +1,6 @@
 # Standing Development Instructions
 
-[DATA](docs/DATA.md) owns retrieval, canonical evidence/validation and immutable storage; [RESEARCH](docs/RESEARCH.md) owns temporal trust, research evaluation and promotion evidence. Six historical M0 sources remain executable dependencies until separately authorized migration.
+[DATA](docs/DATA.md) owns retrieval, canonical evidence/validation and immutable storage; [RESEARCH](docs/RESEARCH.md) owns temporal trust, research evaluation and promotion evidence. The M0 verifier checks seven evidence roles against current sections/interfaces and recorded historical identities; it does not authenticate historical bytes offline. The missing-projection document remains required until separately authorized D6 migration.
 
 [Season mechanics](docs/SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [TRANSACTIONS](docs/TRANSACTIONS.md) owns hypothetical roster evolution, legality and V(R). Canonical records remain source truth.
 
