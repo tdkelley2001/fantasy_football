@@ -37,6 +37,9 @@ TEMPORARY_PLAN = "docs/development/model-documentation-architecture.md"
 # P1 pilot, not a replacement for any current permanent authority. At final
 # migration review, explicitly accept its permanent role and retire this label.
 USER_GUIDE_PILOT = "docs/USER_GUIDE.md"
+# P2 pilot under the same explicit final transfer-review gate as the user guide.
+METHODOLOGY_PILOT = "docs/METHODOLOGY.md"
+PILOTS = {USER_GUIDE_PILOT, METHODOLOGY_PILOT}
 REQUIREMENTS = {
     "README.md": [
         "expected championship probability",
@@ -137,10 +140,11 @@ REQUIREMENTS = {
 
 
 def _validate_inventory(paths: set[str], *, migration_complete: bool = False) -> None:
-    assert paths - {TEMPORARY_PLAN, USER_GUIDE_PILOT} == PERMANENT, (
+    assert paths - {TEMPORARY_PLAN} - PILOTS == PERMANENT, (
         "Missing/unexpected permanent authority"
     )
     assert USER_GUIDE_PILOT in paths, "Missing authorized USER_GUIDE pilot"
+    assert METHODOLOGY_PILOT in paths, "Missing authorized METHODOLOGY pilot"
     if migration_complete:
         assert TEMPORARY_PLAN not in paths, (
             "Temporary architecture plan must retire at final migration completion"
@@ -183,30 +187,33 @@ def test_permanent_authority_and_acceptance_contracts() -> None:
     ("include_plan", "migration_complete"),
     [(False, False), (True, False), (False, True)],
     ids=[
-        "permanent-and-pilot",
+        "permanent-and-pilots",
         "authorized-interim-set",
-        "plan-retired-pilot-retained",
+        "plan-retired-pilots-retained",
     ],
 )
 def test_inventory_accepts_only_authorized_phase_contents(
     include_plan: bool, migration_complete: bool
 ) -> None:
-    paths = (
-        PERMANENT | {USER_GUIDE_PILOT} | ({TEMPORARY_PLAN} if include_plan else set())
-    )
+    paths = PERMANENT | PILOTS | ({TEMPORARY_PLAN} if include_plan else set())
     _validate_inventory(paths, migration_complete=migration_complete)
 
 
 @pytest.mark.parametrize("missing", sorted(PERMANENT))
 def test_temporary_plan_cannot_replace_any_permanent_authority(missing: str) -> None:
-    paths = (PERMANENT - {missing}) | {TEMPORARY_PLAN, USER_GUIDE_PILOT}
+    paths = (PERMANENT - {missing}) | {TEMPORARY_PLAN} | PILOTS
     with pytest.raises(AssertionError, match="Missing/unexpected permanent authority"):
         _validate_inventory(paths)
 
 
 def test_p1_inventory_requires_the_exact_user_guide_pilot() -> None:
     with pytest.raises(AssertionError, match="Missing authorized USER_GUIDE pilot"):
-        _validate_inventory(PERMANENT | {TEMPORARY_PLAN})
+        _validate_inventory(PERMANENT | {TEMPORARY_PLAN, METHODOLOGY_PILOT})
+
+
+def test_p2_inventory_requires_the_exact_methodology_pilot() -> None:
+    with pytest.raises(AssertionError, match="Missing authorized METHODOLOGY pilot"):
+        _validate_inventory(PERMANENT | {TEMPORARY_PLAN, USER_GUIDE_PILOT})
 
 
 @pytest.mark.parametrize(
@@ -215,6 +222,8 @@ def test_p1_inventory_requires_the_exact_user_guide_pilot() -> None:
         "docs/development/another-plan.md",
         "docs/development/model-documentation-architecture-copy.md",
         "docs/USER_GUIDE_COPY.md",
+        "docs/METHODOLOGY_COPY.md",
+        "docs/development/METHODOLOGY.md",
         "docs/UNEXPECTED.md",
         "UNEXPECTED.md",
     ],
@@ -225,7 +234,8 @@ def test_inventory_rejects_additional_markdown_even_with_authorized_plan(
 ) -> None:
     paths = (
         PERMANENT
-        | {USER_GUIDE_PILOT, unexpected}
+        | PILOTS
+        | {unexpected}
         | ({TEMPORARY_PLAN} if include_plan else set())
     )
     with pytest.raises(AssertionError, match="Missing/unexpected permanent authority"):
@@ -238,7 +248,7 @@ def test_final_migration_completion_rejects_unretired_temporary_plan() -> None:
         match="Temporary architecture plan must retire at final migration completion",
     ):
         _validate_inventory(
-            PERMANENT | {TEMPORARY_PLAN, USER_GUIDE_PILOT}, migration_complete=True
+            PERMANENT | {TEMPORARY_PLAN} | PILOTS, migration_complete=True
         )
 
 
@@ -256,20 +266,14 @@ def test_final_migration_completion_rejects_unretired_temporary_plan() -> None:
     ],
 )
 def test_reject_lost_binding_obligation(path: str, requirement: str) -> None:
-    documents = {
-        p: (ROOT / p).read_text(encoding="utf-8")
-        for p in PERMANENT | {USER_GUIDE_PILOT}
-    }
+    documents = {p: (ROOT / p).read_text(encoding="utf-8") for p in PERMANENT | PILOTS}
     documents[path] = documents[path].replace(requirement, "")
     with pytest.raises(AssertionError):
         _validate(documents)
 
 
 def test_reject_retired_master_as_current_authority() -> None:
-    documents = {
-        p: (ROOT / p).read_text(encoding="utf-8")
-        for p in PERMANENT | {USER_GUIDE_PILOT}
-    }
+    documents = {p: (ROOT / p).read_text(encoding="utf-8") for p in PERMANENT | PILOTS}
     documents["README.md"] += "\n[spec](docs/MASTER_SPEC.md)"
     with pytest.raises(AssertionError):
         _validate(documents)
