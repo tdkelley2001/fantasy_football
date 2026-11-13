@@ -6353,3 +6353,304 @@ All **33 historical findings** have separate permanent destinations/statuses and
   "navigation_preparation": "Permanent domain/BACKLOG anchors are proposed future requirement destinations; README/AGENTS/CONTRIBUTING still retain MASTER_SPEC/ROADMAP governing authority. D8.3 must re-scan consumers, preserve required artifacts/oracles and independently accept any final switch/retirement. WR-002 remains open."
 }
 ```
+
+## C13 proposed disposition
+
+**Pending independent review.** This additive extension to D8.2 preserves the complete accepted D8.1/D8.2 document above unchanged, including its blocked C13 decisions and then-pending review evidence. D8.2 was independently accepted at `38b6f78881e872dd07ff1fc16f6a9785e77d59c5`; this new interpretation was not accepted at that revision. The original restriction applies to ephemeral engine search context; accepted M6.2/M7 are proposed as the narrow successor for separately persisted bounded application history, not permission for an unbounded archive or silent reuse.
+
+[Application policy and lifecycle matrix](../APPLICATION_SERVICE.md#c13-proposed-retention-authority), [engine ownership](../UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle) and [decision gate](../BACKLOG.md#c13-proposed-authority-decision) distinguish current implementation, WR-026/021 gaps and the proposed authority choice. No current transfer row is retroactively reclassified; affected retirement stays blocked until independent acceptance. No production migration, new retention default or D8.3 authority switch is performed.
+
+```json d8-c13-proposal
+{
+  "contract": "d8-c13-proposal-v1",
+  "baseline_revision": "38b6f78881e872dd07ff1fc16f6a9785e77d59c5",
+  "accepted_d82_prefix_sha256": "75ccfbc60a8a628f42b846788f12a482f7f48f5489da1d7cf714c9861edd1958",
+  "reviewer_disposition": "pending_review",
+  "decision_accepted": false,
+  "authority_switch_completed": false,
+  "blocks_affected_source_retirement": true,
+  "baseline_disposition": "All three C13 rows remain blocked_authority_conflict in the unchanged accepted D8.2 register. This additive proposal does not replace their accepted historical disposition.",
+  "original_restrictions": [
+    {
+      "clause_id": "D8-MS-L0311-C12",
+      "statement": "Active-results retention (latest decision): Do NOT automatically save each trade/waiver search as a permanent run dataset or maintain a growing archive of stale candidate outcomes.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-MS-L0311-C13",
+      "statement": "Keep only the current search's evaluated transaction summaries, per-team outcomes, filters, and necessary run context in memory or temporary queryable local storage while the analysis is active.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-MS-L0311-C14",
+      "statement": "Clear or replace those temporary results when starting a fresh analysis, closing the session, or after bounded temporary-file cleanup;",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    }
+  ],
+  "accepted_successors": [
+    {
+      "clause_id": "D8-MS-L0513-C01",
+      "statement": "M6.2 \u005bCOMPLETE AND ACCEPTED, 27 October 2026\u005d Add local background execution, lifecycle/status, structured progress, cooperative cancellation with atomic terminal commits, bounded concurrency and nested-worker policy, explicit baseline/manual/search admission limits, durable SQLite metadata, restart interruption classification, paged sortable/filterable retained results, candidate/completed-state detail, short-lived coordinator bookkeeping, retention/deletion, and safe temporary-index transfer/cleanup.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-RM-L0145-C01",
+      "statement": "M6.2 \u005bCOMPLETE AND ACCEPTED, 27 October 2026\u005d Add local background execution, lifecycle/status, structured progress, cooperative cancellation with atomic terminal commits, bounded concurrency and nested-worker policy, explicit baseline/manual/search admission limits, durable SQLite metadata, restart interruption classification, paged sortable/filterable retained results, candidate/completed-state detail, short-lived coordinator bookkeeping, retention/deletion, and safe temporary-index transfer/cleanup.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/ROADMAP.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-MS-L0525-C01",
+      "statement": "M7.2 \u005bCOMPLETE AND ACCEPTED, 29 October 2026\u005d Consume only retained completed baseline results matching the active canonical snapshot.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-MS-L0527-C01",
+      "statement": "M7.3 \u005bCOMPLETE AND ACCEPTED, 30 October 2026\u005d Build the read-only Opportunity Explorer over retained completed action-search results.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-MS-L0531-C05",
+      "statement": "Cooperative cancellation, bounded resource settings, snapshot-scoped retained history, identity-safe result navigation, and scoped provenance export remain separate from engine mechanics.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/MASTER_SPEC.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-RM-L0159-C01",
+      "statement": "M7.2 \u005bCOMPLETE AND ACCEPTED, 29 October 2026\u005d Present retained baseline championship, playoff, and final-placement probabilities;",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/ROADMAP.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-RM-L0161-C01",
+      "statement": "M7.3 \u005bCOMPLETE AND ACCEPTED, 30 October 2026\u005d Explore retained completed trade, acquisition, combined-action, and chain searches through bounded server pagination/filtering/sorting, signed probability-point comparisons, chronological action flows, shared completed-state identity, engine-supplied paired all-team impacts, and bounded local comparison.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/ROADMAP.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    },
+    {
+      "clause_id": "D8-RM-L0165-C01",
+      "statement": "M7.5 \u005bCOMPLETE AND ACCEPTED, 31 October 2026\u005d Build the integrated Simulation Center for explicit baseline and action-search configuration, unit-correct precision presets, inspectable effective requests, identity-safe monitoring of multiple active runs, snapshot-isolated submissions, source-backed progress, cooperative cancellation, retained snapshot-scoped history, result navigation, metadata export, keyboard navigation, reduced motion, responsiveness, and accessibility.",
+      "source_revision": "213715ca7493c49a4f272558670eb0a297bae9a0",
+      "source_path": "docs/ROADMAP.md",
+      "inventory_revision": "2c9c4be560bc3cd1f5839ec1ead54027194b6a0c"
+    }
+  ],
+  "proposed_dispositions": {
+    "D8-MS-L0311-C12": {
+      "scope": "MASTER_SPEC 9.4 governs ephemeral engine context; accepted M6.2/M7 narrowly supersede only a prohibition on separately persisted bounded application history.",
+      "destinations": [
+        "docs/APPLICATION_SERVICE.md#c13-proposed-retention-authority",
+        "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+        "docs/BACKLOG.md#c13-proposed-authority-decision"
+      ],
+      "accepted_successor_ids": [
+        "D8-MS-L0513-C01",
+        "D8-RM-L0145-C01",
+        "D8-MS-L0525-C01",
+        "D8-MS-L0527-C01",
+        "D8-MS-L0531-C05",
+        "D8-RM-L0159-C01",
+        "D8-RM-L0161-C01",
+        "D8-RM-L0165-C01"
+      ],
+      "reviewer_disposition": "pending_review"
+    },
+    "D8-MS-L0311-C13": {
+      "scope": "MASTER_SPEC 9.4 governs ephemeral engine context; accepted M6.2/M7 narrowly supersede only a prohibition on separately persisted bounded application history.",
+      "destinations": [
+        "docs/APPLICATION_SERVICE.md#c13-proposed-retention-authority",
+        "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+        "docs/BACKLOG.md#c13-proposed-authority-decision"
+      ],
+      "accepted_successor_ids": [
+        "D8-MS-L0513-C01",
+        "D8-RM-L0145-C01",
+        "D8-MS-L0525-C01",
+        "D8-MS-L0527-C01",
+        "D8-MS-L0531-C05",
+        "D8-RM-L0159-C01",
+        "D8-RM-L0161-C01",
+        "D8-RM-L0165-C01"
+      ],
+      "reviewer_disposition": "pending_review"
+    },
+    "D8-MS-L0311-C14": {
+      "scope": "MASTER_SPEC 9.4 governs ephemeral engine context; accepted M6.2/M7 narrowly supersede only a prohibition on separately persisted bounded application history.",
+      "destinations": [
+        "docs/APPLICATION_SERVICE.md#c13-proposed-retention-authority",
+        "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+        "docs/BACKLOG.md#c13-proposed-authority-decision"
+      ],
+      "accepted_successor_ids": [
+        "D8-MS-L0513-C01",
+        "D8-RM-L0145-C01",
+        "D8-MS-L0525-C01",
+        "D8-MS-L0527-C01",
+        "D8-MS-L0531-C05",
+        "D8-RM-L0159-C01",
+        "D8-RM-L0161-C01",
+        "D8-RM-L0165-C01"
+      ],
+      "reviewer_disposition": "pending_review"
+    }
+  },
+  "categories": {
+    "temporary_index": {
+      "owner": "engine caller",
+      "data_class": "SearchResultIndex",
+      "destination": "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+      "lifetime": "execution and explicit transfer only; factory delete_on_close; WR-026 later-failure gap"
+    },
+    "in_memory_state": {
+      "owner": "engine",
+      "data_class": "queues and intermediate candidate objects",
+      "destination": "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+      "lifetime": "execution only; no automatic cross-run inheritance or immediate RSS guarantee"
+    },
+    "orchestration_result": {
+      "owner": "engine caller/service after return",
+      "data_class": "SearchOrchestrationResult",
+      "destination": "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+      "lifetime": "consume/transfer then close; result has no context-manager methods"
+    },
+    "application_runs": {
+      "owner": "application",
+      "data_class": "BackgroundRunStore terminal metadata/result JSON",
+      "destination": "docs/APPLICATION_SERVICE.md#c13-proposed-retention-authority",
+      "lifetime": "bounded current policy; expiry/deletion; only completed records expose analytical results"
+    },
+    "retained_candidates": {
+      "owner": "application",
+      "data_class": "candidate/team/state evaluation rows",
+      "destination": "docs/APPLICATION_SERVICE.md#c13-proposed-retention-authority",
+      "lifetime": "bounded run-owned copies, discarded on handled cancellation/failure; cascade on run deletion"
+    },
+    "numerical_checkpoints": {
+      "owner": "numerical coordinator",
+      "data_class": "recovery checkpoint artifacts",
+      "destination": "docs/MONTE_CARLO.md#checkpoints-and-recovery",
+      "lifetime": "independent recovery contract; success cleanup/abandoned expiry pending WR-021"
+    },
+    "canonical_snapshots": {
+      "owner": "source store",
+      "data_class": "immutable canonical publication and captured sources",
+      "destination": "docs/DATA.md#immutable-storage",
+      "lifetime": "append-only indefinite retention; not deleted by result cleanup"
+    },
+    "user_exports": {
+      "owner": "user",
+      "data_class": "explicit exported files",
+      "destination": "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+      "lifetime": "independent user ownership; never silently purged or automatically reimported/reused"
+    }
+  },
+  "section_amendments": {
+    "docs/UNIFIED_ACTION_SEARCH.md#result-indexing-pagination-and-cleanup": {
+      "accepted_section_sha256": "4738cac39dc2ba5786bbeb6e7689bae99551dfbe79038d66d9fa4a4ca1523531",
+      "proposed_section_sha256": "6a6acbb7fff93342d5f84775568b243712228b1ba48c7be70fc200fdf46bfbbc",
+      "reason": "Correct result-versus-index context-manager ownership wording only. The result exposes close(); the index exposes context-manager methods. No cleanup behavior changes; WR-026 remains open.",
+      "reviewer_disposition": "pending_review"
+    }
+  },
+  "destination_evidence": [
+    {
+      "destination": "docs/APPLICATION_SERVICE.md#c13-proposed-retention-authority",
+      "section_sha256": "c26ffaab97aa928883eac3bfcb18d26fa06dc08c950dacf47ed6eddcaa0850a6"
+    },
+    {
+      "destination": "docs/UNIFIED_ACTION_SEARCH.md#c13-proposed-engine-lifecycle",
+      "section_sha256": "e4bc5aee1122a3f52e173b9036d0939b617804f516523f5914acb033b5e2247e"
+    },
+    {
+      "destination": "docs/BACKLOG.md#c13-proposed-authority-decision",
+      "section_sha256": "7a767ba635e3a864c2dc7760910632bc2ca173bd6ca23ea22a07ef825f9e5949"
+    }
+  ],
+  "implementation_evidence": [
+    {
+      "path": "src/fantasy_football/search_orchestration.py",
+      "symbols": [
+        "SearchResultIndex.create",
+        "SearchResultIndex.close",
+        "SearchOrchestrationResult.close",
+        "execute_search_orchestration"
+      ],
+      "finding": "Fresh temporary index; caller close after result; factory/generation cleanup present, later coordinator guard absent (WR-026)."
+    },
+    {
+      "path": "src/fantasy_football/app/service.py",
+      "symbols": [
+        "ApplicationService.run_action_search"
+      ],
+      "finding": "Candidate observation/result serialization then finally close; guard starts after orchestration returns."
+    },
+    {
+      "path": "src/fantasy_football/app/background.py",
+      "symbols": [
+        "BackgroundRunStore._row",
+        "BackgroundRunStore.delete",
+        "BackgroundRunStore.purge",
+        "BackgroundRunCoordinator._execute"
+      ],
+      "finding": "Separate copied terminal/run/candidate/state storage; lookup and coordinator-finally purge; no continuous expiry timer."
+    }
+  ],
+  "functional_evidence": [
+    "tests/test_search_orchestration.py",
+    "tests/test_background_runs.py",
+    "tests/test_app_service.py",
+    "tests/test_backend_validation.py"
+  ],
+  "remaining_obligations": [
+    {
+      "work_item": "WR-026",
+      "state": "Backlog",
+      "acceptance": "Separately approved fault injection at progress/evaluation/export failures; deterministic index/sidecar cleanup preserving original errors, success lifetime, identity/coverage/reference parity."
+    },
+    {
+      "work_item": "WR-021",
+      "state": "open",
+      "acceptance": "Dedicated expiration/count-purge boundary regression coverage, checkpoint cleanup/abandoned expiry, bounded storage/recovery/release evidence; no new TTL or sweeper."
+    },
+    {
+      "work_item": "WR-017",
+      "state": "open",
+      "acceptance": "Existing richer query/export and compatibility scope preserved; no new operators or import/reuse."
+    }
+  ],
+  "compatibility": {
+    "production_changes": false,
+    "migration_required_by_proposal": false,
+    "basis": "The inspected runtime already separates copied application records from engine scratch; this proposal changes only documentation. No external/live compatibility certification.",
+    "preserved": [
+      "retained-result schemas",
+      "expiry/deletion rules",
+      "historical run/model/path identities",
+      "candidate/state lineage",
+      "current query APIs",
+      "user exports",
+      "immutable snapshots",
+      "checkpoint identity",
+      "private local storage"
+    ]
+  },
+  "additional_authority_conflict_found": false,
+  "next_gate": "Independent C13 scope/successor acceptance required; then separately authorize D8.3 consumer scan/artifact preservation and authority switch. No source deletion, WR-002 closure or V1 release."
+}
+```
