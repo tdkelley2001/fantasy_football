@@ -77,17 +77,7 @@ and scenario therefore have distinct simulation/run identities but generate the
 same score scenario for a given model, master seed, path ID, player, and week.
 Every paired path verifies the score-scenario SHA-256 before comparison.
 
-For each binary outcome, M4 records per-path differences in `{-1, 0, 1}`, their
-mean (scenario probability minus baseline probability), and improved/worsened/
-unchanged counts. The interval separately bounds the paired improvement and
-worsening probabilities with Wilson score intervals, then conservatively
-differences those bounds. Bonferroni allocation covers both discordance directions
-for the full family of `team_count * (team_count + 2)` championship, playoff, and
-placement comparisons. This remains nondegenerate for zero-event and small-sample
-cases. Bounds are clipped to the possible difference range and quantify Monte
-Carlo sampling uncertainty only;
-they do not quantify outcome-model calibration or parameter uncertainty. The
-standalone M3.4 Wilson intervals remain separately available.
+Common pathwise differences, paired-discordance Wilson bounds, league metric allocation, missing-pair failure and probability/probability-point units are defined once in [MONTE_CARLO: paired scenario inference](MONTE_CARLO.md#paired-scenario-inference). Do not subtract standalone interval endpoints or treat sampling uncertainty as model calibration. Manual scenario construction/completion and the full league-wide comparison remain this document's workflow; progressive repeated-look limitations are [tracked separately](MONTE_CARLO.md#progressive-search-and-multiplicity).
 
 ## Reproducible local command
 

@@ -67,14 +67,17 @@ def test_historical_acceptance_and_current_release_disposition_are_distinct() ->
         assert "REVIEW PENDING" not in parent.group(0)
         assert "M8.4" in text and "READY FOR INDEPENDENT REVIEW" in text
     readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
-    checkpoint = (
-        REPOSITORY_ROOT / "docs" / "LW23A_PERFORMANCE_CHECKPOINT.md"
-    ).read_text(encoding="utf-8")
+    checkpoint = (REPOSITORY_ROOT / "docs" / "MONTE_CARLO.md").read_text(
+        encoding="utf-8"
+    )
     assert "not formally released" in readme
     assert "M8.4 release disposition remains pending" in readme
-    assert "Current disposition: **ACCEPTED**" in checkpoint
-    assert "Status at delivery: implemented for independent review" in checkpoint
-    assert "not permission to begin LW2.3B" in checkpoint
+    assert "independently accepted LW2.3A checkpoint at d630887" in checkpoint
+    assert "No prepared-input cache/validation bypass was justified" in checkpoint
+    assert "lw23a_baseline_four.json" in checkpoint
+    assert "No LW2.3B work is authorized" in (
+        REPOSITORY_ROOT / "docs" / "PARTIAL_WEEK.md"
+    ).read_text(encoding="utf-8")
 
 
 def test_m8_4_release_documents_and_verification_entrypoint_are_present() -> None:

@@ -247,36 +247,7 @@ fabricated estimate or rank, sets candidate coverage incomplete, and uses the
 `initial_state_budget_reached` stop reason. Such output is a valid partial
 observation, not an exhaustive best-trade claim.
 
-After the comparable initial stage, finalist selection retains at least the
-configured number of highest requester championship-difference states. It also
-retains every state whose direct matched-path championship difference relative
-to the current leader has a Bonferroni-adjusted upper confidence bound of at
-least zero. This compares paired candidate outcomes directly; it does not infer
-competitiveness from overlap of independent marginal intervals. Because the
-leader is selected from these same observations, the conservative V1 family is
-all possible unordered eligible-state pairs across every planned initial and
-refinement look, rather than only the comparisons made with the observed
-leader. The underlying two-direction paired interval allocation remains part of
-the accepted M4 estimator. This controls the declared finite comparison family;
-it does not correct outcome-model error or establish power to resolve close
-candidates.
-
-Refinement keeps two separate sets: every state still statistically competitive
-for the top rank, and the subset currently eligible for another sample block.
-A competitive state that has met its individual all-team precision target stops
-sampling but remains in every ranking reconsideration until a simultaneous
-paired comparison defensibly excludes it. Competitiveness is recalculated after
-every block over the full competitive set; eliminated states cannot re-enter.
-When states have different accumulated coverage, their direct comparison uses
-only the exact common path-index prefix. One baseline block is shared by the entire search; equivalent M5.3
-states share scenario blocks and their immutable M4 comparison. Accepted batches
-are combined only when their exact path coverage reconciles, so initial paths
-are retained once and never resampled or double counted. A state is labeled
-`precision_converged` only when every configured team's paired championship-
-probability difference interval meets the requested half-width. Otherwise its
-status distinguishes initial-only, selected, maximum-path, and not-evaluated
-states. Full playoff and placement comparisons remain attached through the
-accepted `ManualScenarioComparison` contract.
+The shared finalist-selection, all-pair/all-look multiplicity, matched-prefix refinement and all-team paired-championship convergence mathematics are owned by [MONTE_CARLO](MONTE_CARLO.md#progressive-search-and-multiplicity), including its explicit distinction between selection contrasts and repeatedly inspected precision intervals. Trade search retains the finite registry/screened universe and transaction-specific ranking objective. Competitive and sample-active states remain separate: meeting an individual target does not itself remove a contender. One baseline block is shared; equivalent completed states share evaluation, and accepted prefixes are counted once. Full playoff/placement comparisons remain attached through ManualScenarioComparison. [WR-025](BACKLOG.md#numerical-and-partial-evidence-obligations) requires independent repeated-look precision review; this reference does not certify that missing guarantee.
 
 Candidate output is ranked by the requesting team's estimated championship-
 probability difference, with stable candidate ID tie-breaking. Each row retains

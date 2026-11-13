@@ -1,6 +1,6 @@
 # War Room architecture
 
-[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. M0 manifest dependencies remain held until a separate consumer change.
+[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. Only the missing-policy source remains held by the accepted M0 role contract; D6 cannot delete it without separate verifier authorization.
 
 [Season mechanics](../SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [Transactions](../TRANSACTIONS.md) owns evolving legality, operational acquisitions, V(R) and distinct independent references.
 
@@ -34,11 +34,13 @@ flowchart TD
 
 ## One season engine, multiple outcome inputs
 
+[Outcome models](../PLAYER_OUTCOME_MODEL.md) own draw/policy identity; [Monte Carlo](../MONTE_CARLO.md) owns estimators, paired/progressive inference and checkpoints; [Partial Week](../PARTIAL_WEEK.md) owns current-week evidence/permission.
+
 [season_simulator.py](../../src/fantasy_football/season_simulator.py) owns week progression and reuses [weekly transactions](../../src/fantasy_football/weekly_transactions.py), [lineup optimization](../../src/fantasy_football/lineup_optimizer.py), [weekly scoring](../../src/fantasy_football/weekly_engine.py) and [postseason](../../src/fantasy_football/postseason.py). Rules come from validated configuration, not fixed league templates. Immutable [evolving state](../../src/fantasy_football/evolving_state.py) is simulation-path state, separate from source snapshots.
 
 [Player outcome models](../../src/fantasy_football/player_outcomes.py) create deterministic score scenarios keyed by seed/path/player/season/week/model. [Monte Carlo](../../src/fantasy_football/monte_carlo.py) repeats the same season coordinator and aggregates configured teams' outcomes. [Precision](../../src/fantasy_football/monte_carlo_precision.py), [bounded workers](../../src/fantasy_football/monte_carlo_parallel.py) and [checkpoint execution](../../src/fantasy_football/monte_carlo_execution.py) preserve fixed-path identities. Adaptive stopping depends on the configured look schedule. Sampling intervals do not measure model error; both [Normal and empirical models](../PLAYER_OUTCOME_MODEL.md) remain provisional.
 
-Ordinary V1 uses a safe whole-week boundary and projected optimal lineups. Opt-in [partial evidence/composition](../../src/fantasy_football/partial_week.py) feeds the same coordinator with fixed actuals and explicitly supplied realizations after cutoff, observed-lineup, lock, membership and carry reconciliation. Deterministic partial input supports more states than the **fully unstarted-only** partial Monte Carlo path. These are engine-only inputs, with no automatic ESPN translator or public partial execution DTO. See the [capability map](../LW2_PARTIAL_WEEK_CONTRACT.md#current-capability-map).
+Ordinary V1 uses a safe whole-week boundary and projected optimal lineups. Opt-in [partial evidence/composition](../../src/fantasy_football/partial_week.py) feeds the same coordinator with fixed actuals and explicitly supplied realizations after cutoff, observed-lineup, lock, membership and carry reconciliation. Deterministic partial input supports more states than the **fully unstarted-only** partial Monte Carlo path. These are engine-only inputs, with no automatic ESPN translator or public partial execution DTO. See the [capability map](../PARTIAL_WEEK.md#current-capability-map).
 
 ## Hypothetical actions and matched comparisons
 

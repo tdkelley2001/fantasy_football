@@ -1,8 +1,10 @@
+> Retained complete M0 evidence-role dependency. Current generated-score policy and WR-022 compatibility are owned by [PLAYER_OUTCOME_MODEL](PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections); raw interpretation is owned by [DATA](DATA.md#projection-contract). Retirement requires a separately authorized verifier-role migration; this document is not a competing current model specification.
+
 # Missing Projection Research and Approved V1 Policy
 
 ## Decision
 
-Approved WR-022 modeling correction: **every player-week with canonical `projection_class=MISSING` must produce a simulated outcome of exactly `0.0` in every supported outcome-model family, regardless of dispersion parameters, seed or path**. No variance or random draw is permitted for missing observations. Use the canonical classification, not an effective value of zero, to identify missingness. Raw `null`, class, effective zero and provenance remain unchanged. This explicitly resolves R23-06; implementation review remains separate from approval of this policy. See [correction and compatibility record](MISSING_PROJECTION_ZERO_CORRECTION.md).
+Approved WR-022 modeling correction: **every player-week with canonical `projection_class=MISSING` must produce a simulated outcome of exactly `0.0` in every supported outcome-model family, regardless of dispersion parameters, seed or path**. No variance or random draw is permitted for missing observations. Use the canonical classification, not an effective value of zero, to identify missingness. Raw `null`, class, effective zero and provenance remain unchanged. This explicitly resolves R23-06; implementation review remains separate from approval of this policy. See [correction and compatibility record](PLAYER_OUTCOME_MODEL.md#identity-and-compatibility).
 
 Explicit ESPN zero is a different classification and its outcome treatment is unchanged: Normal retains its prior zero-mean/dispersion behavior; empirical retains deterministic zero. Positive and finite negative Normal draws retain their exact prior random keys and values. Existing positive-effective-projection lineup eligibility is unchanged; a random value never establishes availability. Fixed observed actuals and caller-supplied deterministic realizations are separate from generating simulated player outcomes.
 
