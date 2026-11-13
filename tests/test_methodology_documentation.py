@@ -25,8 +25,25 @@ from fantasy_football.live_scoring import NFLGameStatus
 from fantasy_football.monte_carlo import (
     MonteCarloError,
     MonteCarloPartialWeekInput,
+    aggregate_monte_carlo_paths,
+    combine_monte_carlo_batches,
+    run_monte_carlo_batch,
     run_monte_carlo_path,
     simulation_configuration_fingerprint,
+)
+from fantasy_football.monte_carlo_execution import (
+    ExecutionRecoveryError,
+    execute_monte_carlo_profile,
+)
+from fantasy_football.monte_carlo_parallel import (
+    ParallelExecutionConfiguration,
+    run_monte_carlo_batch_parallel,
+)
+from fantasy_football.monte_carlo_precision import (
+    PrecisionConfiguration,
+    ProbabilityMetric,
+    analyze_monte_carlo_precision,
+    binomial_wilson_interval,
 )
 from fantasy_football.partial_week import (
     DeterministicPlayerValue,
@@ -48,8 +65,16 @@ from fantasy_football.postseason import (
     initialize_postseason,
 )
 from fantasy_football.roster_value import ReplacementAccessContext, value_roster
+from fantasy_football.scenario_evaluator import (
+    ManualScenario,
+    ScenarioEvaluationError,
+    _paired_metric,
+    compare_completed_scenario_batches,
+    complete_manual_scenario,
+)
 from fantasy_football.season_simulator import (
     DeterministicScoreScenario,
+    SeasonCompletionStatus,
     SeasonSimulationError,
 )
 from fantasy_football.transaction_cycle import validate_operational_policy_equivalence
@@ -57,6 +82,10 @@ from fantasy_football.weekly_engine import RealizedPlayerScore, initialize_stand
 from fantasy_football.weekly_transactions import execute_weekly_essential_transactions
 from tests.test_lineup_optimizer import _lineup_snapshot, _present, _reference
 from tests.test_m33_player_outcomes import _model
+from tests.test_monte_carlo import PrescribedModel
+from tests.test_monte_carlo import _config as _mc_config
+from tests.test_monte_carlo_execution import _profile
+from tests.test_monte_carlo_execution import _store as _checkpoint_store
 from tests.test_partial_monte_carlo import _case as _mc_partial_case
 from tests.test_partial_season import _execute, _multiweek, _partial, _timed
 from tests.test_roster_value import (
@@ -64,11 +93,15 @@ from tests.test_roster_value import (
     _state,
     _valuation_snapshot,
 )
+from tests.test_scenario_evaluator import _scenario_snapshot
+from tests.test_scenario_evaluator import _state as _manual_state
 from tests.test_season_simulator import (
     _fourteen_team_postseason_snapshot,
     _run,
     _snapshot,
 )
+from tests.test_trade_search import _run as _progressive_run
+from tests.test_trade_search import _search
 from tests.test_weekly_transactions import _policy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -838,3 +871,322 @@ def test_partial_methodology_rejects_lost_permission_or_accounting_guard(
     assert lost in text
     with pytest.raises(AssertionError, match="Missing partial-week contract"):
         _validate_partial_methodology(text.replace(lost, "REMOVED"))
+
+
+def _published_numeric_table(header: str) -> dict[str, float]:
+    body = _guide().split(header + "\n")[1].split("\n\n")[0]
+    return {
+        line.split("|")[1].strip(): float(line.split("|")[2])
+        for line in body.splitlines()[1:]
+    }
+
+
+def test_documented_indicator_counts_match_reconciled_prescribed_seasons() -> None:
+    batch = run_monte_carlo_batch(_snapshot(), _mc_config(0, 4), PrescribedModel())
+    paths = (
+        _guide()
+        .split("| Path | Champion | Final placement order |\n")[1]
+        .split("\n\n")[0]
+    )
+    rows = [line.split("|")[1:-1] for line in paths.splitlines()[1:]]
+    assert len(rows) == len(batch.paths) == 4
+    for row, path in zip(rows, batch.paths, strict=True):
+        assert int(row[0]) == path.path_index
+        ordered = tuple(
+            item.team_id
+            for item in sorted(path.teams, key=lambda team: team.final_placement)
+        )
+        assert ordered == tuple(map(int, row[2].split(",")))
+        assert ordered[0] == int(row[1])
+    counts = (
+        _guide()
+        .split(
+            "| Team | Titles | Qualifications | Placement counts (ranks 1,2,3,4) |\n"
+        )[1]
+        .split("\n\n")[0]
+    )
+    rows = [line.split("|")[1:-1] for line in counts.splitlines()[1:]]
+    for row, team in zip(rows, batch.teams, strict=True):
+        assert (
+            team.team_id,
+            team.championship_wins,
+            team.playoff_qualifications,
+        ) == tuple(map(int, row[:3]))
+        assert tuple(count for _, count in team.placement_counts) == tuple(
+            map(int, row[3].split(","))
+        )
+        assert team.championship_frequency == int(row[1]) / batch.requested_paths
+        assert team.playoff_frequency == int(row[2]) / batch.requested_paths
+
+
+def test_published_wilson_and_paired_intervals_match_current_calculations() -> None:
+    shown = _published_numeric_table("| Wilson quantity | Value |")
+    configuration = PrecisionConfiguration(0.95, 0.005, 100, 200, 50)
+    metric_count = 4 * (4 + 2)
+    looks = 1 + (200 - 100) // 50
+    interval = binomial_wilson_interval(
+        12,
+        100,
+        family_confidence_level=configuration.confidence_level,
+        simultaneous_metric_count=metric_count * looks,
+    )
+    assert tuple(shown.values()) == pytest.approx(
+        (
+            interval.confidence_level,
+            interval.lower,
+            interval.upper,
+            interval.half_width,
+        ),
+        rel=0,
+        abs=5e-13,
+    )
+    assert interval.half_width > configuration.target_half_width
+    for successes in (0, 100):
+        boundary = binomial_wilson_interval(
+            successes, 100, family_confidence_level=0.95, simultaneous_metric_count=72
+        )
+        assert boundary.half_width > 0
+        assert boundary.lower == 0 if successes == 0 else boundary.upper == 1
+    body = (
+        _guide()
+        .split("| Paired sequence | Indicators for paths 0 through 9 |\n")[1]
+        .split("\n\n")[0]
+    )
+    sequences = [
+        tuple(map(int, line.split("|")[2].split(","))) for line in body.splitlines()[1:]
+    ]
+    result = _paired_metric(
+        *sequences,
+        metric=ProbabilityMetric.CHAMPIONSHIP,
+        placement=None,
+        confidence_level=0.95,
+        comparison_count=metric_count,
+    )
+    assert (result.improved_paths, result.worsened_paths, result.unchanged_paths) == (
+        3,
+        1,
+        6,
+    )
+    assert result.difference == 0.2
+    plus = binomial_wilson_interval(
+        3, 10, family_confidence_level=0.95, simultaneous_metric_count=48
+    )
+    minus = binomial_wilson_interval(
+        1, 10, family_confidence_level=0.95, simultaneous_metric_count=48
+    )
+    shown = _published_numeric_table("| Paired quantity | Value |")
+    assert tuple(shown.values()) == pytest.approx(
+        (
+            plus.lower,
+            plus.upper,
+            minus.lower,
+            minus.upper,
+            result.interval.lower,
+            result.interval.upper,
+            result.interval.half_width,
+        ),
+        rel=0,
+        abs=5e-13,
+    )
+    assert result.interval.lower < 0 < result.interval.upper
+    # Unit arithmetic is mathematical; do not silently change API scaling.
+    assert (Fraction(12, 100) - Fraction(10, 100)) * 100 == 2
+    assert (Fraction(12, 100) - Fraction(10, 100)) / Fraction(10, 100) == Fraction(
+        20, 100
+    )
+
+
+def test_incomplete_prefix_suppresses_probabilities_instead_of_reducing_denominator() -> (
+    None
+):
+    snapshot, config, model = (
+        _snapshot(),
+        _mc_config(0, 4, complete=False),
+        PrescribedModel(),
+    )
+    batch = run_monte_carlo_batch(snapshot, config, model)
+    paths = batch.paths[:-1] + (
+        replace(
+            batch.paths[-1],
+            status=SeasonCompletionStatus.INCOMPLETE,
+            unresolved_capabilities=("p5_synthetic_gap",),
+        ),
+    )
+    incomplete = aggregate_monte_carlo_paths(snapshot, config, model, paths)
+    assert (
+        incomplete.requested_paths,
+        incomplete.completed_paths,
+        incomplete.incomplete_paths,
+    ) == (4, 3, 1)
+    assert all(item.championship_frequency is None for item in incomplete.teams)
+    precision = PrecisionConfiguration(0.95, 0.005, 4, 4, 1)
+    result = analyze_monte_carlo_precision(incomplete, precision)
+    assert not result.league_wide_precision_reached
+    for team in result.teams:
+        for estimate in (
+            team.championship,
+            team.playoff_qualification,
+            *team.final_placements,
+        ):
+            assert estimate.probability is None and estimate.interval is None
+    complete = analyze_monte_carlo_precision(batch, precision)
+    zero = complete.teams[2].championship
+    assert zero.probability == 0.0 and zero.interval.upper > 0
+
+
+@pytest.mark.parametrize("defect", ("duplicate", "gap"))
+def test_p5_exact_requested_coverage_rejects_silent_path_changes(defect: str) -> None:
+    snapshot, config, model = _snapshot(), _mc_config(0, 4), PrescribedModel()
+    batch = run_monte_carlo_batch(snapshot, config, model)
+    paths = (
+        batch.paths[:-1] + batch.paths[:1]
+        if defect == "duplicate"
+        else batch.paths[:-1]
+    )
+    message = (
+        "duplicate path IDs"
+        if defect == "duplicate"
+        else "exactly cover configured path range"
+    )
+    with pytest.raises(MonteCarloError, match=message):
+        aggregate_monte_carlo_paths(snapshot, config, model, paths)
+
+
+@pytest.mark.parametrize(
+    ("defect", "message"),
+    (
+        ("pair", "path coverage differs"),
+        ("digest", "matched player-week outcomes"),
+        ("incomplete", "complete reconciled paths"),
+    ),
+)
+def test_p5_paired_preconditions_reject_unmatched_or_incomplete_batches(
+    defect: str, message: str
+) -> None:
+    snapshot = _scenario_snapshot()
+    state = _manual_state(snapshot)
+    completed = complete_manual_scenario(
+        snapshot, state, ManualScenario("p5-identity", ())
+    )
+    batch = run_monte_carlo_batch(snapshot, _mc_config(0, 4), PrescribedModel())
+    other = (
+        replace(batch, path_indices=batch.path_indices[:-1])
+        if defect == "pair"
+        else replace(batch, reconciliation_complete=False)
+        if defect == "incomplete"
+        else replace(
+            batch,
+            paths=(replace(batch.paths[0], scenario_sha256="0" * 64),)
+            + batch.paths[1:],
+        )
+    )
+    with pytest.raises(ScenarioEvaluationError, match=message):
+        compare_completed_scenario_batches(
+            snapshot,
+            state,
+            completed,
+            batch,
+            other,
+            PrecisionConfiguration(0.95, 0.005, 4, 4, 1),
+        )
+
+
+def test_p5_batch_worker_equality_is_distinct_from_checkpoint_compatibility(
+    tmp_path,
+) -> None:
+    snapshot, config, model = _snapshot(), _mc_config(0, 4), PrescribedModel()
+    whole = run_monte_carlo_batch(snapshot, config, model)
+    left = run_monte_carlo_batch(snapshot, replace(config, path_count=2), model)
+    right = run_monte_carlo_batch(
+        snapshot, replace(config, first_path_index=2, path_count=2), model
+    )
+    assert combine_monte_carlo_batches(snapshot, config, model, (right, left)) == whole
+    parallel = ParallelExecutionConfiguration(2, 2)
+    assert (
+        run_monte_carlo_batch_parallel(snapshot, config, model, parallel).batch == whole
+    )
+    store, profile = _checkpoint_store(tmp_path), _profile()
+    stopped = execute_monte_carlo_profile(
+        snapshot,
+        config,
+        model,
+        profile,
+        checkpoint_store=store,
+        cancellation_requested=lambda: True,
+    )
+    assert stopped.result.requested_paths == 2
+    resumed = execute_monte_carlo_profile(
+        snapshot, config, model, profile, checkpoint_store=store, resume=True
+    )
+    uninterrupted = execute_monte_carlo_profile(snapshot, config, model, profile)
+    assert resumed.result == uninterrupted.result
+    assert resumed.recovered_paths == resumed.newly_executed_paths == 2
+    before = store.path.read_bytes()
+    with pytest.raises(ExecutionRecoveryError, match="execution_policy_sha256"):
+        execute_monte_carlo_profile(
+            snapshot,
+            config,
+            model,
+            replace(profile, parallel=parallel),
+            checkpoint_store=store,
+            resume=True,
+        )
+    assert store.path.read_bytes() == before
+
+
+def test_p5_progressive_selection_and_display_use_different_families(
+    monkeypatch,
+) -> None:
+    import fantasy_football.scenario_evaluator as comparison_module
+
+    counts = []
+    original = comparison_module._paired_metric
+
+    def observed(*args, **kwargs):
+        counts.append(kwargs["comparison_count"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(comparison_module, "_paired_metric", observed)
+    result = _progressive_run(_search(initial=1, batch=1, maximum=3, finalists=1))
+    assert result.coverage.eligible_unique_states == 4
+    # Counts inside the current paired helper are doubled for the two directions.
+    # Selection A=6 pairs * 3 looks=18; displayed all-metric family M=4*6=24.
+    assert set(counts) == {18, 24}
+
+
+def _validate_inference_methodology(text: str) -> None:
+    for contract in (
+        r"M=T(T+2)",
+        r"\alpha_{\mathrm{interval}}=\frac{1-C}{ML}",
+        r"\alpha_{\mathrm{direction}}=\frac{1-C}{2M}",
+        r"H_\Delta=\frac{u_\Delta-\ell_\Delta}{2}",
+        "Wilson remains an approximate score interval",
+        "no planned-look/across-state multiplier",
+        "WR-025 remains unresolved",
+        "not certify simultaneous repeated-look coverage",
+        "without service-side scaling",
+        "does **not automatically restart interrupted HTTP jobs**",
+        "unconditional probability estimates are suppressed",
+    ):
+        assert contract in text, f"Missing inference contract: {contract}"
+    for false_claim in (
+        "Repeated-look coverage is proven.",
+        "Candidate-selection allocation guarantees paired stopping coverage.",
+    ):
+        assert false_claim not in text, "Unsupported sequential validity claim"
+
+
+def test_p5_preserves_math_and_unresolved_statistical_gates() -> None:
+    _validate_inference_methodology(_guide())
+
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "Repeated-look coverage is proven.",
+        "Candidate-selection allocation guarantees paired stopping coverage.",
+    ),
+)
+def test_p5_rejects_incorrect_sequential_validity_claim(claim: str) -> None:
+    with pytest.raises(AssertionError, match="Unsupported sequential validity claim"):
+        _validate_inference_methodology(_guide() + "\n" + claim)

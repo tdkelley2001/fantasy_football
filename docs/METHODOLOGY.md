@@ -1,6 +1,6 @@
 # War Room methodology
 
-**P4 pilot: M1 through M5 are developed below; M6 provides a conceptual bridge.** The other chapters explicitly identify later scope. This is a quantitative reader's guide pending transfer review, not a new authority or a claim of empirical validation. Current [outcome](PLAYER_OUTCOME_MODEL.md), [data](DATA.md), [research](RESEARCH.md), [season](SEASON_SIMULATOR.md), [transaction](TRANSACTIONS.md) and [Monte Carlo](MONTE_CARLO.md) contracts remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence). No existing owner is retired or superseded. The [accepted architecture plan](development/model-documentation-architecture.md#reviewable-implementation-packages) defines subsequent packages; [BACKLOG](BACKLOG.md) retains open obligations. For operating procedures, use the [user guide pilot](USER_GUIDE.md).
+**P5 pilot: M1 through M7 are developed below.** The other chapters explicitly identify later scope. This is a quantitative reader's guide pending transfer review, not a new authority or a claim of empirical validation. Current [outcome](PLAYER_OUTCOME_MODEL.md), [data](DATA.md), [research](RESEARCH.md), [season](SEASON_SIMULATOR.md), [transaction](TRANSACTIONS.md) and [Monte Carlo](MONTE_CARLO.md) contracts remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence). No existing owner is retired or superseded. The [accepted architecture plan](development/model-documentation-architecture.md#reviewable-implementation-packages) defines subsequent packages; [BACKLOG](BACKLOG.md) retains open obligations. For operating procedures, use the [user guide pilot](USER_GUIDE.md).
 
 ## Contents
 
@@ -30,7 +30,12 @@
   - [Resulting-roster value and replacement access](#resulting-roster-value-and-replacement-access)
   - [Independent correctness and remaining obligations](#independent-correctness-and-remaining-obligations)
 - [M6: Monte Carlo simulation and estimators](#monte-carlo-simulation-and-estimators)
+  - [Paths, matched shocks and sampling universe](#paths-matched-shocks-and-sampling-universe)
+  - [Complete-path estimators and reconciliation](#complete-path-estimators-and-reconciliation)
 - [M7: Statistical inference, precision and uncertainty](#statistical-inference-precision-and-uncertainty)
+  - [Absolute precision and stopping](#absolute-precision-and-stopping)
+  - [Paired comparisons and probability units](#paired-comparisons-and-probability-units)
+  - [Progressive selection, multiplicity and unresolved validity](#progressive-selection-multiplicity-and-unresolved-validity)
 - [M8: Manual scenarios and action-search methodology](#manual-scenarios-and-action-search-methodology)
 - [M9: Decision evaluation, ranking and limitations](#decision-evaluation-ranking-and-limitations)
 
@@ -555,23 +560,214 @@ Inspected implementation baseline is accepted P2 `fed2dc7863607f539e2640b7c7e6d7
 
 ## Monte Carlo simulation and estimators
 
-**M6 conceptual bridge only; full estimator/execution treatment remains for P5.** Exact integration over uncertain player outcomes and conditional season progression is generally impractical. Monte Carlo repeats the deterministic mapping at reproducible path indices with the same snapshot, model and policies. Each path starts fresh state; it does not continue the previous path's standings or holdings. Parallelism and batching divide this same experiment, not its mathematics.
+Exact integration over player-week uncertainty and conditional league progression is generally impractical. Monte Carlo approximates M1's outcome expectations by repeatedly applying M2's generator and M3's **single deterministic season engine**, with M4's separately gated partial input when supplied. [MONTE_CARLO](MONTE_CARLO.md) remains the current estimator/execution authority; this pilot makes no statistical or numerical policy change.
 
-For $N$ fully complete requested paths, let $C_{it}(a)$ indicate team $t$'s championship on path $i$. The basic estimate is
+### Paths, matched shocks and sampling universe
+
+Fix a validated immutable snapshot, explicit model/parameters and league/IR/transaction/postseason policies. For master seed $s$ and path index $i$, generate one complete canonical in-horizon player-week vector $X^{(i)}$, including unrostered/bench/reserve players. Use it once in the deterministic season coordinator; lineup/ownership changes do not resample a player. Each path starts fresh modeled standings, ownership, counters, availability and brackets from its input state. No state leaks from one path into the next, and no network retrieval occurs inside the experiment.
+
+For requested first index $b$ and positive count $N$, coverage must be exactly $\{b,b+1,\ldots,b+N-1\}$. A seed identifies neither this range nor the entire experiment. Inputs/identities must be compatible, every path must appear once and only once, and gaps/duplicates/overlaps/foreign indices fail rather than being filled, discarded or replaced. Asynchronous worker results are sorted and validated before the same aggregation is used.
+
+Hypothetical scenarios reuse the same player's model/seed/path/season/week shocks across legal roster states. This common-random-number construction supports comparing the consequence of the action on each path rather than adding a second independent player sample. It does not create within-path player correlation or simulate offer acceptance. Its variance benefit depends on the covariance of paired outcomes; it cannot remove source/model uncertainty.
+
+| Identity scope | Meaning; what it does not establish |
+|---|---|
+| Simulation configuration | Snapshot identity/content, full public model parameters and simulation policies/semantics, including supplied initial state and partial evidence when present. Excludes seed and requested range. |
+| Seed-bearing run | Configuration plus master seed; compatible disjoint ranges can belong to the same run. |
+| Path range/coverage | Exact requested indices/count, checked separately; same run identity does not prove the same exposed sample. |
+| Player-week score identity | Original complete scenario label and ordered score-content digest; a label alone is not full parameter/content identity. Ownership can change without changing draws. |
+| Structural scenario/state | Legal action/sequence or completed roster-state identity, not a model-specific probability calculation. Equivalent completed states may share evaluation without erasing distinct structural paths. |
+| Numerical evaluation | Binds the evaluated state to simulation/model, seed/range and precision policy; structural equivalence alone cannot reuse results under incompatible evidence/configuration. |
+
+Exact encodings, parameter ordering and fingerprint payloads remain in [MC identity](MONTE_CARLO.md#configuration-run-and-path-identity), [outcome identity](PLAYER_OUTCOME_MODEL.md#identity-and-compatibility) and the current [evaluation owner](MANUAL_SCENARIOS.md#identity-and-evaluation). Corrected Normal public policy identity remains distinct from its historical draw identity: valid nonmissing draws retain old keys, while pre-correction Normal checkpoints remain incompatible, even with colliding custom model IDs. Historical goldens/bytes are not rewritten. M4's complete partial companion/lineup/history provenance is another independent compatibility boundary. Replaying a recorded model also requires its recorded implementation; a fingerprint is not proof every artifact contains an authenticated code revision. [WR-021 provenance obligations](BACKLOG.md#wr-021-output-provenance-and-numerical-lifecycle) remain open.
+
+Supported worker counts, task sizes, batch partitions, generation order and asynchronous completion must yield the same path outcomes at identical prescribed inputs/indices. Workers use the same coordinator and immutable input preparation; bounded tasks/pools are execution choices, not different estimators. Mathematical fingerprints exclude worker count/task size. Compact retained paths and per-worker input copies still cost memory; this is not a constant-memory or distributed-execution claim.
+
+Numerical checkpoint recovery preserves that estimator by retaining a **complete validated contiguous prefix**. After a complete range: reconcile counts, compute precision, atomically publish any checkpoint, then notify observers. Temporary-file write/flush/fsync/replace protects publication; a hard interruption may lose the active uncommitted range but cannot duplicate the retained prefix. Cancellation is checked at supported completed-range boundaries, so even an initial cancellation request can follow the first minimum-sized range. Intermediate updates are not convergence.
+
+Before new paths or writes, resume validates snapshot/configuration, seed-bearing run, full public model parameters, partial evidence, precision/execution policies, range, prefix invariants and every saved precision-history entry recomputed from its prefix. Compatible resumed/uninterrupted batches, interval histories, stopping decisions and analysis identities must agree; a final compatible checkpoint executes no new paths. Mathematical equality is weaker than resume compatibility: two worker configurations can produce identical paths but have different saved execution-policy identities, so changing workers/task settings can reject resume. Exact schemas, storage roots and policy fields stay in [workers](MONTE_CARLO.md#workers-and-bounded-execution) and [checkpoints](MONTE_CARLO.md#checkpoints-and-recovery).
+
+Engine checkpoint resume does **not automatically restart interrupted HTTP jobs**. Application startup classifies abandoned jobs as interrupted under [APPLICATION_SERVICE](APPLICATION_SERVICE.md); it does not reconstruct a numerical execution automatically. The profile has path caps/cancellation, not a native wall-clock-budget field. Checkpoints are not automatically deleted on success or expired when abandoned; WR-021 retains cleanup/retention obligations. No lifecycle behavior or cross-run cache is added here.
+
+### Complete-path estimators and reconciliation
+
+For team $t$, path $i$ and exact final placement $k$, define $C_{it}=1$ if champion, $Q_{it}=1$ if championship-playoff qualified, and $F_{itk}=1$ if final placement is $k$, otherwise zero. In the sums, $i=1,\ldots,N$ enumerates the requested paths; their stored IDs can start at $b$, including zero as in the example. For a fixed scenario $a$, M1's championship shorthand is
 
 $$
 \widehat p_t(a)=\frac{1}{N}\sum_{i=1}^{N} C_{it}(a).
 $$
 
-Qualification and exact placements use their own indicators. [MONTE_CARLO](MONTE_CARLO.md#aggregation-and-probability-estimators) owns all denominators and per-path reconciliation. If any requested path is capability-incomplete, unconditional probability estimates are suppressed; do not divide by only successful paths. Invalid structural inputs fail rather than becoming replacement paths. A complete-batch frequency zero differs from an unavailable estimate.
+Suppressing $a$ for all three current estimators:
 
-For matched baseline/hypothetical comparisons, the same player's model/seed/path/week draw stays fixed even if ownership changes. Reusing draws isolates roster consequences without a second player sample. A legal transfer can change $G$ and the champion while leaving $X^{(i)}$ identical. The difference $\widehat p_t(a)-\widehat p_t(0)$ is an absolute probability difference; its paired uncertainty is not obtained by subtracting standalone interval endpoints. [Paired inference](MONTE_CARLO.md#paired-scenario-inference) remains authoritative. Seed alone is not sufficient replay provenance: exact evidence, configuration, identity and path ranges matter.
+$$
+\widehat p_{\mathrm{champ},t}=\frac{1}{N}\sum_{i=1}^{N}C_{it},\qquad
+\widehat p_{\mathrm{playoff},t}=\frac{1}{N}\sum_{i=1}^{N}Q_{it},\qquad
+\widehat p_{\mathrm{place},t,k}=\frac{1}{N}\sum_{i=1}^{N}F_{itk}.
+$$
 
-**Reader walkthrough:** begin with an ESPN source-1 weekly value 8, classified PRESENT and preserved as effective 8. For the illustrative Normal parameters and shock in M2's first row, the realization is 4. The engine selects that player's lineup slot using projections/legality before reading 4, then scores the frozen starters and progresses the same league rules through the horizon. Repeat complete seasons at different path indices. If a team wins 12 of 100 fully reconciled synthetic paths, its estimate is 0.12; this is illustrative frequency arithmetic, not a calibrated forecast or claim of adequate precision. A hypothetical evaluates legal roster changes against those same player-week draws, conditional on execution. Source authentication, calibration, supported mechanics and inference gates remain independent of that arithmetic.
+$N$ is the requested count of the **analyzed batch/prefix**, not the maximum future budget or number of successful paths. Counts are integer indicators, estimates are their frequencies, and M1's model probabilities are expectations approximated by those estimates. None is an observed real-league fact. Runner-up is placement 2. Mean final regular rank, wins, points-for and placement are descriptive averages, not further event probabilities.
+
+Before aggregation, each complete path must have every configured team exactly once with valid finite numeric records, a complete regular-rank permutation and final-placement permutation $1,\ldots,T$, exactly the configured qualifier count, no unknown qualifier flags, exactly one champion who qualifies, and placement/qualification consistency. Path validation happens **before league totals**, so malformed paths cannot cancel one another through balanced aggregate counts. Across complete paths, title counts sum to $N$, each placement's counts sum to $N$, each team's placement counts sum to $N$, and qualification counts sum to $N$ times configured qualifiers.
+
+If **any requested path is capability-incomplete, unconditional probability estimates are suppressed**, including associated precision probabilities/intervals and league-wide convergence. Do not renormalize over complete paths. Incomplete IDs/reasons and valid partial records remain visible. `require_complete=True` raises at an incomplete path; False permits explicitly incomplete reporting. Structural/domain-invalid input fails with path context instead of becoming an incomplete/replacement sample; successful batches report zero invalid paths. Retained complete-path counts/descriptive averages may still be inspectable when available, but are not unconditional forecasts. A complete batch with zero successes has estimate zero and nonzero interval uncertainty; unavailable probability is None, not invented zero. [Aggregation authority](MONTE_CARLO.md#aggregation-and-probability-estimators) retains the precise result contract.
+
+**Synthetic four-path example:** the existing prescribed-outcome fixture runs four teams with two qualifiers through the same season engine. The final regular ranking is complete on every path; qualification is teams 1 and 2. Only the title winner alternates:
+
+| Path | Champion | Final placement order |
+|---|---|---|
+| 0 | 2 | 2,1,3,4 |
+| 1 | 1 | 1,2,3,4 |
+| 2 | 2 | 2,1,3,4 |
+| 3 | 1 | 1,2,3,4 |
+
+| Team | Titles | Qualifications | Placement counts (ranks 1,2,3,4) |
+|---|---|---|---|
+| 1 | 2 | 4 | 2,2,0,0 |
+| 2 | 2 | 4 | 2,2,0,0 |
+| 3 | 0 | 0 | 0,0,4,0 |
+| 4 | 0 | 0 | 0,0,0,4 |
+
+Divide by four: championship estimates are (0.5,0.5,0,0); qualification estimates are (1,1,0,0). Each placement column totals four and qualifications total eight. This is a hand-checkable estimator example, not a calibrated outcome model or adequate sample-size claim. [Existing prescribed-path tests](../tests/test_monte_carlo.py) supply the independent deterministic fixture. Current compact outputs do not satisfy every [WR-021 seed/bye/advancement/final-record reporting requirement](BACKLOG.md#wr-021-output-provenance-and-numerical-lifecycle).
 
 ## Statistical inference, precision and uncertainty
 
-**M7 scope only, for P5.** [MONTE_CARLO](MONTE_CARLO.md#precision-and-stopping) owns all-team estimands, intervals, stopping and sampling-versus-model uncertainty. Governing 95% family confidence/0.5 probability-point target obligations remain in that owner and BACKLOG; neither a preset nor completion guarantees convergence. [WR-025](BACKLOG.md) retains unresolved progressive repeated-look coverage. Mathematical fractions/points do not change the [legacy public unit boundary](APPLICATION_SERVICE.md#public-dtos-units-and-validation). Detailed inference and API migration are outside P2.
+M6 counts outcomes under a fixed experiment; M7 describes the **implemented sampling-uncertainty calculations and their limits**. It does not promote a player model or prove every sequential confidence claim. [MONTE_CARLO](MONTE_CARLO.md#precision-and-stopping) remains the statistical owner.
+
+### Absolute precision and stopping
+
+The governing target remains **95% family confidence and at most 0.5 probability-point half-width**, $C=0.95$, $h=0.005$, subject to delivery/configuration and representative benchmarking/calibration gates. QUICK/DETAILED convenience presets are editable execution settings, not replacements for that requirement. Their current half-widths 0.03/0.01 mean 3/1 probability points; no preset guarantees convergence. [WR-021](BACKLOG.md#wr-021-output-provenance-and-numerical-lifecycle) retains outstanding default, control and evidence obligations.
+
+Precision configuration supplies finite $0<C<1$, finite $0<h<1$, positive integer minimum $n_{\min}$, maximum $n_{\max}\ge n_{\min}$ and increment/evaluation interval $d$. Boolean values are not numeric substitutes. For $T$ configured teams, monitor championship, qualification and $T$ exact placements per team, hence
+
+$$
+M=T(T+2),\qquad
+L=1+\left\lceil\frac{n_{\max}-n_{\min}}{d}\right\rceil,\qquad
+\alpha_{\mathrm{interval}}=\frac{1-C}{ML}.
+$$
+
+$L$ counts the planned minimum/increment/capped-final looks; it is not the number of looks observed so far. At a look with successes $s$ in $N$ complete requested paths, set $\widehat p=s/N$, $z=\Phi^{-1}(1-\alpha_{\mathrm{interval}}/2)$ and $D=1+z^2/N$. The implemented two-sided Wilson score calculation is
+
+$$
+\mathrm{center}=\frac{\widehat p+z^2/(2N)}{D},\qquad
+\mathrm{radius}=\frac{z\sqrt{\widehat p(1-\widehat p)/N+z^2/(4N^2)}}{D},
+$$
+
+$$
+\ell=\begin{cases}0,&s=0,\\\max(0,\mathrm{center}-\mathrm{radius}),&s>0,\end{cases}
+\quad
+u=\begin{cases}1,&s=N,\\\min(1,\mathrm{center}+\mathrm{radius}),&s<N,\end{cases}
+\quad H=\frac{u-\ell}{2}.
+$$
+
+The endpoint handling is explicit: zero successes fix the lower endpoint at zero, all successes fix the upper endpoint at one, and neither makes uncertainty vanish. Validate integer $0\le s\le N$, positive $N$ and positive multiplicity count. The method label is `wilson_score_bonferroni_familywise_v1`; reported per-interval confidence is $1-\alpha_{\mathrm{interval}}$, distinct from family $C$. Symbolic equations express the existing algorithm; preserve its floating-point evaluation order rather than substituting algebraically equivalent rounded calculations.
+
+Bonferroni allocates error across the planned metric/look family without requiring independence among team outcomes. **Wilson remains an approximate score interval**, not a newly established exact finite-sample or optional-stopping coverage theorem. Numeric regression success is not a proof of the stated sampling-coverage interpretation.
+
+**Worked absolute example:** four teams give $M=24$. Let $n_{\min}=100$, $n_{\max}=200$, $d=50$, so $L=3$, and use $C=0.95$. For $s=12,N=100$, the current estimator returns the following (shown to 12 decimal places, not rounded in execution):
+
+| Wilson quantity | Value |
+|---|---:|
+| Per-interval confidence | 0.999305555556 |
+| Lower probability | 0.047706456155 |
+| Upper probability | 0.270703995382 |
+| Half-width (fraction) | 0.111498769614 |
+
+The point estimate is 0.12. The half-width is about 11.15 probability points, exceeding 0.5; **this one failed metric alone prevents league-wide convergence**. At this minimum-sized look the runner may continue to 150, then 200 paths; it does not assume future success counts or promise convergence by 200. The example is verified against [the actual Wilson implementation](../src/fantasy_football/monte_carlo_precision.py), not a separate untested formula.
+
+The runner's configured maximum must equal its simulation path budget. It executes a contiguous minimum range, then increments $d$ capped at $n_{\max}$, checking **every monitored interval** after reconciliation. League-wide precision requires every width $\le h$ after the minimum, not one manager or metric passing. Incomplete paths suppress all unconditional estimates/intervals and convergence. Stop reasons include `precision_reached`, `maximum_paths_reached`, `incomplete_capabilities`; profile progress adds `in_progress` and cooperative `cancelled`. Resource/path/time caps or cancellation require actual exposure, achieved widths, method/confidence and unmet-target reporting. Finishing is not convergence. Profile wall-time controls and application limits remain separate; no new native deadline is implied.
+
+### Paired comparisons and probability units
+
+For a hypothetical $a$ versus baseline 0, comparisons require complete reconciled batches with **matching path IDs and exact score-content digests**. Configuration/run identities may differ because ownership/state differs. Never discard unmatched pairs or pass independent draws as matched. For championship indicators on a shared path,
+
+$$
+d_i=C_{it}(a)-C_{it}(0)\in\{-1,0,1\},\qquad
+\widehat\Delta_t=\frac{\operatorname{fsum}_i d_i}{N}=\frac{a_+-a_-}{N}.
+$$
+
+$a_+$ counts improved paths (+1), $a_-$ worsened paths (-1), and $N-a_+-a_-$ unchanged paths. This is $\widehat p_t(a)-\widehat p_t(0)$, not relative percentage gain. Qualification and each placement use their own binary differences. Reusing player shocks can reduce sampling noise when paired outcomes covary positively: $\mathrm{Var}(C(a)-C(0))=\mathrm{Var}(C(a))+\mathrm{Var}(C(0))-2\mathrm{Cov}(C(a),C(0))$. The construction is not a universal variance-reduction guarantee or removal of model/transaction-execution uncertainty.
+
+For the current full one-comparison league family $M=T(T+2)$, allocate each discordance direction
+
+$$
+\alpha_{\mathrm{direction}}=\frac{1-C}{2M}.
+$$
+
+Use the same Wilson function on improvement count $a_+$ and worsening count $a_-$ separately with multiplicity count $2M$. Given intervals $[\ell_+,u_+]$ and $[\ell_-,u_-]$, return
+
+$$
+\ell_\Delta=\max(-1,\ell_+-u_-),\qquad
+u_\Delta=\min(1,u_+-\ell_-),\qquad
+H_\Delta=\frac{u_\Delta-\ell_\Delta}{2}.
+$$
+
+This `paired_discordance_wilson_bonferroni_familywise_v1` construction preserves uncertainty even with zero observed discordance. It does **not subtract standalone baseline/scenario confidence endpoints**. The one-comparison allocation uses $M$, not the absolute monitor's $ML$; repeated-use limits are M7c. Interval metadata carries directional per-interval confidence and nominal simultaneous family confidence separately. [Paired inference](MONTE_CARLO.md#paired-scenario-inference) owns the current calculation.
+
+**Synthetic paired example:** ten paths for one team's championship indicator, with four-team family $M=24$ and $C=0.95$:
+
+| Paired sequence | Indicators for paths 0 through 9 |
+|---|---|
+| Baseline | 1,1,0,0,0,0,0,0,0,0 |
+| Hypothetical | 1,0,1,1,1,0,0,0,0,0 |
+
+There are 3 improvements, 1 worsening and 6 unchanged paths; frequencies are 0.2 and 0.4, with delta 0.2 (20 probability points). Each direction uses multiplicity 48. [The current paired implementation](../src/fantasy_football/scenario_evaluator.py) gives:
+
+| Paired quantity | Value |
+|---|---:|
+| Improvement lower | 0.057874103095 |
+| Improvement upper | 0.749373394327 |
+| Worsening lower | 0.007944620544 |
+| Worsening upper | 0.606550374301 |
+| Delta lower (fraction) | -0.548676271206 |
+| Delta upper (fraction) | 0.741428773783 |
+| Delta half-width (fraction) | 0.645052522494 |
+
+Displayed numbers are rounded only for reading. The broad interval crosses zero; a positive point estimate from ten synthetic pairs is not a resolved beneficial action. This scalar example demonstrates the estimator, not a complete four-team scenario or empirical acceptance probability.
+
+Probability fraction 0.10 is 10% probability. A rise to 0.12 is fraction difference 0.02, **two probability points**, and relative change $0.02/0.10=20\%$; relative change is undefined at a zero baseline. A fractional half-width 0.005 is 0.5 probability points. Mathematical points multiply fractions by 100 exactly once. Legacy API fields named `*_probability_points`, including the paired target, currently pass through engine fractions **without service-side scaling**; no conversion is inserted here. [APPLICATION_SERVICE](APPLICATION_SERVICE.md#public-dtos-units-and-validation) owns wire/storage behavior, INTERFACE current presentation, and [WR-017](BACKLOG.md#wr-017-query-export-and-unit-compatibility) the separately gated correction. Mathematical explanation does not change DTO names, stored values or frontend display.
+
+### Progressive selection, multiplicity and unresolved validity
+
+A fixed batch analyzes a prescribed range once. Progressive scenario evaluation repeatedly uses observed differences to allocate further sampling among completed states. After a **completed initial stage**, every selected unique state has equal initial exposure against a shared baseline. Equivalent completed states reuse one numerical evaluation while distinct candidate paths remain identifiable. Cancellation or initial-state budgets can leave coverage incomplete; unevaluated states receive no fabricated values. M8/M9 retain the detailed action grammar/state/ranking transfer for P6.
+
+At each refinement look, compare a candidate with the current requester-delta leader on their exact shared path prefix (the shorter accumulated range), retaining at least `minimum_finalist_states` plus states whose candidate-minus-leader upper bound is nonnegative. A data-selected leader does not justify independent marginal CI subtraction. Retained states needing more all-team paired championship precision receive the next common baseline/scenario range; competitive membership is reevaluated and finalist membership records selected states. No arrival-order precision advantage or hindsight change to earlier draws is permitted. The [progressive owner](MONTE_CARLO.md#progressive-search-and-multiplicity) and [actual evaluator](../src/fantasy_football/trade_search.py) retain exact selection details.
+
+For $K$ selected unique states, initial count $n_0$, refinement increment $d_s$ and maximum $n_s$,
+
+$$
+L_s=1+\left\lceil\frac{n_s-n_0}{d_s}\right\rceil,\qquad
+A=\max\!\left(1,\frac{K(K-1)}{2}L_s\right).
+$$
+
+These statistical families must not be conflated:
+
+| Family | Implemented allocation per interval/direction | Purpose and limit |
+|---|---|---|
+| Absolute baseline monitoring | $(1-C)/(ML)$ | All teams' championship/qualification/placements across planned absolute looks; Wilson approximation remains. |
+| Candidate-versus-leader selection | $(1-C)/(2A)$ per discordance direction | Requester's paired championship contrast over selected-state unordered pairs and planned selection looks. |
+| Progressive paired stopping/display | $(1-C)/(2M)$ per discordance direction | Reused one-comparison all-metric paired intervals; **no planned-look/across-state multiplier** in this calculation. |
+
+For example, four selected states and three selection looks give $A=6\times3=18$, so each candidate-contrast direction uses count $2A=36$. That is different from a four-team displayed comparison's $2M=48$ and from an absolute family's $ML$. The families differ in what is covered, not just numeric magnitudes.
+
+Finalist convergence monitors **all teams' paired championship deltas**, not qualification/placement precision (which is still reported). Individual precision, all-team precision, candidate generation coverage, state evaluation coverage and ranking resolution are distinct. Current flags `evaluation_complete`, `precision_complete` and `ranking_resolved` cannot be collapsed into one success label. Report actual state/path exposure, competitive/finalist IDs, unevaluated/initial/refinement/converged/capped statuses and unresolved rankings. A noisy visible leader, finished bounded run or the fixed-batch unified adapter does not prove a global optimum or adaptive convergence.
+
+**WR-025 remains unresolved.** Progressive all-team paired stopping/display repeatedly reuses the one-comparison $2M$ allocation without a separately established planned-look/across-state adjustment. Candidate-selection's $2A$ allocation does **not certify simultaneous repeated-look coverage** for those paired stopping/display intervals. The governing contract requires defensible sequential checking and finalist inference; matching formulas, narrower intervals or passing numerical tests cannot establish that coverage. No empirical undercoverage incident, replacement allocation or new coverage theorem is asserted here. [WR-025](BACKLOG.md#numerical-and-partial-evidence-obligations) requires independent statistical review of the intended family/guarantee, theoretical and seeded known-probability/optional-stopping evidence, and versioned compatibility review before any method change. Historical intervals, stopping results and identities remain unchanged.
+
+Five assurance questions remain separate:
+
+| Question | Relevant evidence and remaining limit |
+|---|---|
+| Implementation correctness | Does code compute the accepted algorithm? Synthetic/source/reference checks answer bounded cases. |
+| Numerical correctness | Do exact paths/counts/draws/intervals reproduce across partitions/workers/compatible recovery? Oracles/goldens/replay tests protect this without proving coverage. |
+| Statistical validity | Do approximations, multiplicity and sequential selection support the stated sampling claim? Wilson approximation and WR-025 require honest limits. |
+| Empirical model validity | Do forecasts/distributions match football outcomes under authentic timing/context? M2/RESEARCH/WR-019 retain provenance and held-out calibration gaps. |
+| Decision validity | Do rankings/roster proxies improve realistic decisions under appropriate execution assumptions? WR-008/019 retain full-simulation proxy/decision evidence and independent promotion. |
+
+A highly precise Monte Carlo estimate can describe a poor or biased outcome model. Neither synthetic numerical agreement nor a narrow interval authenticates source data, proves predictive calibration or validates real-world transaction decisions. [RESEARCH promotion](RESEARCH.md#component-specific-promotion), [WR-008](BACKLOG.md#wr-008-representative-performance-and-diagnostics) and WR-019 remain open; future VALIDATION will organize those obligations under the [accepted plan](development/model-documentation-architecture.md#validation-evidence-and-promotion), without a new authority file or release decision in P5.
+
+**Reader walkthrough:** fix the snapshot/model/policies, turn each ESPN-based player-week forecast into M2's realization vector, and run M3's complete season at each recorded path index. M6's four-path fixture reconciles counts before giving team 1 a championship estimate of 0.5. In a larger illustrative look with 12 wins out of 100, the estimate 0.12 has the Wilson range shown above and misses the governing target. A hypothetical must use the same player draws/path IDs; its paired uncertainty depends on improvements/worsenings, as in the ten-pair example, not subtracting two standalone intervals. More samples can reduce sampling error under the model; source trust, repeated-selection validity, calibration and decision usefulness require their own evidence.
+
+Inspected baseline: accepted P4 `9f08b9a58258702d0b2b87fee345036c07812b7b`. Source and reference checks remain inspectable in [aggregation/path validation](../src/fantasy_football/monte_carlo.py), [precision](../src/fantasy_football/monte_carlo_precision.py), [paired comparison](../src/fantasy_football/scenario_evaluator.py), [progressive evaluation](../src/fantasy_football/trade_search.py), [workers](../src/fantasy_football/monte_carlo_parallel.py) and [recovery](../src/fantasy_football/monte_carlo_execution.py). Existing [count/path adversaries](../tests/test_monte_carlo.py), [interval/stopping references](../tests/test_monte_carlo_precision.py), [paired regressions](../tests/test_scenario_evaluator.py), [selection/allocation checks](../tests/test_trade_search.py), [worker parity](../tests/test_monte_carlo_parallel.py), [checkpoint adversaries](../tests/test_monte_carlo_execution.py), [partial replay/goldens](../tests/test_partial_monte_carlo.py) and [Normal historical identity](../tests/test_missing_projection_zero.py) are **Verified by tests**, not new live/calibration evidence. Exact technical protocols remain in their current owners. No statistical method, policy, numerical test/oracle or historical artifact is changed; actual P5 commands/results belong in the PR.
 
 ## Manual scenarios and action-search methodology
 
