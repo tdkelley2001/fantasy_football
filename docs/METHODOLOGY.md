@@ -1,6 +1,6 @@
 # War Room methodology
 
-**P3 pilot: M1, M2, M3 and M5 are developed below; M6 provides a conceptual bridge.** The other chapters explicitly identify later scope. This is a quantitative reader's guide pending transfer review, not a new authority or a claim of empirical validation. Current [outcome](PLAYER_OUTCOME_MODEL.md), [data](DATA.md), [research](RESEARCH.md), [season](SEASON_SIMULATOR.md), [transaction](TRANSACTIONS.md) and [Monte Carlo](MONTE_CARLO.md) contracts remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence). No existing owner is retired or superseded. The [accepted architecture plan](development/model-documentation-architecture.md#reviewable-implementation-packages) defines subsequent packages; [BACKLOG](BACKLOG.md) retains open obligations. For operating procedures, use the [user guide pilot](USER_GUIDE.md).
+**P4 pilot: M1 through M5 are developed below; M6 provides a conceptual bridge.** The other chapters explicitly identify later scope. This is a quantitative reader's guide pending transfer review, not a new authority or a claim of empirical validation. Current [outcome](PLAYER_OUTCOME_MODEL.md), [data](DATA.md), [research](RESEARCH.md), [season](SEASON_SIMULATOR.md), [transaction](TRANSACTIONS.md) and [Monte Carlo](MONTE_CARLO.md) contracts remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence). No existing owner is retired or superseded. The [accepted architecture plan](development/model-documentation-architecture.md#reviewable-implementation-packages) defines subsequent packages; [BACKLOG](BACKLOG.md) retains open obligations. For operating procedures, use the [user guide pilot](USER_GUIDE.md).
 
 ## Contents
 
@@ -20,6 +20,10 @@
   - [Postseason graphs, periods and placements](#postseason-graphs-periods-and-placements)
   - [Complete season walkthrough](#complete-season-walkthrough)
 - [M4: Current-week and partial-week treatment](#current-week-and-partial-week-treatment)
+  - [Observed assignments, proposed assignments and locks](#observed-assignments-proposed-assignments-and-locks)
+  - [Fixed actuals and supplied remaining realizations](#fixed-actuals-and-supplied-remaining-realizations)
+  - [Standings cutoff, period carry and season integration](#standings-cutoff-period-carry-and-season-integration)
+  - [Supported execution states and pregame equivalence](#supported-execution-states-and-pregame-equivalence)
 - [M5: Roster evolution and transaction rules](#roster-evolution-and-transaction-rules)
   - [Legal state and explicit model conventions](#legal-state-and-explicit-model-conventions)
   - [Operational essential acquisitions](#operational-essential-acquisitions)
@@ -303,7 +307,141 @@ The known zero D/ST contribution for team 1 is already included in those totals.
 
 ## Current-week and partial-week treatment
 
-**M4 scope only, for P4.** Full-week forecasts cannot stand in for in-game remaining points. [PARTIAL_WEEK](PARTIAL_WEEK.md#current-capability-map) owns immutable observed assignments, independent lock/cutoff/full-period authority and fixed/remaining/carry composition. Its deterministic companion uses the same season engine; its narrower Monte Carlo subset accepts fully unstarted relevant current-week players with approved full-game projections, matching legal lineups/policies and no ownership-changing first-week acquisition for V1 equivalence. Completed/in-progress/missing/ambiguous MC states fail closed. No live translator, conditional remainder model, current-week recommendation or public partial execution is authorized by this chapter.
+M2 generates full future-game outcomes and M3 ordinarily starts at a verified unplayed boundary. A partly observed week needs a different **input contract**, not another season engine: preserve what has happened, identify what may legally change, and supply only the still-unobserved contribution that execution explicitly permits. [PARTIAL_WEEK](PARTIAL_WEEK.md) remains the substantive authority. This pilot explains its method without changing the companion, source mapping, scoring formula or numerical identity.
+
+Four boundaries must remain separate: **source observation**, **preservable evidence**, **executable deterministic input**, and **supported stochastic experiment**. A source record or checksum does not cross all four. A validated synthetic companion is **Verified by tests**, not authenticated live ESPN evidence. The supplied authority vocabulary is `verified_live`, `verified_by_tests`, `unverified`, `unsupported`; those declarations do not independently authenticate source bytes or real-world permission.
+
+### Observed assignments, proposed assignments and locks
+
+Canonical roster records establish player/team/slot ownership as of retrieval. They do not automatically establish a historical current-week lineup. Observed evidence must match **exact canonical player/team/slot assignments**, derived starter/bench/reserve roles and exact canonical eligibility, with every roster entry once, configured capacities, referenced sources and observation times within the snapshot/companion retrieval interval. A legally eligible FLEX/bench exchange can still be a forged observation. League-specific slots and capacities come from configuration, not a universal roster template.
+
+Executable timing requires the assignment source view to include `mRoster` and either request `scoringPeriodId` equal to the companion's current week, or be an unparameterized current roster request whose snapshot live context identifies that same week. The simulation horizon is not timing evidence. A coherent record with unknown/wrong roster timing can be preserved, but execution fails closed. [Observed authority](PARTIAL_WEEK.md#observed-assignments-and-locks) and [DATA's temporal boundary](DATA.md#live-and-temporal-evidence) retain the precise source interpretation.
+
+The proposed lineup is a separate complete player/team/slot assignment over the same observed roster. It cannot change ownership or overwrite immutable observation. Eligibility and starter/bench/reserve capacities remain mandatory. Lock permission is player-specific:
+
+| Lock state | Evidence and proposed movement | Executable composition |
+|---|---|---|
+| `verified_locked` | Verified determination; assignment cannot move | Preserve the observed slot. |
+| `verified_changeable` | Verified determination; a started player cannot have this state | May move only to a configured eligible slot within capacity. |
+| `unresolved` | Coherent unverified/unsupported permission may be preserved; assignment cannot move | Rejected **even when the proposed slot is unchanged**. |
+
+Kickoff timestamps, NFL scheduled/completed status and assumed league-wide locking conventions cannot substitute for independently verified lock/change permission. Executable composition validates a **supplied hypothetical lineup**, not a current-week recommendation or optimizer. Current-week locks protect observed assignments; later weeks return to ordinary lineup selection instead of inheriting those locks forever.
+
+### Fixed actuals and supplied remaining realizations
+
+Each player record separates NFL game status, score state, fixed actuals, full-game projection, remaining-contribution approval and source. There are exactly five score states. **Unresolved authority is an evidence condition, not a sixth score-state enum.** Confirmed actual zero and missing evidence remain different.
+
+| Score state | Preservable evidence | Deterministic starter contribution |
+|---|---|---|
+| `completed_fixed` | Completed game and confirmed finite actual, including zero/negative; remainder not applicable | Fixed actual once; any supplied resimulation input rejects. A zero/negative projection cannot erase it. |
+| `unstarted` | Scheduled game, no actual, finite approved full-game projection | Exactly one finite `unstarted_realized_points`; no approved-remainder value. |
+| `in_progress` | In-progress game, confirmed actual-so-far; remaining status approved or unresolved, never not-applicable | Requires approved semantics and exactly one finite `approved_remaining_points`; no unstarted value. Unresolved remainder blocks execution. |
+| `missing` | No invented actual or remainder | Evidence can be retained, but executable validation rejects missing states, including supplied nonstarter records. |
+| `nonparticipating` | No invented actual or remainder | Cannot contribute as a starter; do not supply a realization for it. This label is not inferred from a zero projection. |
+
+Bench/reserve and explicit fantasy-team bye assignments contribute no starter points; supplied unused values still reject. Missing actuals cannot be filled with zero. Duplicate values, values for completed players, wrong categories, omitted required values and unused bench/bye inputs fail. Approval of an in-progress deterministic remainder applies to explicit supplied values; it does not create a conditional probability distribution, injury/participation event, pace model or remaining-value estimator. In particular, **projection minus actual-so-far is not an authorized remainder**. An injury during a game does not itself authorize zero remaining points.
+
+For current scoring week $w$, let $J_{tw}$ be the proposed executable non-bye starters. Define components for each starter $j$:
+
+$$
+(f_{jw},r_{jw}^{\mathrm{rem}})=
+\begin{cases}
+(A_{jw},0),&\text{completed_fixed},\\
+(0,x_{jw}^{\mathrm{full}}),&\text{unstarted},\\
+(A_{jw}^{\mathrm{sofar}},x_{jw}^{\mathrm{rem}}),&\text{in_progress with approved remainder}.
+\end{cases}
+$$
+
+Here $x^{\mathrm{full}}$ and $x^{\mathrm{rem}}$ are explicitly supplied realizations, not observed facts or automatic transformations of ESPN projections. Then
+
+$$
+F^{\mathrm{fixed}}_{tw}=\operatorname{fsum}_{j\in J_{tw}}f_{jw},\qquad
+R^{\mathrm{rem}}_{tw}=\operatorname{fsum}_{j\in J_{tw}}r_{jw}^{\mathrm{rem}},\qquad
+Q_{tw}=F^{\mathrm{fixed}}_{tw}+R^{\mathrm{rem}}_{tw}.
+$$
+
+Thus **current-week points = fixed actuals + approved remaining points**. Observed current-week team points must reconcile **exactly to $F^{\mathrm{fixed}}_{tw}$**, not to carry, projections or simulated remainder. Source observations and modeled contributions keep separate provenance. Preserve signed finite values and the existing accumulation/order; these accounting equations authorize no reassociation, clipping, rounding or tolerance substitution.
+
+Let $C_{tm}$ be independently verified earlier-week carry within current matchup period $m$. The composed period slice is $C_{tm}+F^{\mathrm{fixed}}_{tw}+R^{\mathrm{rem}}_{tw}$. When $w$ is the last week of $m$, **final matchup-period points = prior verified carry + current-week points**. If the period continues, future weekly scores must also accumulate before finalization. The composer's field `final_matchup_points` names this composed slice; it does not authorize premature bracket advancement. [Composition authority](PARTIAL_WEEK.md#player-states-and-deterministic-composition) owns the exact arithmetic contract.
+
+**Synthetic signed example:** use the existing reconstructible first-round postseason fixture with full period membership **(15,16,17)**, current week 16, simulation horizon 16–17, verified cutoff through 14 excluding this period, and complete prior week-15 team scores. Team 1's carry is 100. Its locked completed D/ST has actual **-2**; its locked in-progress QB has actual-so-far **3** and an explicitly approved deterministic remainder **4** (not projection minus actual). The fixture's verified-test observed current-week total is **1**:
+
+| Component | Points |
+|---|---:|
+| Completed fixed actual | -2 |
+| In-progress actual-so-far | 3 |
+| Fixed current-week sum | 1 |
+| Approved deterministic remainder | 4 |
+| Composed current-week total | 5 |
+| Verified week-15 carry | 100 |
+| Composed period slice through modeled week 16 | 105 |
+| Subsequent week-17 realization | 3 |
+| Final period total after all three weeks | 108 |
+
+The opponent's carry 0, week-16 realization 15 and week-17 realization 30 give final 45. Prior coverage also includes both consolation participants (week-15 scores 10 and 0), not just the title teams. The fixture provides a matching roster-time source, verified-test locks/score/carry/cutoff and exact team/week history. At week 16 there are no placements; week 17 resolves 108 versus 45. This is synthetic executable arithmetic based on [the existing carry fixture](../tests/test_partial_season.py), not live source authentication or an unconditional forecast for the QB.
+
+### Standings cutoff, period carry and season integration
+
+The full period $m$ can begin before the stored simulation horizon. The first simulation week is not proof that preceding scoring contributions may be omitted. Companion membership must match canonical schedule authority; with current live metadata, use independently supported full `matchup_period_configuration` membership including pre-horizon weeks. A shortened stored list cannot establish a safe boundary. A different live current week cannot simply be omitted. Without live metadata, the accepted canonical period/request-timing contract still applies; schema-v2/v3 reads and earlier readable v4 records do not manufacture new evidence or execution permission.
+
+Standings cutoff names settled period IDs, through-week, explicit exclusion of current period, source and authority. Executable composition requires a verified cutoff excluding the current period. **Season execution additionally requires through-week = first actual period week minus one**, all known preceding canonical periods settled and no known current/future period settled. It validates those supplied assertions; it does not independently authenticate historical ESPN cumulative standings totals. Current-period scores and carry cannot already be included in initial settled standings. [Period/cutoff authority](PARTIAL_WEEK.md#standings-and-period-authority) preserves these separate gates.
+
+Mid-period matchups need verified finite carry for both teams; first-week evidence cannot invent earlier carry. For postseason execution, provide exactly every preceding current-period **team/week contribution**, including pre-horizon weeks, with no duplicates, omissions or unrelated teams. Each team's `fsum` must equal its aggregate verified carry. Source-grounded scheduled pairings and explicit byes must cover rostered teams and agree with modeled seeded participants. Fantasy bye teams need no score inputs, while active championship and consolation obligations remain separate.
+
+NFL completion or `statsOfficial` alone establishes neither fantasy settlement, standings incorporation nor stat-correction finality. Raw score presence, wall time and hashes cannot close those gaps. Corrections need new immutable snapshot/evidence publication; old bytes/results are not rewritten. The existing [DATA observations](DATA.md#source-observations-and-limitations) remain bounded historical evidence: the 11 November 2026 unplayed sample verified candidate field presence/type, not active-game lock permissions, conditional remainders, live score latency, carry/bench semantics or fantasy finality.
+
+The opt-in deterministic path uses M3's **same season coordinator**, in this logical dependency sequence (the implementation performs composition during preparation and checks further season gates before returning a result):
+
+1. Validate snapshot/companion linkage, timing, sources and preservation invariants; require the season path's verified companion-level authority and no unresolved dependent capabilities.
+2. Validate exact observed assignments and the separate proposed lineup, capacities, eligibility and executable locks.
+3. Reconcile current week, authoritative full membership, immediately preceding standings cutoff and required prior carry/history. Missing authority cannot be replaced by a checksum or a later start.
+4. Compose the current week exactly once from fixed and supplied values. Ordinary deterministic scenario scores must contain **subsequent weeks only**; a first-week score in that scenario rejects rather than contributing again.
+5. Skip first-week essential transactions. Reject retroactive initial ownership/slot-state changes or an existing transaction ledger. A separately legal lineup proposal is a supplied slot assignment under verified permissions, not a current-week trade/claim authorization.
+6. For regular scoring, reuse the weekly resolver, disabling only ordinary positive-projection selection for these already validated starters; ownership, eligibility, capacities and canonical values remain checked. For postseason, replay verified prior weekly contributions into the existing accumulator, then add **only current fixed-plus-remaining**, not aggregate carry again.
+7. Restore full period membership and advance only once all applicable weeks are complete. Resume ordinary future-week transactions, lineup optimization, scoring and bracket progression; current-week locks do not freeze future decisions.
+
+Supported season starts are single-week regular periods and reconstructible **first-round** postseason matchups/byes, including mid-round carry with complete preceding history. Later-round starts lacking prior bracket history fail rather than inventing winners or seeds. Partial execution explicitly rejects multiweek regular periods; ordinary V1's separate WR-014 guard gap in M3 remains unchanged. No full historical postseason reconstruction is claimed. [Integration authority](PARTIAL_WEEK.md#deterministic-season-integration) and [M3's current owner](SEASON_SIMULATOR.md#partial-first-week) retain exact interfaces and restrictions.
+
+### Supported execution states and pregame equivalence
+
+| Capability | Permitted calculation | Evidence/unsupported boundary |
+|---|---|---|
+| Ordinary whole-week V1 | Existing projected lineups, transactions and full-game draws | With live metadata, current unplayed week must start its independently supported full period; cannot skip unresolved preceding contributions/settlement. |
+| Deterministic partial composer | Supplied legal lineup with fixed actuals, approved full-game or deterministic remaining values and verified carry | Exact current observed-score reconciliation, timing, locks, cutoff and field-specific authorities; preservation/serialization alone is insufficient. |
+| Deterministic partial season | First composed week once, then the same ordinary coordinator | Adds verified companion-level authority, immediate period cutoff, pair/bye/history reconstruction and no initial/current transactions. |
+| Fully-unstarted partial Monte Carlo | Existing full-game player draws routed through the deterministic partial input | **Every rostered current player, including bench and reserve**, must be unstarted with approved matching nonmissing canonical projection. |
+| Current-week browser/conditional forecasting | Unsupported | No public partial request fields, automatic source translator, current-week action/lineup recommendation or conditional remaining-game sampler. |
+
+The Monte Carlo gate is stronger than deterministic composition. Completed, in-progress (even with an approved deterministic remainder), missing and nonparticipating rostered players all reject, as do unresolved game/lock/remaining/cutoff permissions. A scheduled NFL game is a player-state fact; a fantasy-team bracket bye is a scoring obligation. The latter does **not waive the rostered-player gate**: its players must still meet unstarted/full-game requirements, even though their current-week draws are not used as starter inputs. Matching nonmissing canonical projections may be explicit zero or signed values; this gate does not turn them into ordinary positive-projection eligible starters.
+
+Before sampling, Monte Carlo validates the companion, proposed lineup and the narrow current-player gate. The deterministic coordinator retains the additional period/cutoff/history execution checks; passing the sampler gate cannot waive them. Generate the existing **complete canonical player-week universe exactly once per path**. Map only proposed current non-bye starter draws to unstarted deterministic values, remove **all current-week scores** from the ordinary subsequent-week scenario, and call the same coordinator. Bench/reserve/bye draws remain in the original scenario identity but are not supplied as unused composition inputs. No second independent draw set, completed resimulation, in-game unconditional redraw or conditional distribution is added. Future-week draws and mathematics are unchanged.
+
+Three identity scopes are distinct:
+
+| Scope | Meaning and limit |
+|---|---|
+| Companion identity | Binds immutable snapshot/league/season, current week/full period, retrieval interval, selected sources, observed assignments, player/matchup/cutoff evidence and declared unresolved capabilities. Artifact version 1 is independent of snapshot schemas 2/3/4. |
+| Source-basis digest | Binds snapshot identity and selected source IDs/payload hashes; **not all companion content**, not independent authentication and not sufficient run identity. |
+| Full-content integrity/configuration | Serialized artifact checksum covers complete evidence. Deterministic partial provenance also includes sorted proposed lineup, supplied realizations and history; Monte Carlo configuration binds complete companion, proposed lineup/history and the partial contract alongside ordinary model/policies. Changes invalidate incompatible checkpoints. A rewritten content/checksum pair is not authentic evidence. |
+
+The path summary retains the **original complete scenario ID and score-content digest** for matched-draw auditing. Partial and ordinary configurations intentionally differ when the companion is supplied; score identity is not configuration identity. With absent partial input, no partial fingerprint/provenance entry is added. Existing corrected-Normal versus historical-Normal identity boundaries in M2 remain independent. Exact serialization, hash recipes, typed interfaces and checkpoint/execution compatibility remain in [companion preservation](PARTIAL_WEEK.md#companion-identity-and-preservation), [MC routing](PARTIAL_WEEK.md#monte-carlo-subset) and [numerical identity](MONTE_CARLO.md#configuration-run-and-path-identity), not a new technical specification here.
+
+Pregame equivalence requires identical snapshot, model, seed, **prescribed path range**, league/IR/acquisition/postseason policies, consistent period/cutoff/history evidence, matching legal current starters (including V1's optimized assignments), the same player-week realizations and no first-week acquisition changing ownership. Under these supported preconditions, team scores, matchups, standings, postseason/path outcomes and aggregate probabilities agree. Partial provenance and first-week transaction audit remain distinct. A different legal supplied lineup may intentionally change team outcomes without changing player draws. Seed alone, unequal adaptive path counts or unsupported in-progress states cannot establish equivalence. Sequential/batched/parallel and execution-compatible resumed runs must preserve the same supported path results; P5 retains detailed inference and numerical recovery treatment.
+
+Useful falsification cases and existing evidence include:
+
+| Attempt | Required result / current regression evidence |
+|---|---|
+| Eligible observed starter/FLEX/bench exchange or overcapacity | Reject mismatch with canonical observation or capacities; [lineup adversaries](../tests/test_partial_week.py). A separately changeable legal proposal does not rewrite evidence. |
+| Move locked/unresolved player, or leave unresolved lock unchanged | Proposed movement rejects; unchanged unresolved lock still fails execution; [lock fixtures](../tests/test_partial_week.py). |
+| Replace missing actual with zero, or in-progress input without approved remainder | Preserve genuine zero; reject invented actual or unresolved execution; [state/composition fixtures](../tests/test_partial_week.py). |
+| Wrong cutoff, shortened full membership, omitted/duplicate/conflicting carry history | Reject inclusion/gap/authority/coverage mismatch; [period/carry integration](../tests/test_partial_season.py). |
+| First-week ordinary score, retroactive initial ownership or transaction ledger | Reject double contribution/current transaction; [once-only season tests](../tests/test_partial_season.py). |
+| Completed/in-progress/nonparticipating/missing bench or reserve, including a fantasy-bye roster | Reject the narrow gate before sampling; [MC gate/draw-once/equivalence evidence](../tests/test_partial_monte_carlo.py). |
+
+This chapter preserves the plan's **S128–S136 and S165** mapping without transferring current ownership. Future responsibilities remain identifiable through the [accepted partial-week disposition](development/model-documentation-architecture.md#partial-week-disposition): DATA/D5 owns field/timing/assignment/lock/cutoff source authority; M4 owns composition/use/integration/equivalence; future VALIDATION V1/V2 will organize adversarial/once-only/replay checks; future TECHNICAL_REFERENCE T2/T4/T6 will organize artifact/interface/identity bytes. Those future files do not exist and are not linked as current authorities. BACKLOG retains unimplemented translation, public integration, historical reconstruction and conditional research.
+
+The supported implementation at accepted P3 `a9cca474ae0157050cea8cc14368275e2435f17d` is inspectable in [foundation](../src/fantasy_football/partial_week.py), [serialization](../src/fantasy_football/partial_week_serialization.py), [season coordinator](../src/fantasy_football/season_simulator.py) and [Monte Carlo](../src/fantasy_football/monte_carlo.py). Tests prove synthetic/code behavior, not new live authentication or calibration. [WR-009 through WR-015](BACKLOG.md#numerical-and-partial-evidence-obligations) and [WR-018/019](BACKLOG.md#mechanics-review-obligations) retain active-game evidence, permission, translation/API, wider state, bracket-history and conditional-method gates. Approved future conditional research requires authentic immutable intragame vintages and held-out group/clock/support/calibration/decision evidence; retrospective final scores or a supplied deterministic remainder cannot establish it. No LW2.3B functionality, model promotion, source-consumer migration or release approval follows from P4.
 
 ## Roster evolution and transaction rules
 

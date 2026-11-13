@@ -10,21 +10,65 @@ from pathlib import Path
 
 import pytest
 
-from fantasy_football.canonical.model import ProjectionClass
+from fantasy_football.canonical.model import (
+    FantasyMatchup,
+    MatchupEntryStatus,
+    ProjectionClass,
+)
+from fantasy_football.evolving_state import (
+    IRPolicy,
+    advance_cycle,
+    initialize_evolving_state,
+)
 from fantasy_football.lineup_optimizer import optimize_starting_lineup
+from fantasy_football.live_scoring import NFLGameStatus
+from fantasy_football.monte_carlo import (
+    MonteCarloError,
+    MonteCarloPartialWeekInput,
+    run_monte_carlo_path,
+    simulation_configuration_fingerprint,
+)
+from fantasy_football.partial_week import (
+    DeterministicPlayerValue,
+    EvidenceAuthority,
+    LineupRole,
+    LockState,
+    PartialWeekError,
+    PlayerScoreState,
+    RemainingContributionStatus,
+    compose_partial_week_scores,
+    require_executable_partial_week_evidence,
+    validate_partial_week_evidence,
+    validate_proposed_lineup,
+)
+from fantasy_football.partial_week_serialization import partial_week_to_json
 from fantasy_football.player_outcomes import ProvisionalNormalModel
-from fantasy_football.postseason import generate_championship_graph
+from fantasy_football.postseason import (
+    generate_championship_graph,
+    initialize_postseason,
+)
 from fantasy_football.roster_value import ReplacementAccessContext, value_roster
+from fantasy_football.season_simulator import (
+    DeterministicScoreScenario,
+    SeasonSimulationError,
+)
 from fantasy_football.transaction_cycle import validate_operational_policy_equivalence
+from fantasy_football.weekly_engine import RealizedPlayerScore, initialize_standings
 from fantasy_football.weekly_transactions import execute_weekly_essential_transactions
 from tests.test_lineup_optimizer import _lineup_snapshot, _present, _reference
 from tests.test_m33_player_outcomes import _model
+from tests.test_partial_monte_carlo import _case as _mc_partial_case
+from tests.test_partial_season import _execute, _multiweek, _partial, _timed
 from tests.test_roster_value import (
     _assert_production_matches_oracle,
     _state,
     _valuation_snapshot,
 )
-from tests.test_season_simulator import _run, _snapshot
+from tests.test_season_simulator import (
+    _fourteen_team_postseason_snapshot,
+    _run,
+    _snapshot,
+)
 from tests.test_weekly_transactions import _policy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -355,3 +399,442 @@ def test_mechanics_rejects_lost_constraint_or_known_gap(lost: str) -> None:
     assert lost in text
     with pytest.raises(AssertionError, match="Missing mechanics contract"):
         _validate_mechanics(text.replace(lost, "REMOVED"))
+
+
+def _signed_partial_example():
+    """P4 table on the existing first-round, pre-horizon carry fixture."""
+    snapshot, future, partial = _multiweek()
+    evidence = replace(
+        partial.evidence,
+        players=tuple(
+            replace(
+                item,
+                nfl_game_status=NFLGameStatus.COMPLETED,
+                score_state=PlayerScoreState.COMPLETED_FIXED,
+                fixed_actual_points=-2.0,
+                full_game_projection=None,
+                remaining_status=RemainingContributionStatus.NOT_APPLICABLE,
+            )
+            if item.player_id == -101
+            else replace(
+                item,
+                nfl_game_status=NFLGameStatus.IN_PROGRESS,
+                score_state=PlayerScoreState.IN_PROGRESS,
+                fixed_actual_points=3.0,
+            )
+            if item.player_id == 1
+            else item
+            for item in partial.evidence.players
+        ),
+        lineups=tuple(
+            replace(item, lock_state=LockState.VERIFIED_LOCKED)
+            if item.player_id in {-101, 1}
+            else item
+            for item in partial.evidence.lineups
+        ),
+        matchups=tuple(
+            replace(
+                item,
+                home_observed_week_points=1.0 if item.home_team_id == 1 else 0.0,
+                away_observed_week_points=1.0 if item.away_team_id == 1 else 0.0,
+            )
+            for item in partial.evidence.matchups
+        ),
+    )
+    partial = replace(
+        partial,
+        evidence=evidence,
+        values=tuple(item for item in partial.values if item.player_id not in {-101, 1})
+        + (DeterministicPlayerValue(1, approved_remaining_points=4.0),),
+    )
+    return snapshot, future, partial
+
+
+def test_partial_table_matches_composer_and_once_only_postseason_execution() -> None:
+    table = _guide().split("| Component | Points |\n")[1].split("\n\n")[0]
+    values = {
+        line.split("|")[1].strip(): float(line.split("|")[2])
+        for line in table.splitlines()[1:]
+    }
+    snapshot, future, partial = _signed_partial_example()
+    assert snapshot.first_simulation_week == 16
+    assert partial.evidence.matchup_period_scoring_weeks == (15, 16, 17)
+    assert partial.evidence.standings_cutoff.through_scoring_week == 14
+    composed = compose_partial_week_scores(
+        snapshot, partial.evidence, partial.lineup, partial.values
+    )
+    team = next(item for item in composed.teams if item.team_id == 1)
+    completed, progress = sorted(team.starters, key=lambda item: item.player_id)
+    assert completed.fixed_points == values["Completed fixed actual"]
+    assert progress.fixed_points == values["In-progress actual-so-far"]
+    assert team.fixed_points == values["Fixed current-week sum"]
+    assert team.remaining_points == values["Approved deterministic remainder"]
+    assert (
+        team.fixed_points + team.remaining_points
+        == values["Composed current-week total"]
+    )
+    assert team.carry_in_points == values["Verified week-15 carry"]
+    assert (
+        team.final_matchup_points
+        == values["Composed period slice through modeled week 16"]
+    )
+    before = (repr(snapshot), partial_week_to_json(partial.evidence))
+    result = _execute(snapshot, future, partial)
+    assert not result.weeks[0].postseason_state.placements
+    first = next(
+        item for item in result.weeks[0].frozen_team_weeks if item.team_id == 1
+    )
+    assert first.realized_points == values["Composed current-week total"]
+    final = result.final_postseason_state.championship_matchups[0]
+    assert final.home_total == values["Final period total after all three weeks"]
+    assert final.away_total == 45.0
+    assert len(final.weekly_scores) == 6  # every paired team/week, carry replayed once
+    assert (repr(snapshot), partial_week_to_json(partial.evidence)) == before
+
+
+@pytest.mark.parametrize(
+    ("fault", "message"),
+    (
+        ("observed", "differs from canonical roster slot"),
+        ("locked", "locked or unresolved assignment cannot move"),
+        ("unchanged_unresolved", "unresolved lock status"),
+        ("missing_actual", "completed state requires completed game and fixed actual"),
+        ("remainder", "no approved remainder"),
+        ("cutoff", "immediately before the current matchup period"),
+        ("membership", "membership differs from canonical schedule evidence"),
+        ("duplicate_carry", "duplicate prior postseason team/week contribution"),
+        ("missing_carry", "cover exactly every preceding current-period team/week"),
+        ("first_week_score", "supplied only through partial realizations"),
+    ),
+)
+def test_partial_example_falsification_cases(fault: str, message: str) -> None:
+    snapshot, future, partial = _signed_partial_example()
+    evidence = partial.evidence
+    if fault == "observed":
+        evidence = replace(
+            evidence,
+            lineups=tuple(
+                replace(item, lineup_slot_id=20, role=LineupRole.BENCH)
+                if item.player_id == 1
+                else item
+                for item in evidence.lineups
+            ),
+        )
+    elif fault == "locked":
+        partial = replace(
+            partial,
+            lineup=tuple(
+                replace(item, lineup_slot_id=20) if item.player_id == 1 else item
+                for item in partial.lineup
+            ),
+        )
+    elif fault == "unchanged_unresolved":
+        evidence = replace(
+            evidence,
+            lineups=tuple(
+                replace(
+                    item,
+                    lock_state=LockState.UNRESOLVED,
+                    lock_authority=EvidenceAuthority.UNVERIFIED,
+                )
+                if item.player_id == 1
+                else item
+                for item in evidence.lineups
+            ),
+        )
+        validate_partial_week_evidence(snapshot, evidence)
+        validate_proposed_lineup(snapshot, evidence, partial.lineup)
+    elif fault in {"missing_actual", "remainder"}:
+        evidence = replace(
+            evidence,
+            players=tuple(
+                replace(item, fixed_actual_points=None)
+                if fault == "missing_actual" and item.player_id == -101
+                else replace(
+                    item, remaining_status=RemainingContributionStatus.UNRESOLVED
+                )
+                if fault == "remainder" and item.player_id == 1
+                else item
+                for item in evidence.players
+            ),
+        )
+    elif fault == "cutoff":
+        evidence = replace(
+            evidence,
+            standings_cutoff=replace(
+                evidence.standings_cutoff, through_scoring_week=15
+            ),
+        )
+    elif fault == "membership":
+        evidence = replace(evidence, matchup_period_scoring_weeks=(16, 17))
+    elif fault == "duplicate_carry":
+        partial = replace(
+            partial,
+            prior_postseason_scores=partial.prior_postseason_scores
+            + partial.prior_postseason_scores[:1],
+        )
+    elif fault == "missing_carry":
+        partial = replace(partial, prior_postseason_scores=())
+    else:
+        future = replace(
+            future,
+            scores=future.scores + (RealizedPlayerScore(1, snapshot.season, 16, 5.0),),
+        )
+    with pytest.raises((PartialWeekError, SeasonSimulationError), match=message):
+        _execute(snapshot, future, replace(partial, evidence=evidence))
+
+
+def test_partial_companion_basis_is_not_full_content_or_configuration_identity() -> (
+    None
+):
+    snapshot, config, model = _mc_partial_case()
+    evidence = config.partial_week.evidence
+    changed = replace(
+        evidence,
+        lineups=tuple(
+            replace(item, lock_state=LockState.VERIFIED_LOCKED)
+            if item.player_id == 1
+            else item
+            for item in evidence.lineups
+        ),
+    )
+    require_executable_partial_week_evidence(snapshot, changed)
+    assert changed.evidence_digest_sha256 == evidence.evidence_digest_sha256
+    assert partial_week_to_json(changed) != partial_week_to_json(evidence)
+    other = replace(config, partial_week=replace(config.partial_week, evidence=changed))
+    assert simulation_configuration_fingerprint(
+        snapshot, config, model
+    ) != simulation_configuration_fingerprint(snapshot, other, model)
+    ordinary, baseline = run_monte_carlo_path(
+        snapshot, replace(config, partial_week=None), model, 0, retain_result=True
+    )
+    actual, partial = run_monte_carlo_path(
+        snapshot, config, model, 0, retain_result=True
+    )
+    assert actual == ordinary  # includes complete original scenario digest
+    assert partial.weeks[0].frozen_team_weeks == baseline.weeks[0].frozen_team_weeks
+    assert partial.weeks[1:] == baseline.weeks[1:]
+    assert partial.final_postseason_state == baseline.final_postseason_state
+
+
+class _NoPartialSampling:
+    def generate_scenario(self, *args, **kwargs):
+        pytest.fail("unsupported evidence must reject before sampling")
+
+
+@pytest.mark.parametrize(
+    ("slot", "role"), ((20, LineupRole.BENCH), (21, LineupRole.RESERVE))
+)
+def test_partial_mc_does_not_exempt_nonstarting_rostered_players(slot, role) -> None:
+    snapshot, config, _ = _mc_partial_case()
+    snapshot = replace(
+        snapshot,
+        roster_entries=tuple(
+            replace(item, lineup_slot_id=slot) if item.player_id == 1 else item
+            for item in snapshot.roster_entries
+        ),
+    )
+    partial = config.partial_week
+    evidence = replace(
+        partial.evidence,
+        lineups=tuple(
+            replace(item, lineup_slot_id=slot, role=role)
+            if item.player_id == 1
+            else item
+            for item in partial.evidence.lineups
+        ),
+        players=tuple(
+            replace(
+                item,
+                nfl_game_status=NFLGameStatus.UNKNOWN,
+                score_state=PlayerScoreState.NONPARTICIPATING,
+                remaining_status=RemainingContributionStatus.NOT_APPLICABLE,
+            )
+            if item.player_id == 1
+            else item
+            for item in partial.evidence.players
+        ),
+    )
+    lineup = tuple(
+        replace(item, lineup_slot_id=slot) if item.player_id == 1 else item
+        for item in partial.lineup
+    )
+    validate_partial_week_evidence(snapshot, evidence)
+    validate_proposed_lineup(snapshot, evidence, lineup)
+    with pytest.raises(MonteCarloError, match="LW2.3A requires unstarted.*player 1"):
+        run_monte_carlo_path(
+            snapshot,
+            replace(
+                config, partial_week=replace(partial, evidence=evidence, lineup=lineup)
+            ),
+            _NoPartialSampling(),
+            0,
+        )
+
+
+def test_partial_mc_fantasy_bye_does_not_waive_player_gate() -> None:
+    snapshot = _timed(_fourteen_team_postseason_snapshot())
+    bracket = initialize_postseason(snapshot, initialize_standings(snapshot))
+    games = bracket.championship_matchups + bracket.consolation_matchups
+    snapshot = replace(
+        snapshot,
+        fantasy_matchups=tuple(
+            FantasyMatchup(
+                index,
+                item.matchup_period_id,
+                item.home_team_id,
+                item.away_team_id,
+                item.bracket_type.value,
+                MatchupEntryStatus.BYE
+                if item.away_team_id is None
+                else MatchupEntryStatus.SCHEDULED,
+            )
+            for index, item in enumerate(games, 1)
+        ),
+    )
+    full = DeterministicScoreScenario(
+        "p4-synthetic-bye",
+        tuple(
+            RealizedPlayerScore(
+                item.player_id, snapshot.season, snapshot.first_simulation_week, 10.0
+            )
+            for item in snapshot.players
+        ),
+    )
+    deterministic, _ = _partial(snapshot, full)
+    bye_teams = {item.home_team_id for item in games if item.away_team_id is None}
+    target = next(
+        item.player_id for item in snapshot.roster_entries if item.team_id in bye_teams
+    )
+    evidence = replace(
+        deterministic.evidence,
+        players=tuple(
+            replace(
+                item,
+                nfl_game_status=NFLGameStatus.UNKNOWN,
+                score_state=PlayerScoreState.NONPARTICIPATING,
+                remaining_status=RemainingContributionStatus.NOT_APPLICABLE,
+            )
+            if item.player_id == target
+            else item
+            for item in deterministic.evidence.players
+        ),
+    )
+    validate_partial_week_evidence(snapshot, evidence)
+    _, config, _ = _mc_partial_case()
+    with pytest.raises(
+        MonteCarloError, match=f"LW2.3A requires unstarted.*player {target}"
+    ):
+        run_monte_carlo_path(
+            snapshot,
+            replace(
+                config,
+                partial_week=MonteCarloPartialWeekInput(evidence, deterministic.lineup),
+            ),
+            _NoPartialSampling(),
+            0,
+        )
+
+
+def test_partial_confirmed_zero_stays_fixed_and_initial_ledger_is_rejected() -> None:
+    snapshot, future, partial = _signed_partial_example()
+    zero = replace(
+        partial.evidence,
+        players=tuple(
+            replace(item, fixed_actual_points=0.0) if item.player_id == -101 else item
+            for item in partial.evidence.players
+        ),
+        matchups=tuple(
+            replace(item, home_observed_week_points=3.0)
+            if item.home_team_id == 1
+            else item
+            for item in partial.evidence.matchups
+        ),
+    )
+    result = compose_partial_week_scores(snapshot, zero, partial.lineup, partial.values)
+    team = next(item for item in result.teams if item.team_id == 1)
+    assert team.fixed_points == 3.0
+    assert (
+        next(item for item in team.starters if item.player_id == -101).fixed_points
+        == 0.0
+    )
+    initial = initialize_evolving_state(
+        snapshot, scoring_week=16, ir_policy=IRPolicy.PROJECTION_BASED
+    )
+    # A valid nonempty ledger is still a forbidden retroactive initial history.
+    changed = advance_cycle(
+        initial, snapshot, cycle_id=initial.cycle_id + 1, scoring_week=16
+    )
+    with pytest.raises(
+        SeasonSimulationError, match="hypothetical initial transactions or rosters"
+    ):
+        _execute(snapshot, future, partial, initial_evolving_state=changed)
+
+
+def _validate_partial_methodology(text: str) -> None:
+    chapter = text.split("## Current-week and partial-week treatment\n")[1].split(
+        "## Roster evolution and transaction rules\n"
+    )[0]
+    state_table = chapter.split(
+        "| Score state | Preservable evidence | Deterministic starter contribution |\n"
+    )[1].split("\n\n")[0]
+    states = re.findall(r"^\| `([^`]+)` \|", state_table, re.MULTILINE)
+    assert len(states) == len(PlayerScoreState) and set(states) == {
+        item.value for item in PlayerScoreState
+    }, "Unexpected player-score state table"
+    for contract in (
+        "exact canonical player/team/slot assignments",
+        "even when the proposed slot is unchanged",
+        "not a sixth score-state enum",
+        "projection minus actual-so-far is not an authorized remainder",
+        r"Q_{tw}=F^{\mathrm{fixed}}_{tw}+R^{\mathrm{rem}}_{tw}",
+        "first actual period week minus one",
+        "subsequent weeks only",
+        "not aggregate carry again",
+        "Every rostered current player, including bench and reserve",
+        "does **not waive the rostered-player gate**",
+        "complete canonical player-week universe exactly once per path",
+        "original complete scenario ID and score-content digest",
+        "not all companion content",
+        "prescribed path range",
+        "No public partial request fields",
+        "S128–S136 and S165",
+        "PARTIAL_WEEK.md#standings-and-period-authority",
+        "PARTIAL_WEEK.md#monte-carlo-subset",
+    ):
+        assert contract in chapter, f"Missing partial-week contract: {contract}"
+    assert not re.search(r"\]\([^)]*(?:VALIDATION|TECHNICAL_REFERENCE)\.md", chapter)
+
+
+def test_partial_methodology_preserves_execution_and_source_boundaries() -> None:
+    _validate_partial_methodology(_guide())
+
+
+def test_partial_methodology_rejects_an_invented_unresolved_score_state() -> None:
+    text = _guide().replace(
+        "| `missing` | No invented actual or remainder |",
+        "| `unresolved` | Invented score category | Not authorized |\n"
+        "| `missing` | No invented actual or remainder |",
+    )
+    with pytest.raises(AssertionError, match="Unexpected player-score state table"):
+        _validate_partial_methodology(text)
+
+
+@pytest.mark.parametrize(
+    "lost",
+    (
+        "exact canonical player/team/slot assignments",
+        "even when the proposed slot is unchanged",
+        "not aggregate carry again",
+        "Every rostered current player, including bench and reserve",
+        "not all companion content",
+        "first actual period week minus one",
+    ),
+)
+def test_partial_methodology_rejects_lost_permission_or_accounting_guard(
+    lost: str,
+) -> None:
+    text = _guide()
+    assert lost in text
+    with pytest.raises(AssertionError, match="Missing partial-week contract"):
+        _validate_partial_methodology(text.replace(lost, "REMOVED"))
