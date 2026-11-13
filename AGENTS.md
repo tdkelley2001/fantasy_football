@@ -14,6 +14,10 @@ These rules apply to all future work in this repository. [MASTER_SPEC.md](docs/M
 
 ## Scope and sequencing
 
+The transferred domain requirements are under D8.2 independent review. MASTER_SPEC and applicable ROADMAP gates remain governing; this is not an authority-link switch. Do not retire either source while a requirement-authority conflict or the transfer acceptance gate remains open. An already accepted technical successor needs traceability, not invented reapproval; a binding requirement with an implementation defect must retain its remediation and acceptance conditions rather than be rewritten to describe the defect as acceptable.
+
+Every implemented component's owning reference must state its purpose, actual algorithm/formulas or pseudocode, input/output and invalid-input contracts, parameters, source provenance, assumptions, edge cases, limitations, regressions, empirical evidence and last validated implementation/model version. Preserve proposed replacements and approval/evidence gates while research is open. Run a minimal end-to-end smoke path after each relevant change; a runnable vertical slice, reference-equivalence check and truthful evidence precede completion. Ordinary dated test totals and rollout history remain in Git/PRs. During transfer, keep the governing references and owning-domain explanation consistent without making another master addendum or silently changing an analytical requirement.
+
 User/operator procedures are in [OPERATIONS](docs/OPERATIONS.md); developer setup, verification tiers and documentation maintenance are in [CONTRIBUTING](CONTRIBUTING.md). Enhancements must update the owning domain reference and affected operating procedures; future obligations belong in BACKLOG and ordinary history in Git/PRs.
 
 Product navigation is in [README](README.md); workspace/presentation contracts are in [INTERFACE](docs/INTERFACE.md); this does not replace the authorities above or approve future work.
@@ -36,6 +40,8 @@ Product navigation is in [README](README.md); workspace/presentation contracts a
 6. Maintain a simple reference implementation as the correctness oracle. Optimized implementations must prove equivalence for feasible sequences, final states, and path-indexed outputs before promotion.
 
 ## Testing and evidence
+
+Assert or check observed invariants, including an expectation that only one participant needs a capacity drop in a two-party trade; do not hardcode the search so an unexpected second drop or simultaneous vacancy can never be observed. Adversarial tests must be able to expose the counterexample. Explicitly designed manual gap configuration, calibrated pooling and operational recovery are separate documented algorithms, not permission for silent error-masking fallbacks. Honest resource-capped Monte Carlo output is normal only with exact partial coverage and unmet-target disclosure; structural/data violations still fail with precise identifiers and context.
 
 1. Define each task's input contract, output artifact, invalid-input behavior, and acceptance test before implementation.
 2. Add focused unit tests plus negative and adversarial tests that attempt to break invariants. Do not make unexpected cases unreachable merely to satisfy a test.

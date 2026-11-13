@@ -36,6 +36,23 @@ flowchart TD
 
 ## One season engine, multiple outcome inputs
 
+The component responsibilities are stable boundaries, not requirements for ten separate frameworks or classes:
+
+| Component | Responsibility / owner |
+|---|---|
+| A — frontend | Present validated contracts; never implement analytical rules. [INTERFACE](../INTERFACE.md) owns presentation. |
+| B — application service | Validate requests, select snapshots, manage local runs/progress/results and translate typed errors without changing meaning. [APPLICATION_SERVICE](../APPLICATION_SERVICE.md) owns transport/lifecycle. |
+| C — ESPN adapter | Discover current/sample historical evidence and translate validated canonical records; [DATA](../DATA.md) owns raw interpretation. |
+| D — LeagueSnapshot | Immutable as-of rosters, rules, standings, schedule, player-week projections/eligibility and shared unowned pool. |
+| E — PlayerOutcomeModel | Transform ESPN future weekly projections into sampled scores under the selected versioned policy. |
+| F — weekly/season engines | Essential transactions, projected-optimal lineups, scores, standings and championship/consolation transitions. |
+| G — value/completion policies | Transform explicit hypothetical changes into coherent full-roster states; TRANSACTIONS owns V(R), MANUAL_SCENARIOS owns completion. |
+| H — scenario evaluator | Pair baseline/hypothetical runs on matched shocks. |
+| I — candidate generators | Enumerate configured finite trades, acquisitions and ordered actions with explicit feasibility/screening boundaries. |
+| J — aggregation/persistence/reporting | Reconciled outcomes, uncertainty/diagnostics, numerical recovery checkpoints, indexed current results and application records. |
+
+Dependencies run frontend → application/API → accepted analytical engine → data/persistence. Reuse domain configuration and semantics in API schemas; do not introduce parallel rules, duplicate authoritative persistence, speculative cloud infrastructure or presentation-driven mechanics. Interfaces must make actual policies testable/replaceable without a heavyweight plugin framework. ESPN IDs, fantasy weeks, eligibility, scenario ownership and snapshot metadata must reconcile across boundaries. Keep preparation/reporting readable; favor compact arrays, batching or compiled loops in hot paths **only when measured and reference-equivalent**. The local-web/backend direction supersedes the historical CLI-first plan; its old test totals and prototype layout are evidence, not new requirements or verified current measurements.
+
 [Outcome models](../PLAYER_OUTCOME_MODEL.md) own draw/policy identity; [Monte Carlo](../MONTE_CARLO.md) owns estimators, paired/progressive inference and checkpoints; [Partial Week](../PARTIAL_WEEK.md) owns current-week evidence/permission.
 
 [season_simulator.py](../../src/fantasy_football/season_simulator.py) owns week progression and reuses [weekly transactions](../../src/fantasy_football/weekly_transactions.py), [lineup optimization](../../src/fantasy_football/lineup_optimizer.py), [weekly scoring](../../src/fantasy_football/weekly_engine.py) and [postseason](../../src/fantasy_football/postseason.py). Rules come from validated configuration, not fixed league templates. Immutable [evolving state](../../src/fantasy_football/evolving_state.py) is simulation-path state, separate from source snapshots.
