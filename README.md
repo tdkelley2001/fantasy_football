@@ -31,6 +31,7 @@ The service binds to loopback on a trusted local machine. Host/Origin checks are
 
 ## Start here
 
+- [User guide pilot](docs/USER_GUIDE.md): a practical path from setup and validated data through baseline/scenario analysis, interpretation and safe shutdown. Detailed operating/interface contracts remain in their current references during P1.
 - [Install and operate](docs/OPERATIONS.md): Windows prerequisites, locked setup, public/private ESPN configuration, launch, first analysis, private storage and safe shutdown. Installation/startup needs no ESPN credentials. Tested versions and the unresolved Node-policy mismatch (WR-003) are recorded there.
 - [Use the interface](docs/INTERFACE.md): workspace journeys, analytical presentation, provenance, accessibility and frontend contracts.
 - [Contribute](CONTRIBUTING.md): original-repository/fork branches, safe synchronization, developer environment, verification tiers and independent PR review. [AGENTS](AGENTS.md) supplies standing development rules.
