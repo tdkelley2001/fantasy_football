@@ -64,6 +64,12 @@ Order candidates by held-out mean CRPS, then negative log score, then stable can
 
 The governing research program also requires honest temporal training/validation/sealed-test use, prevention of tuning leakage, representative position/projection-level and scoring coverage, calibrated pooling/fallback sensitivity and championship-decision relevance before promotion. Current one-boundary code or sample sufficiency alone does not satisfy every scientific gate. [BACKLOG](BACKLOG.md#data-research-and-m0-migration-obligations) retains the exact outstanding protocol/evidence obligations. Do not preselect a family, promote on synthetic scores, treat a single CRPS winner as universal calibration, add third-party means or invent horizon variance. [PLAYER_OUTCOME_MODEL](PLAYER_OUTCOME_MODEL.md) owns any separately approved production family/identity transition.
 
+### Component-specific promotion
+
+Retain internally selectable, explicitly versioned experimental policies for uncertainty distributions, roster valuation, waiver behavior, candidate pruning and numerical methods where those interfaces are supported. This design obligation does not mean every experimental selector is implemented or exposed publicly. Choose acceptance criteria for the component's actual job: calibration/zero mass/support/tails for outcomes, sampled decision quality for V(R), source-rule fidelity for mechanics, and exact equivalence plus runtime/memory for numerical optimization. Compare against the incumbent approved version using held-out or prospective evidence when feasible, accounting for selection bias and runtime regression. No single universal score/threshold promotes all components.
+
+Promotion requires a reproducible decision record and independent acceptance after the documented criteria pass. The normal application must default to the latest approved official combination without experimental model-selection clutter; current API exposes the provisional Normal configuration, not a newly calibrated official family or every internal model. Scientific requirements and conditional methods remain binding under [WR-019](BACKLOG.md#wr-019-scientific-promotion-and-deferred-research); implementing a report, obtaining the lowest exploratory CRPS, or transferring documentation cannot promote a model. Raw ESPN decision inputs and existing numerical identity remain unchanged unless a separately approved versioned transition says otherwise.
+
 ## Reproduction and artifacts
 
 Pure in-memory path after separately authorized data preparation:

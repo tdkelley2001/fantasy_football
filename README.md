@@ -8,6 +8,8 @@ ESPN access is **read-only**. War Room **never submits real transactions**, pred
 
 ## Current capabilities
 
+The default decision objective is **expected championship probability**, evaluated for every manager using ESPN's player-specific future weekly projections, actual league rules and the current snapshot. Paired season analysis measures downstream qualification, seeding, waiver competition and placement consequences; the published aggregate outputs are a documented subset of the broader [required output contract](docs/BACKLOG.md#wr-021-output-provenance-and-numerical-lifecycle). Secondary objectives remain future scope. War Room converts ESPN means into uncertain league seasons; it does not initially aim to outperform those player-mean forecasts. ESPN is the sole initial projection source. Another source requires demonstrated incremental value and independent approval as a versioned official model, not an automatic missing-data fallback.
+
 | Availability | What you can use |
 |---|---|
 | Application | Explicit ESPN refresh/publication and snapshot selection; League Overview championship/playoff/placement estimates; Opportunity Explorer retained candidate exploration; Trade Lab final-state scenarios; Simulation Center bounded baseline/action execution, cancellation and retained history. |
