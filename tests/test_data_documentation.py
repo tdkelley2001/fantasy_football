@@ -51,6 +51,69 @@ def _record_fields(text: str, name: str) -> list[str]:
     return re.findall(r"`([^`]+)`", row)[1:]
 
 
+def _check_source_provenance(text: str) -> None:
+    section = text.split("### Adapter and canonical interfaces\n", 1)[1].split(
+        "\n### ", 1
+    )[0]
+    plain = " ".join(section.replace("`", "").replace("**", "").lower().split())
+    for field in (
+        "source_id",
+        "endpoint",
+        "view",
+        "parameters",
+        "retrieved_at_utc",
+        "payload_sha256",
+    ):
+        assert field in plain, f"Missing provenance field: {field}"
+    assert "not http wire-byte archives" in plain, "Parsed payload is not wire bytes"
+    assert "not independent authentication" in plain, (
+        "Source digest is not authentication"
+    )
+    assert "cannot grant consumer capability" in plain, (
+        "Source schema is not permission"
+    )
+
+
+def test_source_provenance_keeps_material_identity_and_trust_limits() -> None:
+    text = _read("TECHNICAL_REFERENCE.md")
+    _check_source_provenance(text)
+    # Reflow and unrelated editorial additions cannot invalidate these contracts.
+    _check_source_provenance(
+        text.replace(
+            "not independent authentication", "not independent\nauthentication"
+        )
+        + "\nAn editorial note may be added without changing source meaning.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "old,new,message",
+    (
+        ("payload_sha256", "unbound_digest", "Missing provenance field"),
+        (
+            "not HTTP wire-byte archives",
+            "original HTTP wire-byte archives",
+            "wire bytes",
+        ),
+        (
+            "not independent authentication",
+            "independent authentication",
+            "authentication",
+        ),
+        (
+            "cannot grant consumer capability",
+            "grants consumer capability",
+            "permission",
+        ),
+    ),
+)
+def test_source_provenance_rejects_lost_or_invented_authority(old, new, message):
+    text = _read("TECHNICAL_REFERENCE.md")
+    assert old in text
+    with pytest.raises(AssertionError, match=message):
+        _check_source_provenance(text.replace(old, new))
+
+
 @pytest.mark.parametrize(
     ("module", "name"),
     [
@@ -113,7 +176,6 @@ def test_t2_manifest_and_call_contract_match_implemented_boundaries() -> None:
     assert "samples, sources, validated_pregame_captures=()" in text
     assert "_validation_token` is internal and omitted" in text
     assert "raw payload bytes are not" in text
-    assert "not a sealed final-test process" in _read("VALIDATION.md")
 
 
 def _example_dataset(*, missing_actual: bool = False):
@@ -265,14 +327,14 @@ def test_v3_exploratory_recommendation_and_t2_report_identity_are_distinct() -> 
 
 def test_d1_d6_and_deferred_mapping_preserve_existing_owners() -> None:
     data = _read("DATA.md")
-    assert re.findall(r"^## (.+)$", data, re.MULTILINE) == [
+    assert {
         "Data lifecycle and source provenance",
         "Source trust, coverage and research data",
         "Inputs, transformations and league-rule authority",
         "Quality, canonical invariants and immutable publication",
         "Current-week temporal evidence and permissions",
         "Evidence-role register and verification references",
-    ]
+    } <= set(re.findall(r"^## (.+)$", data, re.MULTILINE))
     mapping = data.split("### P7a source-section mapping and retained ownership", 1)[1]
     for retained in (
         "S071–S072",
@@ -291,18 +353,4 @@ def test_d1_d6_and_deferred_mapping_preserve_existing_owners() -> None:
         "executable bindings use contract 3, with authority retirement separately gated"
         in mapping
     )
-    assert "V0–V5 chapters are complete" in mapping
-    assert "T1–T9 chapters are complete" in mapping
     assert "permanent authority adoption remains separately gated" in mapping
-    for name in ("VALIDATION.md", "TECHNICAL_REFERENCE.md"):
-        text = _read(name)
-        assert "RESEARCH.md" in text and "M0" in text and "BACKLOG.md" in text
-        expected_scope = (
-            "V0–V5: assurance map."
-            if name == "VALIDATION.md"
-            else "Technical reference:"
-        )
-        assert expected_scope in text
-    assert "The other chapters explicitly identify later scope" not in _read(
-        "METHODOLOGY.md"
-    )

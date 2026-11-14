@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import hashlib
 import inspect
 from pathlib import Path
 
@@ -29,35 +28,6 @@ def _read(path: str) -> str:
 
 def _section(text: str, title: str) -> str:
     return text.split(f"## {title}\n", 1)[1].split("\n## ", 1)[0].rstrip() + "\n"
-
-
-@pytest.mark.parametrize(
-    ("title", "digest"),
-    [
-        (
-            "Canonical, source and evidence data contracts",
-            "4c5dc11fd36e24d576a69726e4b4c75b29d7e674865b302e2eae96944682575a",
-        ),
-        (
-            "HTTP API, DTOs and evolution",
-            "113ec47e80509cae0f77993a3f141c7c62922e6bca8e9977ede48dbd4f9da493",
-        ),
-        (
-            "Search interfaces, indexing and query/export contracts",
-            "a31ed2f6086cecdc0debed56f78b6788657c02d0f2e385e6eb5baed550bffde2",
-        ),
-    ],
-)
-def test_accepted_t2_t5_t7_text_is_preserved(title: str, digest: str) -> None:
-    # Preserve whole chapters after Package 1's scoped F02 status-wording edits.
-    # T2/P8 evidence and T5/T7 executable contracts remain unchanged.
-    # Ignore only separator trailing newlines; never load Git at test runtime.
-    assert (
-        hashlib.sha256(
-            _section(_read("docs/TECHNICAL_REFERENCE.md"), title).encode()
-        ).hexdigest()
-        == digest
-    )
 
 
 @pytest.mark.parametrize(

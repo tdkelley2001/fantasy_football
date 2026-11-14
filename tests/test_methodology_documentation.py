@@ -870,11 +870,21 @@ def _validate_partial_methodology(text: str) -> None:
         "PARTIAL_WEEK.md#monte-carlo-subset",
     ):
         assert contract in chapter, f"Missing partial-week contract: {contract}"
-    assert not re.search(r"\]\([^)]*(?:VALIDATION|TECHNICAL_REFERENCE)\.md", chapter)
 
 
 def test_partial_methodology_preserves_execution_and_source_boundaries() -> None:
     _validate_partial_methodology(_guide())
+
+
+def test_partial_methodology_allows_links_to_existing_assurance_and_interfaces() -> (
+    None
+):
+    guide = _guide().replace(
+        "## Current-week and partial-week treatment\n",
+        "## Current-week and partial-week treatment\n\n"
+        "See [assurance](VALIDATION.md) and [interfaces](TECHNICAL_REFERENCE.md).\n",
+    )
+    _validate_partial_methodology(guide)
 
 
 def test_partial_methodology_rejects_an_invented_unresolved_score_state() -> None:
