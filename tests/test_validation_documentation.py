@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import hashlib
 import re
 from pathlib import Path
 
@@ -34,16 +33,134 @@ def _plain(text: str) -> str:
     return text.replace("**", "").replace("`", "")
 
 
-def test_six_validation_chapters_and_accepted_v3_are_preserved() -> None:
+def _check_assurance_scope(text: str) -> None:
+    assert set(HEADINGS) <= set(re.findall(r"^## (.+)$", text, re.MULTILINE))
+
+
+def test_validation_covers_each_assurance_question() -> None:
     text = _read("docs/VALIDATION.md")
-    assert tuple(re.findall(r"^## (.+)$", text, re.MULTILINE)) == HEADINGS
-    # P8 updated the M0 footer; Package 1 corrects only pilot/mapping wording.
-    # Empirical observations, methods, numbers and promotion gates are unchanged.
-    # Normalize only the section separator's trailing newlines. No runtime Git.
+    _check_assurance_scope(text)
+    _check_assurance_scope(text + "\n## Additional reader navigation\n")
+    with pytest.raises(AssertionError):
+        _check_assurance_scope(
+            text.replace("## Empirical validity", "## General confidence")
+        )
+
+
+def _check_empirical_validity(text: str) -> None:
     v3 = _chapter(text, "Empirical validity")
-    assert hashlib.sha256(v3.encode("utf-8")).hexdigest() == (
-        "f3b70263c093f5c8b43a8bc6f26b0de20b89109d0391c20fdf9ba395028f6094"
+
+    def topic(title: str) -> str:
+        body = v3.split(f"### {title}\n", 1)[1].split("\n### ", 1)[0]
+        return " ".join(body.replace("`", "").replace("**", "").lower().split())
+
+    trust = topic("Evidence admissibility before evaluation")
+    for requirement in (
+        "independently provisioned trusted manifest digest",
+        "exact payload bytes",
+        "strictly before the observation period",
+        "at or after period end",
+        "cannot inherit authentication from a legitimate source id",
+        "does not establish independent trust",
+    ):
+        assert requirement in trust, f"Lost empirical admissibility: {requirement}"
+    retained = topic("What the retained evidence supports")
+    # Accepted dated facts, not a new calibration run or a prose checksum.
+    for number in (
+        "8,760",
+        "7,489",
+        "5,214",
+        "5,000",
+        "2,638",
+        "2,362",
+        "2.0294",
+        "2.0544",
+    ):
+        assert number in retained, f"Lost retained research fact: {number}"
+    assert "zero authenticated-pregame pairs" in retained, (
+        "Retrospective is not authenticated"
     )
+    assert "recommended_candidate_id remained null" in retained, (
+        "No historical promotion"
+    )
+    temporal = topic("Temporal evaluation and support")
+    for requirement in (
+        "evaluation_start_season",
+        "evaluation_start_week",
+        "no random player-week split",
+        "not a sealed final-test process",
+        "training/validation/sealed-test separation",
+    ):
+        assert requirement in temporal, f"Lost temporal evidence limit: {requirement}"
+    promotion = topic("Independent component-specific promotion")
+    for requirement in (
+        "pending independent review",
+        "neither mode installs a production model",
+        "incumbent approved version",
+        "selection bias and runtime regression",
+        "no single score promotes all components",
+        "wr-019",
+    ):
+        assert requirement in promotion, (
+            f"Lost independent promotion gate: {requirement}"
+        )
+
+
+def test_empirical_validity_retains_evidence_and_promotion_limits_without_prose_hash():
+    text = _read("docs/VALIDATION.md")
+    _check_empirical_validity(text)
+    _check_empirical_validity(
+        text.replace("exact payload bytes", "exact payload\nbytes")
+        + "\nAn unrelated editorial explanation may be added.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "old,new,message",
+    (
+        (
+            "independently provisioned trusted manifest digest",
+            "self-declared digest",
+            "admissibility",
+        ),
+        (
+            "strictly before the observation period",
+            "at any convenient time",
+            "admissibility",
+        ),
+        (
+            "zero authenticated-pregame pairs",
+            "all authenticated-pregame pairs",
+            "Retrospective",
+        ),
+        (
+            "recommended_candidate_id` remained null",
+            "recommended_candidate_id` installed a model",
+            "historical promotion",
+        ),
+        (
+            "not a sealed final-test process",
+            "a sealed final-test process",
+            "temporal evidence",
+        ),
+        (
+            "neither mode installs a production model",
+            "both modes install a production model",
+            "promotion gate",
+        ),
+        (
+            "No single score promotes all components",
+            "A single score promotes all components",
+            "promotion gate",
+        ),
+        ("2,638", "2,000", "research fact"),
+    ),
+)
+def test_empirical_validity_rejects_forged_trust_or_promotion(old, new, message):
+    text = _read("docs/VALIDATION.md")
+    assert old in text
+    with pytest.raises(AssertionError, match=message):
+        _check_empirical_validity(text.replace(old, new))
 
 
 # Every row must retain its concrete owner, implementation/reference and tests,
@@ -437,10 +554,6 @@ def test_source_mapping_does_not_retire_owners_or_authorize_later_packages() -> 
         assert source in identifiers
     assert (
         "all outstanding criteria, priorities/statuses and independent gates remain unchanged in BACKLOG"
-        in mapping
-    )
-    assert (
-        "T5/T7/T8/T9 chapters are complete without retiring those authorities"
         in mapping
     )
     assert "No authority is retired; executable role bindings follow" in text

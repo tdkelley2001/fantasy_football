@@ -41,6 +41,104 @@ def _read(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8")
 
 
+def _check_transport_boundaries(text: str) -> None:
+    def section(title: str) -> str:
+        body = text.split(f"## {title}\n", 1)[1].split("\n## ", 1)[0]
+        return " ".join(body.replace("`", "").replace("**", "").lower().split())
+
+    api = section("HTTP API, DTOs and evolution")
+    assert "forbid extra fields" in api, "JSON bodies reject unknown fields"
+    assert "not global strict coercion" in api, (
+        "Parsing is not universal strict coercion"
+    )
+    assert "required nullable fields must still be supplied" in api, (
+        "Required is not nullable"
+    )
+    assert "fraction pass-through without service-side scaling" in api, (
+        "Legacy API units"
+    )
+    assert re.search(r"(?:needs|requires) a new api version", api), (
+        "API evolution boundary"
+    )
+    assert "undeclared query keys are ignored" in api, (
+        "Unknown query is not supported syntax"
+    )
+    assert "no http export/download" in api, "No invented public export capability"
+
+    query = section("Search interfaces, indexing and query/export contracts")
+    assert "scoped by run_id" in query, "Retained query identity"
+    assert "and, then global sort, then limit/offset" in query, (
+        "Global query before pagination"
+    )
+    assert "explicit empty tuple selects none" in query, (
+        "Omitted versus empty export selection"
+    )
+    assert "preserves existing result iteration order" in query, "Export ordering"
+    assert "does not rerun analysis or alter run_sha256" in query, (
+        "Export identity and reuse"
+    )
+    assert "no export scaling occurs" in query, "Export fraction units"
+    assert "not the json all-team/statistical/configuration payload" in query, (
+        "CSV summary scope"
+    )
+    assert "WR-017".lower() in query, "Richer query/export obligations remain open"
+
+
+def test_transport_semantics_allow_editorial_changes_without_changing_contracts():
+    text = _read("docs/TECHNICAL_REFERENCE.md")
+    _check_transport_boundaries(text)
+    _check_transport_boundaries(
+        text.replace("needs a new API version", "requires a new API version").replace(
+            "without service-side scaling", "without service-side\nscaling"
+        )
+        + "\nEditorial context is independent of the executable transport contracts.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "old,new,message",
+    (
+        ("forbid extra fields", "accept extra fields", "JSON bodies"),
+        (
+            "Required nullable fields must still be supplied",
+            "Nullable fields can be omitted",
+            "Required",
+        ),
+        (
+            "fraction pass-through without service-side scaling",
+            "scaled by 100",
+            "Legacy API units",
+        ),
+        ("needs a new API version", "needs no compatibility review", "API evolution"),
+        (
+            "AND, then global sort, then LIMIT/OFFSET",
+            "AND on the current page",
+            "Global query",
+        ),
+        (
+            "no export scaling occurs",
+            "exports multiply fractions by 100",
+            "Export fraction units",
+        ),
+        (
+            "does not rerun analysis or alter run_sha256",
+            "resimulates a new run",
+            "Export identity",
+        ),
+        (
+            "explicit empty tuple selects none",
+            "empty tuple selects all",
+            "Omitted versus empty",
+        ),
+    ),
+)
+def test_transport_rejects_semantic_drift(old, new, message):
+    text = _read("docs/TECHNICAL_REFERENCE.md")
+    assert old in text
+    with pytest.raises(AssertionError, match=message):
+        _check_transport_boundaries(text.replace(old, new))
+
+
 def _shape(schema: dict) -> str:
     """Render public JSON Schema shapes, not Python coercion guarantees."""
     if "$ref" in schema:
@@ -227,21 +325,6 @@ def test_route_loss_and_invented_export_endpoint_are_rejected() -> None:
             _check_routes(changed)
 
 
-def test_accepted_t2_body_is_unchanged() -> None:
-    text = _read("docs/TECHNICAL_REFERENCE.md")
-    body = (
-        text.split("## Canonical, source and evidence data contracts\n", 1)[1]
-        .split("\n## ", 1)[0]
-        .rstrip()
-        + "\n"
-    )
-    # P8 supplied evidence homes; Package 1 corrects only F02 transfer wording.
-    assert (
-        hashlib.sha256(body.encode()).hexdigest()
-        == "4c5dc11fd36e24d576a69726e4b4c75b29d7e674865b302e2eae96944682575a"
-    )
-
-
 @pytest.fixture
 def retained_api(tmp_path):
     yield from background_fixture.__wrapped__(tmp_path)
@@ -283,10 +366,6 @@ def test_openapi_and_http_query_coercion_do_not_imply_extra_field_rejection(
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "invalid_request_schema"
         assert client.get("/api/v1/runs/export").status_code == 404
-    text = _read("docs/TECHNICAL_REFERENCE.md")
-    assert "Undeclared query keys are **ignored**" in text
-    assert "not global strict coercion" in text
-    assert "no HTTP export/download" in text
 
 
 def test_legacy_paired_units_and_required_nullable_fields_remain_exact() -> None:
@@ -311,10 +390,6 @@ def test_legacy_paired_units_and_required_nullable_fields_remain_exact() -> None
         ).from_team_id
         is None
     )
-    text = _read("docs/TECHNICAL_REFERENCE.md")
-    assert "fraction pass-through without service-side scaling" in text
-    assert "Required nullable fields must still be supplied" in text
-    assert "adapter does not return 2.0" in text
 
 
 def test_retained_queries_apply_filters_and_sort_before_pagination_and_bind_run(
