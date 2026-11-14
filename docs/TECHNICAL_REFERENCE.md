@@ -1,10 +1,50 @@
 # War Room technical reference
 
-**P7c pilot: T2, T5 and T7.** T2 retains its accepted source/dataset content; T5/T7 describe the implemented wire and search/query/export contracts. [DATA](DATA.md), [RESEARCH](RESEARCH.md), [APPLICATION_SERVICE](APPLICATION_SERVICE.md), [UNIFIED_ACTION_SEARCH](UNIFIED_ACTION_SEARCH.md) and [INTERFACE](INTERFACE.md) retain their current authority and all M0 bindings remain unchanged. Analytical meaning is in [METHODOLOGY](METHODOLOGY.md); assurance is in [VALIDATION](VALIDATION.md). [Authority and precedence](../AGENTS.md#authority-and-precedence) and all [BACKLOG](BACKLOG.md) obligations remain binding. T8/T9 runtime/persistence transfer is deferred; no owner is retired.
+**P7d pilot: application integration and recovery.** This reference connects the system architecture (T1), persistence/lifecycle (T8) and application/frontend boundaries (T9) to the existing T2/T5/T7 contracts, whose text is preserved. Earlier chapter-specific transfer notes remain scoped to those chapters. [DATA](DATA.md), [RESEARCH](RESEARCH.md), [APPLICATION_SERVICE](APPLICATION_SERVICE.md), [UNIFIED_ACTION_SEARCH](UNIFIED_ACTION_SEARCH.md), [OPERATIONS](OPERATIONS.md) and [INTERFACE](INTERFACE.md) retain their current authority; all M0 bindings remain unchanged. Analytical meaning is in [METHODOLOGY](METHODOLOGY.md), assurance in [VALIDATION](VALIDATION.md), operating procedures in [USER_GUIDE](USER_GUIDE.md)/OPERATIONS and developer checks in [CONTRIBUTING](../CONTRIBUTING.md). [Authority and precedence](../AGENTS.md#authority-and-precedence) and exact [BACKLOG](BACKLOG.md) obligations remain binding. No authority is retired or release declared.
 
+- [T1: System architecture and integration map](#system-architecture-and-integration-map)
 - [T2: Canonical, source and evidence data contracts](#canonical-source-and-evidence-data-contracts)
 - [T5: HTTP API, DTOs and evolution](#http-api-dtos-and-evolution)
 - [T7: Search interfaces, indexing and query/export contracts](#search-interfaces-indexing-and-queryexport-contracts)
+- [T8: Persistence, run lifecycle and recovery](#persistence-run-lifecycle-and-recovery)
+- [T9: Application and frontend security/integration contracts](#application-and-frontend-securityintegration-contracts)
+
+## System architecture and integration map
+
+War Room is a local application around one shared analytical engine. The frontend presents backend results; HTTP adapts typed requests and orchestrates work; pure domain components own rules, scoring, decisions and sampling. Network retrieval and persistence surround that engine rather than defining its mathematics. The [architecture overview](architecture/overview.md) retains the broader component map; [M1](METHODOLOGY.md#analytical-framework-and-objective) explains the experiment rather than the source layout.
+
+```mermaid
+flowchart LR
+    Browser[React presentation] -->|relative requests / observation| HTTP[Local HTTP boundary]
+    HTTP -->|synchronous analysis| Service[Application service]
+    HTTP -->|submit / poll / cancel| Jobs[Bounded job coordinator]
+    Jobs -->|accepted request| Service
+    HTTP -->|refresh request| Refresh[Refresh coordinator]
+    Refresh -->|read only| Adapter[ESPN retrieval / translation]
+    Adapter -->|validated source bundle| Publish[Atomic snapshot publication]
+    Publish --> Snapshots[Immutable snapshot store]
+    Snapshots -->|verified selected input| Service
+    Service -->|domain configuration| Engine[Shared deterministic season engine]
+    Service -->|sampling / paired paths| MC[Monte Carlo / scenario / search coordinators]
+    MC -->|same season mechanics| Engine
+    Jobs -->|copied progress / typed results| History[Bounded application history]
+    HTTP -->|retained queries| History
+```
+
+Arrows identify request/data flow, not permission escalation: a valid HTTP schema, source record, hash or stored result cannot grant missing league/live capability. Dependency direction is presentation → application adapters/coordinators → analytical/domain components and canonical data. Engines do not import the UI, serve HTTP, retrieve ESPN or write application history. Domain validation/completeness remains authoritative; frontend validation is useful feedback, not another legality/probability engine. Source snapshots and each path's immutable evolving state are different objects.
+
+| Reader task | Source navigation / boundary |
+|---|---|
+| Retrieve and validate source evidence | [espn_adapter.py](../src/fantasy_football/espn_adapter.py), [canonical](../src/fantasy_football/canonical/model.py), [snapshot_store.py](../src/fantasy_football/snapshot_store.py); [T2](#canonical-source-and-evidence-data-contracts) owns the interface map, DATA owns field meaning/publication |
+| Follow one season or a repeated/paired experiment | [season_simulator.py](../src/fantasy_football/season_simulator.py), [monte_carlo.py](../src/fantasy_football/monte_carlo.py), [scenario_evaluator.py](../src/fantasy_football/scenario_evaluator.py), [search_orchestration.py](../src/fantasy_football/search_orchestration.py); M3–M9/current domain owners define mathematics and action semantics |
+| Trace an application request | [http.py](../src/fantasy_football/app/http.py) → [service.py](../src/fantasy_football/app/service.py); [T5](#http-api-dtos-and-evolution) owns the complete wire map; background/refresh are separate execution coordinators |
+| Locate execution versus retained data | [background.py](../src/fantasy_football/app/background.py), [refresh.py](../src/fantasy_football/app/refresh.py), [numerical recovery](../src/fantasy_football/monte_carlo_execution.py); T8 distinguishes owners/lifetimes; [T7](#search-interfaces-indexing-and-queryexport-contracts) owns temporary indexing/query/export interfaces |
+| Follow presentation and draft bookkeeping | [App.tsx](../frontend/src/App.tsx), [API client](../frontend/src/lib/api.ts), [TradeLab.tsx](../frontend/src/TradeLab.tsx); T9 and INTERFACE own isolation/presentation, not alternate analytical rules |
+| Understand local process ownership | [server.py](../src/fantasy_football/app/server.py), [launcher identity helpers](../scripts/local-runtime.ps1); T8/T9 explain the boundary, OPERATIONS owns startup/shutdown/recovery commands |
+
+The deterministic coordinator reuses weekly transactions, lineup optimization, weekly scoring and postseason resolution. Monte Carlo generates path-indexed player/week outcomes and repeatedly invokes that same coordinator; hypothetical scenarios/search reuse matched paths and the existing aggregation. Opt-in partial evidence feeds that coordinator after its separate permission checks. It is not another season simulator, and engine support does not imply public partial-week requests. See [M3](METHODOLOGY.md#season-simulation-and-lineup-optimization), [M4](METHODOLOGY.md#current-week-and-partial-week-treatment) and the [capability map](PARTIAL_WEEK.md#current-capability-map).
+
+At refresh, sequential read-only source retrieval/translation occurs outside publication's SQLite write transaction; publication appends verified immutable evidence. At analysis, the service loads the explicitly selected snapshot, checks identity/capabilities and translates DTO configuration into domain inputs. Synchronous results return directly; accepted background work has a durable run ID and explicit lifecycle. Retained queries read copied results without Monte Carlo or a new ESPN request. The browser is an untrusted input/presentation boundary, raw source semantics require validation, and private stores/pickle scratch remain trusted-process material rather than safe public interchange.
 
 ## Canonical, source and evidence data contracts
 
@@ -276,3 +316,117 @@ The current engine export is not an HTTP download endpoint, a shared global HTTP
 | INTERFACE current display/query boundaries; BACKLOG S064 WR-017 | T5 actual fraction pass-through and T7 global-versus-page semantics; approved richer query/export/unit compatibility obligations remain exact BACKLOG text, not implemented endpoints |
 
 [Service/transport tests](../tests/test_app_service.py), [retained queries](../tests/test_background_runs.py), [cross-layer tests](../tests/test_backend_validation.py), [search/export tests](../tests/test_search_orchestration.py), [unified grammar tests](../tests/test_unified_actions.py) and [focused contract map](../tests/test_transport_documentation.py) establish **Verified by tests** source/fixture consistency. They do not prove live ESPN, actual browser behavior, calibration or release readiness. Developer commands remain in [CONTRIBUTING](../CONTRIBUTING.md#change-based-verification-matrix); API/engine contracts, M0 bindings, historical identities/artifacts, C13 and WR-021 release gates remain unchanged. No P7d, M0 migration, authority retirement or release declaration is included.
+
+## Persistence, run lifecycle and recovery
+
+### Ownership and lifetime
+
+The [accepted C13 authority](APPLICATION_SERVICE.md#retention-authority) separates ephemeral execution context from separately persisted, bounded application-owned history. This compact map links the detailed lifecycle authority; it introduces no new TTL, schema, cache, migration or deletion policy.
+
+| Data class | Owner and intended lifetime | Boundary / remaining obligation |
+|---|---|---|
+| Immutable snapshots | [DATA publication/store](DATA.md#immutable-storage): exact canonical bytes plus captured source evidence, append-only retained publications | Refresh appends a new identity even for repeated content; application expiry/deletion never deletes or rewrites snapshots. T2 retains exact validation/serialization/publication protocol. |
+| Execution scratch | [Engine lifecycle](UNIFIED_ACTION_SEARCH.md#engine-artifact-lifecycle): current-run temporary index/sidecars and execution objects | Successfully returned results remain valid until consumed/transferred and explicitly closed; no abandoned scratch accumulation. Service finally closes a returned result, but failures before return retain WR-026's encompassing-cleanup gap. T7 retains close/iteration contracts. |
+| Application history | [Application lifecycle matrix](APPLICATION_SERVICE.md#ownership-and-lifecycle-assessment): separately copied request/progress/result/candidate/state data within retention policy | Survives session/restart without resimulation under original provenance. Terminal expiry/count purge and explicit terminal deletion cascade dependent rows, not snapshots/checkpoints/user exports. No silent new-search/cross-refresh reuse. |
+| Numerical checkpoints | [Numerical recovery](MONTE_CARLO.md#checkpoints-and-recovery): atomic, identity/prefix/history-validated engine recovery artifacts | Compatible engine resume is implemented; success cleanup and abandoned expiry remain WR-021 obligations. Temporary write-file removal is not those policies, nor permission for indefinite archives or arbitrary user-file deletion. |
+| User exports | [T7 exports](#existing-exports-and-deferred-parity-requirements): explicit user-owned files with independent lifetime | Index closure, run deletion and expiry must not delete exports. No automatic reimport or silent reuse as a new analysis. |
+
+Background run storage is separate from source snapshots and numerical checkpoints. Production derives an adjacent `.runs.sqlite3` store from the selected snapshot database path; injected test stores are distinct. The run store records exact request/checksum, snapshot/build metadata, lifecycle, progress, result JSON and candidate/state links. SQLite transactions/foreign keys protect owned records; connections close explicitly. Logical serialized-payload accounting is not a physical SQLite/WAL/disk/RSS ceiling. Detailed policy values and storage mechanisms remain in [application retention](APPLICATION_SERVICE.md#results-retention-and-ownership), not duplicated here.
+
+Expiry is calculated from **submission time**, not completion. Terminal lookup may remove expired rows; coordinator-finalization purge removes expired/excess terminal work. Active runs are excluded, listing may precede cleanup, and there is **no continuous TTL sweeper** or immediate physical reclamation guarantee. Dedicated expiry/count-purge evidence remains WR-021. Active deletion rejects; terminal deletion removes the run's dependent rows while preserving other ownership classes. Reopening retained history is inspection under its original identity, not execution resume, current advice from an old snapshot, or a restored historical draft.
+
+### Commit and cancellation boundaries
+
+| Boundary | Implemented behavior / qualification |
+|---|---|
+| Snapshot publication | Retrieval and preparation precede atomic append-only publication; pre-commit failure rolls back that attempt. Post-commit verification failure retains/reports the committed snapshot ID and publication_committed flag; no rollback, overwrite or retry-delete fiction. See [T2 publication owner](DATA.md#immutable-storage). |
+| Analysis admission/submission | Snapshot/type-specific policy validates first; persist request/expiry, register stop Event and submitted Future under lock, then attach completion callback. Submission failure removes transient state and conditionally marks queued work failed; a cancellation that already won is not overwritten. This guarantee is for analysis, **not refresh submission**. |
+| Terminal analysis write | Conditional transaction stores result JSON, terminal progress/status/error/stop metadata together; failed logical-storage checks roll it back. Completed/failed transition from running; cancelled transitions from cancel_requested. If cancellation wins, stale completion cannot overwrite it; if completion already committed, cancel returns completed. |
+| Candidate transfer | Candidate/shared evaluation copies use separate bounded transactions before temporary index closure. Failed/cancelled runs discard those rows rather than expose them as a successful result. Querying copied data never resimulates. |
+| Refresh failure windows | Cancellation can win before publication; publishing/verifying is non-cancellable. Refresh has no analysis-style compensation around executor.submit; later inspection errors can preserve a committed flag while retaining misleading pre-publication wording. These are source-inspected open obligations, not new live incidents or corrected guarantees. |
+
+Queued cancellation prevents worker entry. Running cancellation records intent and sets an Event; acknowledgment is not terminal completion. Action search checks accepted generation/batch boundaries. Baseline/manual calls can finish their active engine work before the result is discarded and cancellation commits. Threads are not forcibly killed; resource-capped work may complete with explicitly incomplete analytics, while an infrastructure/worker exception is failed. Progress reports actual stages/exposure/coverage/precision/ranking, not a fabricated universal percentage or ETA. [T5](#http-api-dtos-and-evolution) owns public statuses/errors; [T7](#preflight-bounded-execution-and-trusted-indexing) owns search budget/overrun semantics.
+
+### Restart, leases and bounded shutdown
+
+Store initialization acquires a live-instance lease **before** classifying abandoned queued/running/cancel_requested rows as interrupted. Initialization failure releases its acquired lease. Completed results survive; terminal rows never reactivate. The lease uses instance identity and OS PID liveness: Windows read-only probing treats access-denied as alive, Unix uses signal-zero. It does not authenticate creation time; a reused live PID can conservatively block reopening. This availability limitation cannot authorize a second writer or deletion of a live lease. It is weaker evidence than launcher process authentication.
+
+Shutdown requests cooperative cancellation and waits bounded intervals: refresh close defaults to one second and analysis close to two seconds. A false/pending close is logged; executor shutdown(wait=False) is **not thread termination**. A non-quiescent analytical worker retains the store lease until its last callback; temporary injected stores are removed only after quiescence. Done callbacks release transient futures/events across terminal outcomes, independently of durable retained history.
+
+Synchronous upstream I/O or an active analytical call can keep Python alive after its listener closes. Launcher stop normally gives a 20-second grace; on timeout or an already lost listener, recovery may target only a reauthenticated launcher-owned tree, preserving completed databases and classifying unfinished durable work as interrupted on restart. The diagnostic preserve-on-timeout option deliberately leaves a pending authenticated process. [T9 process authentication](#launcher-and-process-authentication) states the trust checks; [OPERATIONS](OPERATIONS.md#shutdown-and-recovery) owns commands. A foreground development server is not launcher-owned.
+
+Keep **engine checkpoint resume**, **HTTP job restart classification** and **launcher process recovery** distinct. None implies automatic refresh/analysis replay, automatic HTTP resume, success for interrupted work, or permission to stop a guessed PID. Runtime metadata is ownership evidence, not a file to delete to bypass a conflict.
+
+### Configuration and path precedence
+
+| Boundary | Source-backed precedence / interpretation |
+|---|---|
+| Launcher | Explicit parameters → process environment WAR_ROOM_* → defaults; launcher does not read `.env`. Relative paths resolve from the repository and its child runs there. WAR_ROOM_DATABASE controls the server's explicit database argument, not SNAPSHOT_DB_PATH. |
+| Python settings / CLI | [load_settings()](../src/fantasy_football/config.py) reads its required settings file, then overlays process environment **including empty values**. SNAPSHOT_DB_PATH selects the settings/CLI snapshot store; it does not override explicit launcher/server arguments. Direct server defaults are its own arguments, not automatic `.env` database selection. |
+| Browser refresh / manual rules | Server-side configured league/season and complete private credential pair or public access. FANTASY_FOOTBALL_RULE_CONFIG_PATH is resolved/validated by settings before profile advertisement and passed into audited translation. Browser cannot choose an arbitrary rule path. CLI explicit manual-rule configuration is a separate documented boundary. Availability is not proof the rule applied. |
+
+Source is [launcher](../scripts/start-local.ps1), [server](../src/fantasy_football/app/server.py), [settings](../src/fantasy_football/config.py) and [refresh](../src/fantasy_football/app/refresh.py). Server startup does not require loading ESPN settings, but profile/refresh configuration fails closed if unavailable. Operator defaults/paths and manual-rule selection details remain solely in [OPERATIONS](OPERATIONS.md#launcher-paths-and-precedence) and the [user guide](USER_GUIDE.md#choose-the-intended-local-database); contributor processes use [CONTRIBUTING](../CONTRIBUTING.md#backend-and-vite). No credentials or private configuration are reproduced here.
+
+### Open lifecycle and acceptance obligations
+
+[WR-026](BACKLOG.md#search-orchestration-cleanup-review) requires separately approved later evaluation/progress/export fault injection and deterministic scratch cleanup preserving original exceptions and successful result lifetime. Garbage collection is not acceptance. C13 ownership is accepted; the missing cleanup guard is an implementation gap, not a pending ownership choice.
+
+[WR-021](BACKLOG.md#wr-021-output-provenance-and-numerical-lifecycle) retains terminal-expiry/count-purge evidence, numerical success cleanup/abandoned expiry, complete provenance/output, representative storage/runtime/parent-and-child memory, cancellation/lease/reference cleanup and recovery evidence. Refresh submission compensation and truthful committed-publication failure inspection remain open under the [application limitations](APPLICATION_SERVICE.md#limitations-and-review-obligations). The exact p95/admission/cleanup, P0/P1, manual-rule/configuration and independent signoff requirements remain in [BACKLOG release acceptance](BACKLOG.md#wr-021-release-acceptance) and [V5](VALIDATION.md#operational-validation-and-release-limitations); this chapter neither replaces their criteria with generic links nor marks them passed. No new failure-window certification, continuous storage bound or release follows from documentation.
+
+## Application and frontend security/integration contracts
+
+### Local request and static-file boundary
+
+[server.py](../src/fantasy_football/app/server.py) binds 127.0.0.1, with no public-host option. [HTTP middleware](../src/fantasy_football/app/http.py) restricts Host to supported loopback names plus testserver for injected tests. For state-changing requests with an Origin, only http/https with localhost/127.0.0.1/::1 hostname is accepted; origin-less native clients are allowed. This is not remote user authentication, TLS, a sandbox or protection from another process on the trusted local machine. CORS is not the boundary. Public/multi-user hosting, port forwarding and untrusted shared-machine deployment remain unsupported.
+
+Static serving requires a validated built index/assets tree. Asset paths resolve beneath the assets root and must name files; traversal/symlink escape is rejected. Unknown API paths, extension-bearing resources and dotfile navigation do not receive SPA success. The application does not expose arbitrary repository/source/private files. [T5](#http-api-dtos-and-evolution) retains the exact route/schema/query/error behavior; no broader strict-query or authentication guarantee is inferred from this confinement.
+
+Public failures use safe typed context and validation locations without supplied values; unexpected engine/store failures remain errors, not successful partial results. Raw credentials, payloads, paths and tracebacks do not belong in public errors. Detailed analytical exceptions may remain in private local logs; refresh's ordinary logs are more restrictive, retaining stable code/type rather than raw upstream exception text. A redacted message cannot negate snapshot_id/publication_committed evidence. Secrets stay server-side; ignored configuration, rule files, both stores/sidecars, raw evidence, logs/runtime metadata, checkpoints/research and exports remain private. [OPERATIONS privacy](OPERATIONS.md#local-data-and-privacy) owns handling instructions.
+
+### Launcher and process authentication
+
+[Launcher identity helpers](../scripts/local-runtime.ps1) authenticate recorded PID/creation time, interpreter/command identity and configured paths, with listener/health agreement while available. Launcher metadata **schema 2** carries the exact command-line SHA-256/interpreter binding; legacy metadata follows its supported weaker compatibility checks and cannot be presumed to contain that evidence. Startup records the actual reported server PID. Reused PID, changed executable/command, foreign listener or ambiguous ownership fails closed.
+
+Stop revalidates ownership before writing the run-specific shutdown control. Authenticated listener-loss/timeout recovery revalidates root identity and descendant lineage; it does not require surviving HTTP health and cannot target arbitrary processes merely because they own a port. No guessed PID, manual metadata deletion, live-lease bypass or unverified tree termination is authorized. Bounded cooperative waits and retained leases are described in T8; recovery procedures remain in OPERATIONS. [Disposable-process test definitions](../tests/test_local_installation.py) describe separately authorized real Windows evidence, not guarantees established by mocked liveness or numerical spawn-worker tests.
+
+### Frontend state, requests and replay
+
+The relative [API client](../frontend/src/lib/api.ts) and [consumed types](../frontend/src/types/api.ts) adapt backend DTOs; TypeScript assertions are not runtime authentication. Canonical IDs and snapshot joins identify teams, players, ownership/slots and periods. Display names are not identity; matching numeric team IDs across leagues do not authorize state reuse. A structurally valid snapshot may lack an analytical capability.
+
+| Boundary | Current contract / source and evidence |
+|---|---|
+| Snapshot/run observation | [App](../frontend/src/App.tsx) and [viewers](INTERFACE.md#identity-and-request-isolation) combine effect-owned AbortControllers, latest-request/revision tokens and response identity checks. Retained results validate schema, run/type, snapshot/checksum and applicable scenario/path/state identities. Late data/errors/loading cannot overwrite active context even if transport resolves after abort. Detail/page/state failures settle independently; retry replaces the relevant observation. |
+| Workspace context | Trade Lab is keyed by snapshot UUID/checksum, Explorer details by snapshot/run; Simulation Center resets incompatible snapshot selectors/observation. Snapshot/run changes reset incompatible selections; team focus cannot bridge leagues. Navigating away or aborting observation does not cancel an accepted backend job; explicit run cancellation is separate, and ambiguous submission failures are not automatically retried. |
+| Draft bookkeeping | [replayDraft()](../frontend/src/TradeLab.tsx) validates chronological ownership against canonical IDs, rejects duplicate/unknown/empty/same-team/discontinuous edits and emits at most one final change per player. It is not a frontend legality engine. Edit keeps stable ID/index, selects from prefix state, then validates the entire proposed sequence including later dependencies. Invalid save/removal/reorder leaves committed steps intact; Cancel discards temporary choices. Pins follow final hypothetical ownership and are not ESPN locks. |
+| Intentional evaluation | Temporary selections/filters/editor state do not change committed revision or invalidate output; committed steps/pins/evaluation settings do invalidate it and abort local observation. Evaluate submits reviewed aggregate final ownership and pins, not an executable ordered chain. Backend owns legality/completion/paired evaluation. Scenario/run/engine identities stay distinct; retained manual results do not reconstruct a historical draft through an unavailable endpoint. |
+
+Only war-room-theme and war-room-snapshot preference identifiers persist in localStorage; private drafts/rosters/results do not. Local drafts/comparisons/filters are not a durable scenario library and may be lost on navigation. Runtime metadata/source drawer keeps unknown build provenance unknown; an explicit build revision is not authenticated source bytes. [INTERFACE](INTERFACE.md#draft-and-edit-contract) owns the full editing/presentation contract; [USER_GUIDE](USER_GUIDE.md#run-a-baseline-and-evaluate-hypothetical-changes) owns user actions.
+
+### Evidence, uncertainty and accessibility
+
+The frontend formats supplied outputs; it does not independently recompute probabilities, paired intervals, ranking, distributions, legality or completion. Absolute fractions display as percentages; legacy paired fields retain the existing direct signed pp presentation, with no extra conversion. Null estimates/intervals display unavailable, never fabricated zero. [T5 units](#numerical-units-and-identity-scopes) and [INTERFACE](INTERFACE.md#analytical-presentation-and-units) retain exact compatibility; this is no unit correction.
+
+Execution status, capability/path completeness, candidate coverage, state evaluation, precision and ranking resolution remain distinct. Sampling intervals are conditional on the model, not calibration/model-error bands. Capped or unresolved results cannot become exhaustive advice, complete-only denominators or confirmed best by display; a positive estimate does not prove significance, permission or claim/offer success. Actual standings/points remain source facts. Preserve the four evidence classes and explicit source/model limitations.
+
+Use semantic headings/native controls, keyboard access, visible focus/skip navigation, labels/text alongside graphics, non-color-only status and explicit loading/error/empty states. Responsive local scrolling/stacking and reduced-motion/themes support the [presentation standard](INTERFACE.md#accessibility-and-responsive-behavior). Shell navigation/context drawers have tested focus entry/wrapping, inert background, Escape and trigger restoration. **Refresh dialog focus containment is not equivalently verified**; [WR-017](BACKLOG.md#interface-follow-up-disposition) retains that accessibility review. Component/axe tests supplement, not replace, actual-browser keyboard, screen-reader, contrast, responsive and usability evidence.
+
+| Current component evidence | What the synthetic tests establish / limit |
+|---|---|
+| [App tests](../frontend/src/App.test.tsx) | Shell snapshot races, preferences, drawer focus and refresh observation/publication context; no universal modal/accessibility certification |
+| [Overview tests](../frontend/src/LeagueOverview.test.tsx) | Retained baseline identity, supplied percentages/intervals/placements, null/incomplete/precision states and stale responses |
+| [Explorer tests](../frontend/src/OpportunityExplorer.test.tsx) | Server query/pagination, unresolved ranking, path/state provenance, comparisons and isolation; no richer WR-017 query/export claim |
+| [Trade Lab tests](../frontend/src/TradeLab.test.tsx) | Replay/edit/revision/pin/settings invariants, intentional submissions, retained identity and supplied completion/lineup explanations |
+| [Simulation Center tests](../frontend/src/SimulationCenter.test.tsx) | Workload/control units, preflight, observation/cancellation races, history/navigation; no actual-process shutdown proof |
+
+### Integration evidence and continuing authority
+
+[Application](../tests/test_app_service.py), [background lifecycle](../tests/test_background_runs.py), [backend integration](../tests/test_backend_validation.py), [refresh](../tests/test_snapshot_refresh.py), [immutable storage](../tests/test_snapshot_store.py), [installation/static tests](../tests/test_local_installation.py) and [focused integration map](../tests/test_application_documentation.py) establish their credential-free fixture/source cases. The windows_process tier, live ESPN, private-store, actual-browser and clean-machine verification need separate authorization. No synthetic pass proves field semantics, universal accessibility, authenticated real-process recovery, empirical calibration or independent release acceptance. [CONTRIBUTING](../CONTRIBUTING.md#change-based-verification-matrix) owns verification commands and tier selection.
+
+| Authoritative source / accepted inventory | Integration destination and retained owner |
+|---|---|
+| architecture/overview S196–S202; APPLICATION_SERVICE S030–S031 | T1 dependency/data/trust map; architecture/current domain owners remain authoritative, METHODOLOGY owns analytical meaning |
+| APPLICATION_SERVICE S035–S039/S043/S048–S050, OPERATIONS configuration/storage/recovery | T8 commit/lifetime/lease/path distinctions and C13; DATA/T2, numerical recovery and T7 retain detailed protocols/interfaces, OPERATIONS/USER_GUIDE retain instructions |
+| APPLICATION_SERVICE S043–S047; INTERFACE identity/draft/monitor/accessibility sections | T9 Host/Origin/static/error/process and frontend isolation/replay/evidence boundaries; exact wire units/routes remain T5 and detailed UI contracts remain INTERFACE |
+| [BACKLOG obligations](BACKLOG.md) WR-017/021/026 and [V5](VALIDATION.md#operational-validation-and-release-limitations) | Accessibility, refresh/cleanup/retention/recovery/provenance and complete release obligations stay outstanding under their current exact criteria; no closure, P8 authorization or release follows |
+
+T2/T5/T7, current domain authorities, M0's seven roles/bindings, numerical identities and historical artifacts are preserved. No cleanup implementation, API/schema change, M0 migration, authority retirement or broader migration/release completion is included.
