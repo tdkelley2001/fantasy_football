@@ -291,13 +291,16 @@ def test_d1_d6_and_deferred_mapping_preserve_existing_owners() -> None:
         "executable bindings use contract 3, with authority retirement separately gated"
         in mapping
     )
-    assert "V0–V2/V4–V5 not transferred" in mapping
-    assert "T1 and T3–T8 not transferred" in mapping
+    assert "V0–V5 chapters are complete" in mapping
+    assert "T1–T9 chapters are complete" in mapping
+    assert "permanent authority adoption remains separately gated" in mapping
     for name in ("VALIDATION.md", "TECHNICAL_REFERENCE.md"):
         text = _read(name)
         assert "RESEARCH.md" in text and "M0" in text and "BACKLOG.md" in text
         expected_scope = (
-            "P7b pilot:" if name == "VALIDATION.md" else "Technical reference pilot:"
+            "V0–V5: assurance map."
+            if name == "VALIDATION.md"
+            else "Technical reference:"
         )
         assert expected_scope in text
     assert "The other chapters explicitly identify later scope" not in _read(
