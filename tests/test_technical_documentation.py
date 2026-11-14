@@ -10,6 +10,8 @@ from dataclasses import fields
 from pathlib import Path
 from typing import get_args
 
+import pytest
+
 from fantasy_football.app.background import BackgroundRunPolicy
 from fantasy_football.app.contracts import (
     API_SCHEMA_VERSION,
@@ -151,20 +153,47 @@ def test_partial_contract_keeps_distinct_opt_in_engine_entry_points() -> None:
         assert name in current
 
 
-def test_application_admission_defaults_are_documented_from_current_policies() -> None:
-    rows = dict(
-        re.findall(
-            r"^\| ((?:SynchronousSearchSafetyPolicy|BackgroundRunPolicy)\.\w+) \| ([0-9.]+) \|$",
-            read("docs/APPLICATION_SERVICE.md"),
-            re.MULTILINE,
-        )
+def _check_application_policy_defaults(document: str) -> None:
+    rows = re.findall(
+        r"^\| ((?:SynchronousSearchSafetyPolicy|BackgroundRunPolicy)\.\w+) \| ([0-9.]+) \|$",
+        document,
+        re.MULTILINE,
     )
     expected = {
         f"{policy.__name__}.{field.name}": float(field.default)
         for policy in (SynchronousSearchSafetyPolicy, BackgroundRunPolicy)
         for field in fields(policy)
     }
-    assert {key: float(value) for key, value in rows.items()} == expected
+    assert len(rows) == len(expected), "Missing/duplicate application policy default"
+    assert {key: float(value) for key, value in rows} == expected, (
+        "Application policy default drift"
+    )
+
+
+def test_application_admission_defaults_are_documented_from_current_policies() -> None:
+    for reference in ("docs/APPLICATION_SERVICE.md", "docs/TECHNICAL_REFERENCE.md"):
+        _check_application_policy_defaults(read(reference))
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    (
+        (
+            "| BackgroundRunPolicy.maximum_pending_runs | 8 |",
+            "| BackgroundRunPolicy.maximum_pending_runs | 80 |",
+        ),
+        (
+            "| BackgroundRunPolicy.maximum_result_store_bytes | 1000000000 |",
+            "| BackgroundRunPolicy.maximum_result_store_bytes | 1000000 |",
+        ),
+        ("| SynchronousSearchSafetyPolicy.maximum_evaluation_states | 25 |", ""),
+    ),
+)
+def test_transferred_policy_defaults_reject_drift_and_missing_limits(old, new):
+    document = read("docs/TECHNICAL_REFERENCE.md")
+    assert old in document
+    with pytest.raises(AssertionError, match="policy default"):
+        _check_application_policy_defaults(document.replace(old, new))
 
 
 def test_application_reference_covers_public_lifecycle_and_error_categories() -> None:

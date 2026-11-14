@@ -354,6 +354,32 @@ The registry below lists every concrete DTO, all fields, required/optional statu
 
 Normal dispersion requires at least one of base_stddev_points/projection_scale positive, not both zero. Precision minimum_paths cannot exceed maximum_paths. Baseline simulation.path_count must equal precision.maximum_paths; search maximum_paths_per_state must match simulation.path_count before resource clamping. Engine validation additionally checks finite values, ownership, family/order compatibility, timing, rules and evidence. DTO parse success never grants execution permission. Explicit failure/capability-incomplete responses remain distinct.
 
+### Application admission and resource policies
+
+These are injected **application policy defaults**, verified against `SynchronousSearchSafetyPolicy` in [service.py](../src/fantasy_football/app/service.py) and `BackgroundRunPolicy` in [background.py](../src/fantasy_football/app/background.py). They are not league rules, mathematical precision defaults or limits on direct engine calls. [T8 retention policy](#retained-run-store-and-retention-policy) documents the three storage/retention defaults from the same background policy.
+
+| Policy field | Default |
+|---|---:|
+| SynchronousSearchSafetyPolicy.maximum_wall_clock_seconds | 30 |
+| SynchronousSearchSafetyPolicy.maximum_evaluation_states | 25 |
+| SynchronousSearchSafetyPolicy.maximum_candidate_limit | 10000 |
+| SynchronousSearchSafetyPolicy.maximum_paths_per_state | 1000 |
+| BackgroundRunPolicy.maximum_active_runs | 1 |
+| BackgroundRunPolicy.maximum_pending_runs | 8 |
+| BackgroundRunPolicy.maximum_engine_workers_per_run | 2 |
+| BackgroundRunPolicy.maximum_total_engine_workers | 2 |
+| BackgroundRunPolicy.maximum_wall_clock_seconds | 3600 |
+| BackgroundRunPolicy.maximum_evaluation_states | 1000 |
+| BackgroundRunPolicy.maximum_paths_per_state | 10000 |
+| BackgroundRunPolicy.maximum_baseline_paths | 10000 |
+| BackgroundRunPolicy.maximum_manual_scenario_paths | 10000 |
+
+Action search must explicitly supply finite `wall_clock_seconds` and `evaluation_state_limit` in either transport; omitted values reject rather than acquire an implicit budget. Synchronous resource checks run **before snapshot load** and engine execution; background admission loads/validates the selected snapshot **before type-specific resource checks**. Background baseline/manual admission validates simulation/precision path agreement and their independent ceilings; search's per-state ceiling is a different policy. The synchronous candidate ceiling applies only when candidate_limit is supplied; it is not automatic pruning. Background action admission checks both worker_count <= maximum_engine_workers_per_run and worker_count * maximum_active_runs <= maximum_total_engine_workers, even if fewer runs happen to be active at that instant.
+
+After validation, background submission checks closing/queue capacity under lock before creating durable work. Queued, running and cancel_requested records count toward maximum_active_runs + maximum_pending_runs; a full queue rejects with background_queue_full instead of silently dropping or trimming work. Active scheduling uses a bounded thread executor; nested engine worker admission is separate. [T8 commit boundaries](#commit-and-cancellation-boundaries) retain submission compensation and cancellation races, rather than promising that every application executor shares this guarantee.
+
+`response_candidate_limit` (1–500, default 100) bounds serialized action-search summary rows and sets response_truncated; it does **not** cap the candidate universe or evaluation. Background observation copies all generated retained candidates independently of that display limit. Generation/state/path/time bounds can leave analytical coverage, precision or ranking incomplete and must disclose actual exposure. Search deadlines are cooperative at safe boundaries; an active exact batch can overrun and reports wall_clock_overrun_seconds while retaining completed work. These application budgets are not CPU/RSS isolation, a physical-memory ceiling or a throughput/precision guarantee. [T6](#process-workers-and-resource-policies) owns numerical execution; [T7](#preflight-bounded-execution-and-trusted-indexing) owns effective search limits.
+
 ### Wire schema registry
 
 | DTO | Fields: required unless marked `?`; types, bounds and defaults |
@@ -470,7 +496,7 @@ At pool entry, partition the initialized range into contiguous path-ID tuples an
 
 `max_in_flight_tasks` bounds pending submitted futures when set. **None permits submission of every task in that finite batch**; worker_count limits concurrent workers, not a constant-sized queue. As futures complete, submit further chunks up to the bound. Collect asynchronous results and reconcile in path order through the shared aggregator. Diagnostics report requested/effective workers, tasks/paths, settings and measured elapsed time; they are not mathematical identity or proof of concurrent OS process activity. Worker exceptions propagate via future.result(); there is no silent sequential retry. Pool exit waits for workers; on an exception it also cancels pending futures, not forcibly terminating active paths.
 
-Worker/task/completion order changes preserve fixed-path mathematical results under identical validated inputs. Startup, serialization, timings, pool lifetime, memory and cancellation latency can differ. Compact per-path/team records, chunk lists and worker input copies remain resident: this is neither distributed execution nor constant-memory streaming. [T7 resource integration](#preflight-bounded-execution-and-trusted-indexing) retains search limits: maximum_in_flight_states maps to this task bound, not concurrent candidate-state evaluation; path budget is per state, and safe-boundary deadlines may overrun. A numerical execution profile has no native wall-clock-budget field.
+Worker/task/completion order changes preserve fixed-path mathematical results under identical validated inputs. Startup, serialization, timings, pool lifetime, memory and cancellation latency can differ. Compact per-path/team records, chunk lists and worker input copies remain resident: this is neither distributed execution nor constant-memory streaming. [T7 resource integration](#preflight-bounded-execution-and-trusted-indexing) retains search limits: maximum_in_flight_states maps to this task bound, not concurrent candidate-state evaluation; path budget is per state, and safe-boundary deadlines may overrun. A numerical execution profile has no native wall-clock-budget field. [T5 admission](#application-admission-and-resource-policies) separately caps application requests and nested workers; those transport policies do not change engine fingerprints or direct numerical interfaces.
 
 ### Precision controls and stopping state
 
@@ -590,7 +616,7 @@ The current engine export is not an HTTP download endpoint, a shared global HTTP
 
 ### Ownership and lifetime
 
-The [accepted C13 authority](APPLICATION_SERVICE.md#retention-authority) separates ephemeral execution context from separately persisted, bounded application-owned history. This compact map links the detailed lifecycle authority; it introduces no new TTL, schema, cache, migration or deletion policy.
+The [accepted C13 authority](APPLICATION_SERVICE.md#retention-authority), independently accepted at `14fd6dba46cfe5827c0b3da110bfefa4a683b647`, separates ephemeral execution context from separately persisted, bounded application-owned history. Historical MASTER_SPEC §9.4's active-only restriction governs ephemeral engine execution context; the accepted M6.2/M7 contracts are the narrowly scoped successor where that wording would prohibit bounded application history. This permits explicitly owned, provenance-bound copies after execution, not an unbounded stale archive, abandoned scratch accumulation, automatic index promotion or silent new-search reuse. [Decision traceability](BACKLOG.md#retention-decision) retains exact accepted citations. APPLICATION_SERVICE remains authoritative pending final adoption; the detail below introduces no new TTL, schema, cache, migration or deletion policy.
 
 | Data class | Owner and intended lifetime | Boundary / remaining obligation |
 |---|---|---|
@@ -600,9 +626,23 @@ The [accepted C13 authority](APPLICATION_SERVICE.md#retention-authority) separat
 | Numerical checkpoints | [Numerical recovery](MONTE_CARLO.md#checkpoints-and-recovery): atomic, identity/prefix/history-validated engine recovery artifacts | Compatible engine resume is implemented; success cleanup and abandoned expiry remain WR-021 obligations. Temporary write-file removal is not those policies, nor permission for indefinite archives or arbitrary user-file deletion. |
 | User exports | [T7 exports](#existing-exports-and-deferred-parity-requirements): explicit user-owned files with independent lifetime | Index closure, run deletion and expiry must not delete exports. No automatic reimport or silent reuse as a new analysis. |
 
-Background run storage is separate from source snapshots and numerical checkpoints. Production derives an adjacent `.runs.sqlite3` store from the selected snapshot database path; injected test stores are distinct. The run store records exact request/checksum, snapshot/build metadata, lifecycle, progress, result JSON and candidate/state links. SQLite transactions/foreign keys protect owned records; connections close explicitly. Logical serialized-payload accounting is not a physical SQLite/WAL/disk/RSS ceiling. Detailed policy values and storage mechanisms remain in [application retention](APPLICATION_SERVICE.md#results-retention-and-ownership), not duplicated here.
+### Retained run store and retention policy
 
-Expiry is calculated from **submission time**, not completion. Terminal lookup may remove expired rows; coordinator-finalization purge removes expired/excess terminal work. Active runs are excluded, listing may precede cleanup, and there is **no continuous TTL sweeper** or immediate physical reclamation guarantee. Dedicated expiry/count-purge evidence remains WR-021. Active deletion rejects; terminal deletion removes the run's dependent rows while preserving other ownership classes. Reopening retained history is inspection under its original identity, not execution resume, current advice from an old snapshot, or a restored historical draft.
+`BackgroundRunStore` in [background.py](../src/fantasy_football/app/background.py) is separate from immutable source snapshots and numerical checkpoints. Production derives an adjacent `.runs.sqlite3` from the selected snapshot database path; injected test stores are distinct. Request JSON/SHA-256, source snapshot/build metadata, submission/start/finish/expiry times, lifecycle/progress, safe errors/stop reasons and typed result JSON persist in this store. Candidate summaries, ordered action/detail records, involved-team links and shared all-team state evaluations are copied records with run/state lineage, not a persisted engine index. Within-run state sharing avoids duplicating an evaluation per structural path; it authorizes no inherited evaluation in another run or refresh.
+
+| Policy field | Default |
+|---|---:|
+| BackgroundRunPolicy.retention_seconds | 86400 |
+| BackgroundRunPolicy.maximum_retained_runs | 100 |
+| BackgroundRunPolicy.maximum_result_store_bytes | 1000000000 |
+
+SQLite initialization uses WAL and synchronous=FULL; connections enable foreign keys and close explicitly even after exceptions. Each store operation's connection context commits or rolls back its transaction. Conditional terminal writes atomically bind status, progress, result and error/stop metadata; candidate/state transfers occur in separate bounded transactions. No whole-search transaction spans retrieval, simulation, filesystem inspection and all persistence. The service closes an already returned SearchOrchestrationResult in finally after serialization/transfer; that guard begins only after the engine coordinator returns. Earlier coordinator failure cleanup remains WR-026, not a blanket success guarantee from service closure.
+
+Logical accounting sums SQLite `length()` of serialized request/build/progress/result text, candidate summary/detail text and state-evaluation teams text across the store. Despite the policy's `_bytes` name, these TEXT lengths count characters, not a universal UTF-8 byte measurement; fixed row metadata, SQLite pages/indexes, WAL/SHM, native allocations and OS caches are outside that sum. Existing `_TERMINAL_METADATA_RESERVE_BYTES` is **4096** accounting units of headroom at submission and candidate/state writes, not a preallocated disk reservation. A checked write exceeding the logical limit rolls back; terminal writes check the post-update logical total without adding that reserve. This is not a physical SQLite/WAL/disk/RSS ceiling. The coordinator also checks DB/WAL/SHM file sizes after retaining a candidate and can reject an excessive footprint; an after-write inspection is not continuous enforcement or immediate reclamation. FileNotFoundError during footprint inspection is narrowly tolerated for disappearing SQLite files; other I/O errors are not silently masked.
+
+Expiry is calculated from **submission time**, not completion, so a long run can have little retention time left after finishing. Terminal lookup at/after expiry deletes that run and reports run_expired. Coordinator-finalization purge removes expired/excess terminal work; count purge keeps the newest terminal records by finish time with stable run-ID ordering. Active runs are excluded, listing may precede cleanup, and there is **no continuous TTL sweeper** or immediate physical reclamation guarantee. Dedicated expiry/count-purge evidence remains WR-021. Listing is newest-first, default 50/range 1–200, optionally filtered by status; it has no server-side snapshot filter or list offset. Browser snapshot-scoped filtering over returned records is not complete lifetime history. [T7](#retained-http-query-allowlist) separately owns candidate query pagination.
+
+Analytical result retrieval requires completed status and stored result JSON; cancelled, failed, interrupted or otherwise unavailable results are not completed analyses. Missing and expired records remain distinct from result_not_available. Explicit terminal deletion returns 204 and cascades candidate/team/state records; active deletion rejects. It never deletes source snapshots, numerical checkpoints or user exports. Handled cancellation/failure discards candidate/state evaluations while retaining safe terminal metadata under policy. Reopening retained history queries the original result without Monte Carlo: it is not execution resume, current advice from an old snapshot or restoration of a historical editable request/draft. No automatic HTTP resume, cross-run completed-scenario cache, silent new-baseline reuse or automatic export reimport is implemented.
 
 ### Commit and cancellation boundaries
 
