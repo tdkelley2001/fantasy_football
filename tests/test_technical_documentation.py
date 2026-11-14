@@ -779,6 +779,12 @@ def test_scenario_and_search_ownership_preserves_distinct_completion_and_identit
         "projected legal-lineup explanations",
     ):
         assert boundary.lower() in manual.lower(), boundary
+    assert "caller-validated model and policy provenance" in manual
+    assert "does not independently reconstruct that compatibility" in manual
+    assert (
+        "requires matching path IDs and compatible configuration/outcome-model identity"
+        not in manual
+    )
     for boundary in (
         "same roster ownership alone is insufficient",
         "excludes path labels/descriptions",
@@ -834,3 +840,37 @@ def test_search_reference_explains_source_resource_and_index_lifetime_boundaries
     backlog = read("docs/BACKLOG.md")
     assert "## Search orchestration cleanup review" in backlog
     assert "separately approve" in backlog.lower()
+
+
+def test_current_navigation_evidence_homes_and_execution_limits_remain_explicit() -> (
+    None
+):
+    from fantasy_football.m0_verification import EVIDENCE_DOCUMENTS
+
+    readme = read("README.md")
+    for name in ("USER_GUIDE", "METHODOLOGY", "VALIDATION", "TECHNICAL_REFERENCE"):
+        assert f"docs/{name}.md" in readme
+    assert "existing domain authorities below remain binding" in readme
+    research = read("docs/RESEARCH.md").split("The [M0 role contract]", 1)[1]
+    for path in EVIDENCE_DOCUMENTS:
+        assert Path(path).stem in research
+    assert "uses contract 3 to check" in research
+    assert "RESEARCH retains substantive research authority" in research
+    assert "not an authenticated pregame capture" in research
+    assert "limitations to RESEARCH;" not in read("docs/DATA.md")
+
+    workers = read("docs/MONTE_CARLO.md").split("## Workers and bounded execution", 1)[
+        1
+    ]
+    workers = workers.split("\n## ", 1)[0]
+    assert (
+        "explicit positive max_in_flight_tasks limits pending submitted futures"
+        in workers
+    )
+    assert "None permits submission of every task in the finite batch" in workers
+    assert "Task queues are bounded" not in workers
+    backlog = read("docs/BACKLOG.md")
+    row = next(line for line in backlog.splitlines() if line.startswith("| WR-002 |"))
+    assert row.split("|")[4].strip() == "In Review"
+    assert "remaining final consolidation" in row.lower()
+    assert "does not close the later consolidation" in backlog

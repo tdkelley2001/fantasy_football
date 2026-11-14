@@ -235,10 +235,10 @@ def test_accepted_t2_body_is_unchanged() -> None:
         .rstrip()
         + "\n"
     )
-    # P8 updates only T2 source-policy/identity prose and M0 ownership.
+    # P8 supplied evidence homes; Package 1 corrects only F02 transfer wording.
     assert (
         hashlib.sha256(body.encode()).hexdigest()
-        == "589aa0cbcba60e692535dbbbceff5c0eb65910bc2b39e75de2f9e20354e09c41"
+        == "4c5dc11fd36e24d576a69726e4b4c75b29d7e674865b302e2eae96944682575a"
     )
 
 

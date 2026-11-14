@@ -31,13 +31,15 @@ The service binds to loopback on a trusted local machine. Host/Origin checks are
 
 ## Start here
 
-- [User guide pilot](docs/USER_GUIDE.md): a practical path from setup and validated data through baseline/scenario analysis, interpretation and safe shutdown. Detailed operating/interface contracts remain in their current references during P1.
+- [User guide](docs/USER_GUIDE.md): a practical path from setup and validated data through baseline/scenario analysis, interpretation and safe shutdown. OPERATIONS and INTERFACE retain their binding operating/interface contracts pending final consolidation.
 - [Install and operate](docs/OPERATIONS.md): Windows prerequisites, locked setup, public/private ESPN configuration, launch, first analysis, private storage and safe shutdown. Installation/startup needs no ESPN credentials. Tested versions and the unresolved Node-policy mismatch (WR-003) are recorded there.
 - [Use the interface](docs/INTERFACE.md): workspace journeys, analytical presentation, provenance, accessibility and frontend contracts.
 - [Contribute](CONTRIBUTING.md): original-repository/fork branches, safe synchronization, developer environment, verification tiers and independent PR review. [AGENTS](AGENTS.md) supplies standing development rules.
 - [Development backlog](docs/BACKLOG.md): authoritative outstanding work and evidence/approval gates; a proposal is not implementation approval.
 
 ## Understand the system
+
+- [Methodology](docs/METHODOLOGY.md), [validation](docs/VALIDATION.md) and [technical reference](docs/TECHNICAL_REFERENCE.md): completed M1–M9, V0–V5 and T1–T9 chapters for model meaning, evidence and executable interfaces. DATA covers D1–D6. The existing domain authorities below remain binding pending independently reviewed final consolidation; chapter completion does not retire an owner or declare release.
 
 - [Architecture map](docs/architecture/overview.md) and [application API/execution](docs/APPLICATION_SERVICE.md): source ownership, runtime boundaries and public contracts.
 - [Data lifecycle](docs/DATA.md): ESPN sources, canonical structures/validation, league-rule evidence and immutable snapshot storage. The [offline M0 verifier](docs/DATA.md#m0-consumer-dependency) checks historical evidence roles and diagnostic availability; it does not certify current live readiness.

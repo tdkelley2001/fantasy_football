@@ -37,12 +37,12 @@ def _plain(text: str) -> str:
 def test_six_validation_chapters_and_accepted_v3_are_preserved() -> None:
     text = _read("docs/VALIDATION.md")
     assert tuple(re.findall(r"^## (.+)$", text, re.MULTILINE)) == HEADINGS
-    # P8 changes only the M0 ownership footer of the accepted P7a V3.
+    # P8 updated the M0 footer; Package 1 corrects only pilot/mapping wording.
     # Empirical observations, methods, numbers and promotion gates are unchanged.
     # Normalize only the section separator's trailing newlines. No runtime Git.
     v3 = _chapter(text, "Empirical validity")
     assert hashlib.sha256(v3.encode("utf-8")).hexdigest() == (
-        "e7aa89b954f0a68cbbf0d5b796bf55f1ccb0be4b2aedf1d41d6496cb7ffc0f54"
+        "f3b70263c093f5c8b43a8bc6f26b0de20b89109d0391c20fdf9ba395028f6094"
     )
 
 
@@ -439,6 +439,9 @@ def test_source_mapping_does_not_retire_owners_or_authorize_later_packages() -> 
         "all outstanding criteria, priorities/statuses and independent gates remain unchanged in BACKLOG"
         in mapping
     )
-    assert "not P7c/P7d transfer" in mapping
+    assert (
+        "T5/T7/T8/T9 chapters are complete without retiring those authorities"
+        in mapping
+    )
     assert "No authority is retired; executable role bindings follow" in text
     assert "all seven role names/identities/limits remain unchanged" in mapping

@@ -118,7 +118,7 @@ Finalist convergence checks **all teams' paired championship deltas** against ta
 
 `ParallelMonteCarloExecutor` initializes immutable inputs once per worker; tasks carry bounded path-ID tuples and return compact summaries. The parent sorts asynchronous results, checks exact coverage and delegates to the same aggregator. The reusable pool is bound to the seed-bearing **run identity**, not merely configuration identity; subsets may vary within its initialized range, but changing seed/model/snapshot/policy fails. Worker exceptions and invalid evidence fail closed.
 
-Worker count/task size/completion order do not enter mathematical simulation fingerprints; supported sequential/parallel paths remain identical. Runtime timings are observational. Task queues are bounded, but the batch/checkpoint still retains compact per-path outcomes, so memory scales with path/team counts plus per-worker immutable copies. This is not a distributed execution system or constant-memory sufficient-statistic-only implementation.
+Worker count/task size/completion order do not enter mathematical simulation fingerprints; supported sequential/parallel paths remain identical. Runtime timings are observational. An explicit positive max_in_flight_tasks limits pending submitted futures; None permits submission of every task in the finite batch. Worker count limits process concurrency, not queue size. The batch/checkpoint still retains compact per-path outcomes, so memory scales with path/team counts plus per-worker immutable copies. This is not a distributed execution system or constant-memory sufficient-statistic-only implementation.
 
 ## Checkpoints and recovery
 

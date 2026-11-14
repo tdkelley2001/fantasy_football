@@ -2,7 +2,7 @@
 
 This is the current data lifecycle reference. [RESEARCH](RESEARCH.md) owns historical temporal trust/evaluation; [TRANSACTIONS](TRANSACTIONS.md) owns hypothetical state/legality; [SEASON_SIMULATOR](SEASON_SIMULATOR.md) owns scoring/brackets; [Partial Week](PARTIAL_WEEK.md) owns execution permission/composition. [APPLICATION_SERVICE](APPLICATION_SERVICE.md) owns HTTP refresh and separate job/result persistence. Operator commands/configuration precedence live in [OPERATIONS](OPERATIONS.md). Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
-This retained authority is organized into D1–D6. [Empirical validity](VALIDATION.md#empirical-validity) and [technical source contracts](TECHNICAL_REFERENCE.md#canonical-source-and-evidence-data-contracts) are scoped reader pilots; RESEARCH retains its substantive authority; the M0 register binds the consolidated DATA/METHODOLOGY/VALIDATION/TECHNICAL_REFERENCE evidence homes. Source meaning and execution permission are unchanged.
+This retained authority is organized into D1–D6. [Empirical validity](VALIDATION.md#empirical-validity) and [technical source contracts](TECHNICAL_REFERENCE.md#canonical-source-and-evidence-data-contracts) are documented in completed chapters pending permanent authority adoption; RESEARCH retains its substantive authority; the M0 register binds the consolidated DATA/METHODOLOGY/VALIDATION/TECHNICAL_REFERENCE evidence homes. Source meaning and execution permission are unchanged.
 
 - [D1: Data lifecycle and source provenance](#data-lifecycle-and-source-provenance)
 - [D2: Source trust, coverage and research data](#source-trust-coverage-and-research-data)
@@ -371,7 +371,7 @@ The exact section arrays below are the binding map: connectivity uses D1/D2; fut
 }
 ```
 
-Connectivity preserves read-only identity/ownership and library sparse-slot/signed-ID findings; future-data covers pagination/current authority/raw weekly matching/missing-zero/bye coverage; league-rules preserves settings/ties/bracket/manual provenance and gaps. Historical-projections binds vintage/scoring/selection/revision limitations to RESEARCH; dictionary binds implemented namespaces/provenance and structural-versus-capability validation. Handoff preserves the original provisional disposition/no-horizon assumptions and ongoing gates; the seventh role preserves the current missing policy. The source observations retain their original dates/classifications, not a fresh live verification. [BACKLOG](BACKLOG.md#data-research-and-m0-migration-obligations) retains future evidence gates and the independent review requirement.
+Connectivity preserves read-only identity/ownership and library sparse-slot/signed-ID findings; future-data covers pagination/current authority/raw weekly matching/missing-zero/bye coverage; league-rules preserves settings/ties/bracket/manual provenance and gaps. Historical-projections binds vintage/scoring/selection/revision limitations to DATA's research-source trust, VALIDATION's empirical-validity sections and TECHNICAL_REFERENCE's research interfaces under contract 3; RESEARCH retains its substantive research authority; dictionary binds implemented namespaces/provenance and structural-versus-capability validation. Handoff preserves the original provisional disposition/no-horizon assumptions and ongoing gates; the seventh role preserves the current missing policy. The source observations retain their original dates/classifications, not a fresh live verification. [BACKLOG](BACKLOG.md#data-research-and-m0-migration-obligations) retains future evidence gates and the independent review requirement.
 
 ### Source and verification
 
@@ -381,17 +381,17 @@ Source: [adapter](../src/fantasy_football/espn_adapter.py), [canonical model](..
 
 The accepted [section inventory](development/model-documentation-architecture.md#inventory--datamd) supplies stable source IDs. Existing anchors remain available; the current executable role destinations and limits are recorded in contract 3 above. Current authorities remain in place.
 
-| Accepted source sections | P7a destination / disposition | Continuing owner or deferred mapping |
+| Accepted source sections | Current destination coverage | Continuing authority boundary |
 |---|---|---|
 | S071–S072 DATA introduction/retrieval | D1, original retrieval anchor retained | DATA; adapter signatures cross-reference T2 |
 | S073, S083 vocabulary/observations | D2, original anchors retained | DATA; dated observations remain bounded evidence |
 | S074–S078, S080 raw dictionary/projections/settings/calendar/manual rules | D3, original anchors retained | DATA; numerical use remains M2/M3/M5 and current domain owners |
-| S079, S082 canonical/publication | D4, original anchors retained | DATA retains exact serialization/storage text; T2 links it; broader T8 transfer deferred |
-| S081 and S130–S133 partial source evidence | D5, original live anchor plus source-boundary guidance | PARTIAL_WEEK retains companion/permission contracts; T4 and V1/V2 transfer deferred |
+| S079, S082 canonical/publication | D4, original anchors retained | DATA retains exact serialization/storage text; T2/T8 document interfaces and lifecycle; final detail reconciliation and authority adoption remain pending |
+| S081 and S130–S133 partial source evidence | D5, original live anchor plus source-boundary guidance | PARTIAL_WEEK retains companion/permission contracts; T4 and V1/V2 chapters are complete without retiring that authority |
 | S084–S085 M0 register/source checks | D6, original anchors and JSON unchanged | DATA; executable bindings use contract 3, with authority retirement separately gated |
 | S144–S149, S154 RESEARCH trust/coverage/limitations | D2 links current substantive sections | RESEARCH retained as authority; consolidated executable homes are recorded in D6 |
-| S145, S149–S154 evaluation/metrics/promotion/reproduction | V3 substantive reader pilot | RESEARCH retains authoritative design, results and component-specific promotion; V0–V2/V4–V5 not transferred |
-| S072, S079, S146–S148, S150, S153 interfaces/identity | T2 substantive source/dataset pilot | DATA/RESEARCH retain binding details; T1 and T3–T8 not transferred |
+| S145, S149–S154 evaluation/metrics/promotion/reproduction | V3 empirical-validity chapter | RESEARCH retains authoritative design, results and component-specific promotion; V0–V5 chapters are complete; permanent authority adoption remains separately gated |
+| S072, S079, S146–S148, S150, S153 interfaces/identity | T2 source/dataset chapter | DATA/RESEARCH retain binding details; T1–T9 chapters are complete; permanent authority adoption remains separately gated |
 | S139, S141, S143 outcome classification/empirical/promotion | D3/V3 links only | PLAYER_OUTCOME_MODEL retained; no model/identity transition or retirement |
 
-BACKLOG, current release gates and component-specific acceptance remain unchanged. These are scoped destinations, not completion of P7, P8 or the broader migration.
+BACKLOG, current release gates and component-specific acceptance remain unchanged. P1–P8 and T1–T9 documentation packages are complete; final consolidation and authority adoption remain independently gated, with WR-002 In Review.
