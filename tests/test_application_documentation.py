@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from fantasy_football.app import background as background_module
 from fantasy_football.app.background import BackgroundRunCoordinator
 from fantasy_football.app.http import create_app
 from fantasy_football.app.refresh import SnapshotRefreshCoordinator
@@ -186,6 +187,48 @@ def test_lifecycle_does_not_promote_unimplemented_cleanup_or_resume() -> None:
     )
 
 
+def _check_retained_store_contract(text: str) -> None:
+    section = _section(text, T8)
+    plain = " ".join(section.replace("**", "").replace("`", "").lower().split())
+    assert str(background_module._TERMINAL_METADATA_RESERVE_BYTES) in section, (
+        "Storage headroom drift"
+    )
+    for boundary in (
+        "text lengths count characters",
+        "not a preallocated disk reservation",
+        "submission time",
+        "no continuous ttl sweeper",
+        "completed status and stored result json",
+        "never deletes source snapshots, numerical checkpoints or user exports",
+        "without monte carlo",
+    ):
+        assert boundary in plain, f"Lost retained-store boundary: {boundary}"
+    assert "14fd6dba46cfe5827c0b3da110bfefa4a683b647" in section
+    assert "narrowly scoped successor" in plain
+
+
+def test_transferred_retention_distinguishes_logical_storage_and_owned_lifetimes():
+    _check_retained_store_contract(_read("docs/TECHNICAL_REFERENCE.md"))
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    (
+        ("**4096**", "**0**"),
+        ("no continuous TTL sweeper", "a continuous TTL sweeper"),
+        (
+            "never deletes source snapshots, numerical checkpoints or user exports",
+            "deletes source snapshots, numerical checkpoints and user exports",
+        ),
+    ),
+)
+def test_transferred_retention_rejects_false_accounting_or_cleanup_guarantees(old, new):
+    text = _read("docs/TECHNICAL_REFERENCE.md")
+    assert old in text
+    with pytest.raises(AssertionError, match="headroom|retained-store boundary"):
+        _check_retained_store_contract(text.replace(old, new))
+
+
 @pytest.fixture
 def application(tmp_path):
     yield from background_fixture.__wrapped__(tmp_path)
@@ -255,11 +298,14 @@ def test_terminal_history_deletion_preserves_source_and_user_owned_files(
     source_bytes = service.dependencies.store.loaded.canonical_json
     user_export = tmp_path / "user-owned-export.json"
     user_export.write_bytes(b'{"synthetic_export":true}\n')
+    checkpoint = tmp_path / "numerical-checkpoint.json"
+    checkpoint.write_bytes(b'{"separately_owned_recovery_sentinel":true}\n')
     run = coordinator.submit("baseline", request)
     assert _wait(store, run.run_id).status == "completed"
     store.delete(run.run_id)
     assert service.dependencies.store.loaded.canonical_json == source_bytes
     assert user_export.read_bytes() == b'{"synthetic_export":true}\n'
+    assert checkpoint.read_bytes() == b'{"separately_owned_recovery_sentinel":true}\n'
 
 
 def test_frontend_isolation_replay_and_accessibility_claims_keep_their_limits() -> None:

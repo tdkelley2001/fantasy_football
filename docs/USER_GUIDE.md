@@ -170,6 +170,8 @@ Observed records/standings/points are snapshot facts, not forecasts. Missing pat
 
 History is bounded, not indefinite. A confirmed terminal-run deletion removes that run's retained analytical data, not immutable source snapshots. Restart classifies unfinished application work as interrupted; there is **no automatic HTTP analysis resume**. Numerical checkpoints are a separate engine facility.
 
+Application [admission limits](TECHNICAL_REFERENCE.md#application-admission-and-resource-policies) can reject a valid request or a full queue before work is accepted; a displayed-row limit is not a computation budget. [Retention starts at submission](TECHNICAL_REFERENCE.md#retained-run-store-and-retention-policy), so a long-running analysis can leave little time to reopen its result after completion. Keep needed user-owned exports separately; history is not a backup or permanent archive.
+
 The current Simulation Center export downloads **run metadata JSON only**, not a saved request/draft or the full candidate/state dataset. The engine's configured all/filtered JSON/CSV export is a different advanced capability. Exported files are user-owned; they are not automatically reimported or reused as current search context. Details remain in [retained-result ownership](APPLICATION_SERVICE.md#retention-authority) and [export boundaries](UNIFIED_ACTION_SEARCH.md#result-indexing-pagination-and-cleanup).
 
 ## Local persistence, troubleshooting and safe shutdown
