@@ -235,10 +235,10 @@ def test_accepted_t2_body_is_unchanged() -> None:
         .rstrip()
         + "\n"
     )
-    # Accepted P7b LF chapter, 90169655dfc2ba01998810db8f0b546e55943b9d.
+    # P8 updates only T2 source-policy/identity prose and M0 ownership.
     assert (
         hashlib.sha256(body.encode()).hexdigest()
-        == "aece7ce1af2b91a02cf791dd34bc2bc8ab972cce16aeb058cabcc5e9324fa863"
+        == "589aa0cbcba60e692535dbbbceff5c0eb65910bc2b39e75de2f9e20354e09c41"
     )
 
 
@@ -496,7 +496,7 @@ def test_scope_identity_and_future_parity_obligations_remain_explicit() -> None:
         "selected sort, filters, scope",
         "user-owned under C13",
         "T8/T9",
-        "No P7d, M0 migration, authority retirement or release declaration",
+        "no authority retirement or release declaration",
     ):
         assert fragment in text, fragment
 

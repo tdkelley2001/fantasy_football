@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import socket
@@ -14,9 +15,98 @@ from fantasy_football.m0_verification import (
     EVIDENCE_ROLES,
     M0VerificationError,
     _sections,
+    _unfenced_lines,
     build_report,
     main,
     render_summary,
+)
+
+# Exact predecessor bindings; used only to preserve the accepted historical
+# record oracle while separately asserting the authorized contract-3 bindings.
+PREVIOUS_BINDINGS = {
+    "connectivity": (
+        "docs/DATA.md#retrieval-and-provenance",
+        "docs/DATA.md#source-observations-and-limitations",
+    ),
+    "future_data": (
+        "docs/DATA.md#retrieval-and-provenance",
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#calendar-brackets-and-nfl-evidence",
+    ),
+    "league_rules": (
+        "docs/DATA.md#roster-scoring-and-transaction-settings",
+        "docs/DATA.md#rules-and-manual-authority",
+        "docs/DATA.md#live-and-temporal-evidence",
+    ),
+    "historical_projections": (
+        "docs/RESEARCH.md#evidence-and-hypotheses",
+        "docs/RESEARCH.md#external-trust-and-exact-row-binding",
+        "docs/RESEARCH.md#coverage-and-leakage",
+        "docs/RESEARCH.md#metrics-and-promotion",
+    ),
+    "data_dictionary": (
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+        "docs/DATA.md#canonical-validation-and-serialization",
+    ),
+    "m0_handoff": (
+        "docs/DATA.md#m0-consumer-dependency",
+        "docs/DATA.md#projection-contract",
+        "docs/RESEARCH.md#metrics-and-promotion",
+    ),
+    "missing_projection_policy": (
+        "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
+        "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+    ),
+}
+CURRENT_BINDINGS = {
+    "connectivity": (
+        "docs/DATA.md#retrieval-and-provenance",
+        "docs/DATA.md#source-observations-and-limitations",
+    ),
+    "future_data": (
+        "docs/DATA.md#retrieval-and-provenance",
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#calendar-brackets-and-nfl-evidence",
+    ),
+    "league_rules": (
+        "docs/DATA.md#roster-scoring-and-transaction-settings",
+        "docs/DATA.md#rules-and-manual-authority",
+        "docs/DATA.md#live-and-temporal-evidence",
+    ),
+    "historical_projections": (
+        "docs/DATA.md#research-source-trust",
+        "docs/VALIDATION.md#evidence-admissibility-before-evaluation",
+        "docs/VALIDATION.md#what-the-retained-evidence-supports",
+        "docs/VALIDATION.md#temporal-evaluation-and-support",
+        "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
+        "docs/VALIDATION.md#independent-component-specific-promotion",
+        "docs/TECHNICAL_REFERENCE.md#research-source-and-dataset-interfaces",
+        "docs/TECHNICAL_REFERENCE.md#evaluation-and-report-interfaces",
+    ),
+    "data_dictionary": (
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+        "docs/DATA.md#canonical-validation-and-serialization",
+        "docs/TECHNICAL_REFERENCE.md#adapter-and-canonical-interfaces",
+    ),
+    "m0_handoff": (
+        "docs/DATA.md#m0-consumer-dependency",
+        "docs/METHODOLOGY.md#experiment-inputs-and-estimand",
+        "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
+        "docs/VALIDATION.md#independent-component-specific-promotion",
+    ),
+    "missing_projection_policy": (
+        "docs/DATA.md#projection-contract",
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+        "docs/METHODOLOGY.md#projection-classes-and-complete-outcome-universe",
+        "docs/TECHNICAL_REFERENCE.md#missing-projection-policy-and-identity-boundary",
+    ),
+}
+HISTORICAL_SECTION = "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries"
+MISSING_POLICY_SECTIONS = (
+    "docs/METHODOLOGY.md#projection-classes-and-complete-outcome-universe",
+    "docs/TECHNICAL_REFERENCE.md#missing-projection-policy-and-identity-boundary",
 )
 
 
@@ -26,6 +116,195 @@ def evidence_tree(root: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         source = Path(__file__).resolve().parents[1] / relative
         path.write_bytes(source.read_bytes())
+
+
+def test_contract_three_changes_only_approved_report_and_role_binding_fields(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import asdict
+
+    evidence_tree(tmp_path)
+    assert {role.role: role.sections for role in EVIDENCE_ROLES} == CURRENT_BINDINGS
+    payload = [
+        {key: value for key, value in asdict(role).items() if key != "sections"}
+        for role in EVIDENCE_ROLES
+    ]
+    # All seven complete nonbinding payloads at accepted P7d 2131164.
+    assert (
+        hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        == "d7d5893bec4738b6ed57d5fb3242d0905abb25ddbdd4d22d2a443c5329979878"
+    )
+    report = build_report(tmp_path).to_dict()
+    report.pop("evidence_documents")
+    report.pop("evidence_role_contract_version")
+    for row in report["evidence_roles"]:
+        row.pop("sections")
+    # The full prior default report with only those authorized fields removed.
+    assert (
+        hashlib.sha256(
+            json.dumps(report, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        == "7541050789e8f58609a0c6dabe5984bebf4758434d09bc35d97ee81a73497ff5"
+    )
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_previous_contract_versions_are_not_silently_reinterpreted(
+    tmp_path: Path, version: int
+) -> None:
+    evidence_tree(tmp_path)
+    edit_contract(tmp_path, lambda contract: contract.update(schema_version=version))
+    with pytest.raises(M0VerificationError, match="invalid schema or fields"):
+        build_report(tmp_path)
+
+
+def test_legacy_bindings_cannot_be_relabelled_as_contract_three(tmp_path: Path) -> None:
+    evidence_tree(tmp_path)
+    for name in ("RESEARCH.md", "PLAYER_OUTCOME_MODEL.md"):
+        (tmp_path / "docs" / name).write_text(
+            "Old owner present, not a substitute binding.", encoding="utf-8"
+        )
+
+    def restore_old_bindings(contract):
+        for row in contract["roles"]:
+            row["sections"] = list(PREVIOUS_BINDINGS[row["role"]])
+
+    edit_contract(tmp_path, restore_old_bindings)
+    with pytest.raises(
+        M0VerificationError,
+        match="mapping or historical identity mismatch: historical_projections",
+    ):
+        build_report(tmp_path)
+
+
+def test_former_checked_documents_are_not_implicit_dependencies_or_retired(
+    tmp_path: Path,
+) -> None:
+    evidence_tree(tmp_path)
+    assert not (tmp_path / "docs/RESEARCH.md").exists()
+    assert not (tmp_path / "docs/PLAYER_OUTCOME_MODEL.md").exists()
+    expected = build_report(tmp_path).to_dict()
+    for name in ("RESEARCH.md", "PLAYER_OUTCOME_MODEL.md"):
+        (tmp_path / "docs" / name).write_text(
+            "Unrelated local content is not checked by M0.", encoding="utf-8"
+        )
+        assert (Path(__file__).resolve().parents[1] / "docs" / name).is_file()
+    assert build_report(tmp_path).to_dict() == expected
+
+
+@pytest.mark.parametrize(
+    "role,limit",
+    [(role.role, key) for role in EVIDENCE_ROLES for key, _ in role.evidence_limits],
+)
+def test_every_preserved_evidence_limit_rejects_weakening(
+    tmp_path: Path, role: str, limit: str
+) -> None:
+    evidence_tree(tmp_path)
+
+    def weaken(contract):
+        row = next(row for row in contract["roles"] if row["role"] == role)
+        row["evidence_limits"][limit] = "weakened"
+
+    edit_contract(tmp_path, weaken)
+    with pytest.raises(
+        M0VerificationError, match=f"mapping or historical identity mismatch: {role}"
+    ):
+        build_report(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "reference",
+    sorted({reference for role in EVIDENCE_ROLES for reference in role.sections}),
+)
+def test_every_current_role_section_rejects_empty_or_fenced_only_content(
+    tmp_path: Path, reference: str
+) -> None:
+    for body in (
+        "",
+        "   ````text\n### Fake evidence heading\nForged evidence.\n   ````\n",
+    ):
+        evidence_tree(tmp_path)
+        if reference.endswith("#m0-consumer-dependency"):
+            section = _sections(
+                (tmp_path / "docs/DATA.md").read_text(encoding="utf-8")
+            )["m0-consumer-dependency"]
+            block = re.search(r"```json m0-evidence\n.*?\n```", section, re.DOTALL)[0]
+            # Preserve valid metadata to exercise the evidence-prose check too.
+            body += "\n" + block + "\n"
+        replace_required_section(tmp_path, reference, body)
+        with pytest.raises(
+            M0VerificationError,
+            match="requires nonempty section: " + re.escape(reference),
+        ):
+            build_report(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "role,meanings",
+    [
+        (
+            "historical_projections",
+            (
+                "strictly before",
+                "zero authenticated-pregame pairs",
+                "not a sealed final-test process",
+                "50/80/90%",
+                "row",
+                "independent",
+                "scoring",
+                "revision",
+            ),
+        ),
+        (
+            "data_dictionary",
+            (
+                "signed nonzero",
+                "rosterentry",
+                "position",
+                "lineup",
+                "source",
+                "payload_sha256",
+                "structural validity is not execution permission",
+            ),
+        ),
+        (
+            "m0_handoff",
+            (
+                "go_with_explicit_unresolved_metadata",
+                "optional, not a v1 prerequisite",
+                "capability-specific evidence gates",
+                "independent review",
+                "current projections",
+            ),
+        ),
+        (
+            "missing_projection_policy",
+            (
+                "raw_projection=null",
+                "missing_projection_policy",
+                "explicit_zero",
+                "deterministic",
+                "nonparticipation",
+                "missing_projection_outcome",
+                "historical draw parameters byte-for-byte",
+            ),
+        ),
+    ],
+)
+def test_consolidated_role_homes_retain_substantive_evidence_outside_examples(
+    role: str, meanings: tuple[str, ...]
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    body = ""
+    for reference in CURRENT_BINDINGS[role]:
+        path, anchor = reference.split("#")
+        section = _sections((root / path).read_text(encoding="utf-8"))[anchor]
+        body += "\n" + "".join(line for _, line in _unfenced_lines(section))
+    body = body.replace("**", "").replace("`", "").lower()
+    for meaning in meanings:
+        assert meaning in body, (role, meaning)
 
 
 def test_build_report_distinguishes_recorded_evidence_from_live_verification(
@@ -202,12 +481,11 @@ def test_fenced_fake_headings_and_empty_sections_cannot_supply_evidence(
     tmp_path: Path,
 ) -> None:
     evidence_tree(tmp_path)
-    path = tmp_path / "docs/RESEARCH.md"
-    text = path.read_text(encoding="utf-8")
-    start = text.index("## Coverage and leakage")
-    end = text.index("## Temporal evaluation", start)
-    fake = "## Coverage and leakage\n\n```text\n## Coverage and leakage\nforged evidence\n```\n\n"
-    path.write_text(text[:start] + fake + text[end:], encoding="utf-8")
+    replace_required_section(
+        tmp_path,
+        HISTORICAL_SECTION,
+        "```text\n### Diagnostics and recommendation boundaries\nforged evidence\n```\n",
+    )
     with pytest.raises(
         M0VerificationError, match="historical_projections requires nonempty section"
     ):
@@ -251,15 +529,24 @@ CLOSED_EVIDENCE_FENCES = (
 )
 
 
-def replace_coverage_section(root: Path, body: str) -> None:
-    path = root / "docs/RESEARCH.md"
+def replace_required_section(root: Path, reference: str, body: str) -> None:
+    name, anchor = reference.split("#")
+    path = root / name
     text = path.read_text(encoding="utf-8")
-    start = text.index("## Coverage and leakage\n")
-    end = text.index("## Temporal evaluation", start)
-    path.write_text(
-        text[:start] + "## Coverage and leakage\n\n" + body + "\n" + text[end:],
-        encoding="utf-8",
+    title = next(
+        line
+        for line in text.splitlines()
+        if line.startswith("#")
+        and re.sub(r"[^\w -]", "", line.lstrip("# ").lower()).replace(" ", "-")
+        == anchor
     )
+    start = text.index(title + "\n") + len(title) + 1
+    end = start + len(_sections(text)[anchor])
+    path.write_text(text[:start] + "\n" + body + "\n" + text[end:], encoding="utf-8")
+
+
+def replace_coverage_section(root: Path, body: str) -> None:
+    replace_required_section(root, HISTORICAL_SECTION, body)
 
 
 @pytest.mark.parametrize("fence", CLOSED_EVIDENCE_FENCES)
@@ -270,25 +557,25 @@ def test_required_section_containing_only_fenced_examples_is_rejected(
     replace_coverage_section(tmp_path, fence)
     with pytest.raises(
         M0VerificationError,
-        match="historical_projections requires nonempty section: docs/RESEARCH.md#coverage-and-leakage",
+        match="historical_projections requires nonempty section: docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
     ):
         build_report(tmp_path)
 
 
 def test_unclosed_fence_cannot_supply_required_evidence(tmp_path: Path) -> None:
     evidence_tree(tmp_path)
-    path = tmp_path / "docs/RESEARCH.md"
+    path = tmp_path / "docs/VALIDATION.md"
     text = path.read_text(encoding="utf-8")
-    start = text.index("## Coverage and leakage\n")
-    # End the document here so a later example cannot accidentally close this fence.
+    start = text.index("### Diagnostics and recommendation boundaries\n")
+    # End here so later examples cannot accidentally close the invalid fence.
     path.write_text(
-        text[:start] + "## Coverage and leakage\n\n   ````text\n"
-        "## Metrics and promotion\nApparent evidence through end of document.\n",
+        text[:start] + "### Diagnostics and recommendation boundaries\n\n   ````text\n"
+        "### Independent component-specific promotion\nApparent evidence through end of document.\n",
         encoding="utf-8",
     )
     with pytest.raises(
         M0VerificationError,
-        match="historical_projections requires nonempty section: docs/RESEARCH.md#coverage-and-leakage",
+        match="historical_projections requires nonempty section: docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
     ):
         build_report(tmp_path)
 
@@ -296,11 +583,12 @@ def test_unclosed_fence_cannot_supply_required_evidence(tmp_path: Path) -> None:
 def test_prose_before_unclosed_fence_still_supplies_evidence(tmp_path: Path) -> None:
     evidence_tree(tmp_path)
     expected = build_report(tmp_path).to_dict()
-    path = tmp_path / "docs/RESEARCH.md"
+    path = tmp_path / "docs/VALIDATION.md"
     text = path.read_text(encoding="utf-8")
-    start = text.index("## Metrics and promotion\n")
+    start = text.index("### Independent component-specific promotion\n")
     path.write_text(
-        text[:start] + "## Metrics and promotion\n\nSubstantive prose.\n"
+        text[:start]
+        + "### Independent component-specific promotion\n\nSubstantive prose.\n"
         "   ~~~~text\n## Fake heading\nExample through end of document.\n",
         encoding="utf-8",
     )
@@ -460,7 +748,7 @@ def test_default_and_json_are_stable_offline_without_credentials_or_git(
         == "recorded_historical_evidence_plus_credential_free_manifest_check"
     )
     assert expected.credential_free_test_command == "python -m pytest"
-    assert expected.evidence_role_contract_version == 2
+    assert expected.evidence_role_contract_version == 3
 
 
 def test_untrusted_evidence_values_and_config_exception_are_sanitized(
@@ -636,7 +924,7 @@ def test_numeric_zero_cannot_impersonate_false_in_evidence_limits(
         build_report(tmp_path)
 
 
-def test_contract_two_checks_exact_current_documents_and_seventh_role(
+def test_contract_three_checks_exact_current_documents_and_seventh_role(
     tmp_path: Path,
 ) -> None:
     evidence_tree(tmp_path)
@@ -644,19 +932,15 @@ def test_contract_two_checks_exact_current_documents_and_seventh_role(
     report = build_report(tmp_path)
     assert report.evidence_documents == (
         "docs/DATA.md",
-        "docs/RESEARCH.md",
-        "docs/PLAYER_OUTCOME_MODEL.md",
+        "docs/METHODOLOGY.md",
+        "docs/VALIDATION.md",
+        "docs/TECHNICAL_REFERENCE.md",
     )
-    assert report.evidence_role_contract_version == EVIDENCE_ROLE_CONTRACT_VERSION == 2
+    assert report.evidence_role_contract_version == EVIDENCE_ROLE_CONTRACT_VERSION == 3
     assert len(report.evidence_roles) == 7
     row = report.evidence_roles[-1]
     assert row["role"] == "missing_projection_policy"
-    assert row["sections"] == [
-        "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
-        "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
-        "docs/DATA.md#projection-contract",
-        "docs/DATA.md#identity-rosters-and-player-weeks",
-    ]
+    assert row["sections"] == list(CURRENT_BINDINGS["missing_projection_policy"])
     assert row["interfaces"] == [
         "fantasy_football.canonical.model:ProjectionClass",
         "fantasy_football.canonical.model:ProjectionSource",
@@ -682,6 +966,7 @@ def test_other_six_role_records_match_accepted_d6_contract(tmp_path: Path) -> No
     records = []
     for role in EVIDENCE_ROLES[:6]:
         row = asdict(role)
+        row["sections"] = PREVIOUS_BINDINGS[role.role]
         row["evidence_limits"] = dict(role.evidence_limits)
         records.append(row)
     # Captured from the first six JSON role records at accepted 4eea42d.
@@ -697,44 +982,31 @@ def test_other_six_role_records_match_accepted_d6_contract(tmp_path: Path) -> No
     )
 
 
-@pytest.mark.parametrize(
-    "anchor", ["missing-zero-and-present-projections", "identity-and-compatibility"]
-)
-def test_required_outcome_sections_cannot_be_empty(tmp_path: Path, anchor: str) -> None:
+@pytest.mark.parametrize("reference", MISSING_POLICY_SECTIONS)
+def test_required_outcome_sections_cannot_be_empty(
+    tmp_path: Path, reference: str
+) -> None:
     evidence_tree(tmp_path)
-    path = tmp_path / "docs/PLAYER_OUTCOME_MODEL.md"
-    text = path.read_text(encoding="utf-8")
-    title = {
-        "missing-zero-and-present-projections": "Missing, zero and present projections",
-        "identity-and-compatibility": "Identity and compatibility",
-    }[anchor]
-    start = text.index("## " + title + "\n") + len("## " + title + "\n")
-    end = text.find("\n## ", start)
-    path.write_text(
-        text[:start] + "\n" + (text[end:] if end >= 0 else ""), encoding="utf-8"
-    )
+    replace_required_section(tmp_path, reference, "")
     with pytest.raises(
         M0VerificationError,
-        match=f"missing_projection_policy requires nonempty section: docs/PLAYER_OUTCOME_MODEL.md#{anchor}",
+        match="missing_projection_policy requires nonempty section: "
+        + re.escape(reference),
     ):
         build_report(tmp_path)
 
 
+@pytest.mark.parametrize("reference", MISSING_POLICY_SECTIONS)
 @pytest.mark.parametrize("fence", CLOSED_EVIDENCE_FENCES)
 def test_fenced_outcome_examples_are_not_missing_policy_evidence(
-    tmp_path: Path, fence: str
+    tmp_path: Path, fence: str, reference: str
 ) -> None:
     evidence_tree(tmp_path)
-    path = tmp_path / "docs/PLAYER_OUTCOME_MODEL.md"
-    text = path.read_text(encoding="utf-8")
-    start = text.index("## Missing, zero and present projections\n") + len(
-        "## Missing, zero and present projections\n"
-    )
-    end = text.index("\n## Normal distribution", start)
-    path.write_text(text[:start] + "\n" + fence + text[end:], encoding="utf-8")
+    replace_required_section(tmp_path, reference, fence)
     with pytest.raises(
         M0VerificationError,
-        match="missing_projection_policy requires nonempty section: docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
+        match="missing_projection_policy requires nonempty section: "
+        + re.escape(reference),
     ):
         build_report(tmp_path)
 

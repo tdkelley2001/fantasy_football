@@ -288,7 +288,8 @@ def test_d1_d6_and_deferred_mapping_preserve_existing_owners() -> None:
     ):
         assert retained in mapping
     assert (
-        "executable binding migration deferred to separately authorized P8" in mapping
+        "executable bindings use contract 3, with authority retirement separately gated"
+        in mapping
     )
     assert "V0–V2/V4–V5 not transferred" in mapping
     assert "T1 and T3–T8 not transferred" in mapping

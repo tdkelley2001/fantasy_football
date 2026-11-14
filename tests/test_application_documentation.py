@@ -36,7 +36,7 @@ def _section(text: str, title: str) -> str:
     [
         (
             "Canonical, source and evidence data contracts",
-            "aece7ce1af2b91a02cf791dd34bc2bc8ab972cce16aeb058cabcc5e9324fa863",
+            "589aa0cbcba60e692535dbbbceff5c0eb65910bc2b39e75de2f9e20354e09c41",
         ),
         (
             "HTTP API, DTOs and evolution",
@@ -44,12 +44,14 @@ def _section(text: str, title: str) -> str:
         ),
         (
             "Search interfaces, indexing and query/export contracts",
-            "83dae9c8577696645cae17c27a033473dae4610723d12eb5e6346ff2838e2125",
+            "4bcc64338a64b984f0e5f3ef5851369bfecd9ebb2302e2233e63ff5b9001de31",
         ),
     ],
 )
 def test_accepted_t2_t5_t7_text_is_preserved(title: str, digest: str) -> None:
-    # Accepted P7c LF chapters at fab6608b9a2418efcd856bfc7aa8dbc3746fd28f.
+    # T2 includes authorized P8 evidence/identity prose; T7 only updates
+    # its M0 footer. T5 retains
+    # accepted P7c LF text at fab6608b9a2418efcd856bfc7aa8dbc3746fd28f.
     # Ignore only separator trailing newlines; never load Git at test runtime.
     assert (
         hashlib.sha256(

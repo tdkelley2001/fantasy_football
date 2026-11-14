@@ -1,6 +1,6 @@
 # War Room validation
 
-**P7b pilot: V0–V5 assurance map.** V3 retains its accepted P7a content. This reference assembles evidence and acceptance obligations; the linked domain authorities retain their analytical, technical and runtime contracts. [RESEARCH](RESEARCH.md) retains all M0-bound sections and research authority; [PLAYER_OUTCOME_MODEL](PLAYER_OUTCOME_MODEL.md) retains generation/identity authority. No authority is retired or executable evidence role moved. Requirements remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence); [BACKLOG](BACKLOG.md) retains the exact outstanding criteria and review dispositions, not generic substitutes for those obligations.
+**P7b pilot: V0–V5 assurance map.** V3 retains its accepted P7a content. This reference assembles evidence and acceptance obligations; the linked domain authorities retain their analytical, technical and runtime contracts. [RESEARCH](RESEARCH.md) retains research authority; contract 3 binds the consolidated DATA/METHODOLOGY/VALIDATION/TECHNICAL_REFERENCE evidence homes; [PLAYER_OUTCOME_MODEL](PLAYER_OUTCOME_MODEL.md) retains generation/identity authority. No authority is retired; executable role bindings follow [DATA's current register](DATA.md#m0-consumer-dependency). Requirements remain binding under [authority and precedence](../AGENTS.md#authority-and-precedence); [BACKLOG](BACKLOG.md) retains the exact outstanding criteria and review dispositions, not generic substitutes for those obligations.
 
 - [V0: Assurance scope and evidence status](#assurance-scope-and-evidence-status)
 - [V1: Implementation correctness](#implementation-correctness)
@@ -30,7 +30,7 @@ Use [D2's evidence vocabulary](DATA.md#evidence-vocabulary) exactly: **Verified 
 | Projected-optimal starters, equal-week V(R), mandatory sequential transactions | Current model policies, not empirical claims of championship-optimal decisions. [Mechanics](SEASON_SIMULATOR.md), [transactions](TRANSACTIONS.md); WR-023/024 limitations below. |
 | `all_league_teams_v1` postseason acquisitions | Named `approved_v1_assumption`, not verified ESPN permission. Validated configuration is a distinct supported authority; unresolved permission fails at the dependent boundary. [Participation owner](SEASON_SIMULATOR.md#postseason-transaction-participation). |
 | `wilson_score_bonferroni_familywise_v1` and `paired_discordance_wilson_bonferroni_familywise_v1` | Implemented approximations with specified allocations, not universal exact finite-sample/sequential guarantees. WR-025 remains open. [Inference owner](MONTE_CARLO.md#precision-and-stopping). |
-| M0 evidence-role contract 2 | Seven exact roles bind DATA/RESEARCH/PLAYER_OUTCOME_MODEL sections and implementation definitions. Offline checks record historical identity, **not historical byte authentication**, live compatibility or release acceptance. [Register](DATA.md#m0-consumer-dependency), [adversarial tests](../tests/test_m0_verification.py). |
+| M0 evidence-role contract 3 | Seven exact roles bind DATA/METHODOLOGY/VALIDATION/TECHNICAL_REFERENCE sections and implementation definitions. Offline checks record historical identity, **not historical byte authentication**, live compatibility or release acceptance. [Register](DATA.md#m0-consumer-dependency), [adversarial tests](../tests/test_m0_verification.py). |
 
 Outstanding WR-009/010 live source/settlement authority, WR-014 unsupported multiweek regular behavior, WR-018 league semantics, WR-019 scientific evidence, WR-021 release/output/provenance, WR-023/024 mechanics, WR-025 inference and WR-026 cleanup remain explicit. An incomplete capability must suppress the dependent success/probability claim; it must not be replaced by a guessed rule, zero or complete-only denominator. Approval of a future investigation is not approval of its method or a new feature.
 
@@ -148,7 +148,7 @@ Keep the [component-specific gate](RESEARCH.md#component-specific-promotion): un
 
 [Dataset/provenance tests](../tests/test_historical_dataset.py) exercise exact-row binding, forged trust and modified values; [research tests](../tests/test_outcome_distribution_research.py) exercise temporal exclusion, insufficiency, perfect-forecast CRPS, signed/zero support and sparse thresholds. [Historical parser tests](../tests/test_historical_projection_audit.py) and [workflow tests](../tests/test_historical_research_workflow.py) check source parsing/materialization, not live semantics. [Focused pilot tests](../tests/test_data_documentation.py) bind the documented schemas/examples and inventory boundaries to those interfaces. None is empirical calibration.
 
-RESEARCH retains [reproduction and private artifact instructions](RESEARCH.md#reproduction-and-artifacts), exact dated results and all M0 anchors. Networked materialization requires separate authorization; no command is run by this chapter. The [P7a mapping](DATA.md#p7a-source-section-mapping-and-retained-ownership) records source sections and deferred owners. No M0, production model or release transition follows from documentation transfer.
+RESEARCH retains [reproduction and private artifact instructions](RESEARCH.md#reproduction-and-artifacts), exact dated results and its existing section anchors. The historical-projection M0 role now binds substantive DATA/V3/T2 evidence under [contract 3](DATA.md#m0-consumer-dependency); no historical-content authentication is added. Networked materialization requires separate authorization; no command is run by this chapter. The [P7a mapping](DATA.md#p7a-source-section-mapping-and-retained-ownership) records source sections and deferred owners. No M0, production model or release transition follows from documentation transfer.
 
 ## Decision validity and model promotion
 
@@ -208,16 +208,16 @@ The complete P0/P1 review gate and WR-021 disposition remain open; this map does
 
 ### Source-to-validation mapping and continuing owners
 
-The [accepted section inventory](development/model-documentation-architecture.md#reviewable-implementation-packages) supplies the source IDs below. These are assurance destinations; linked owners keep algorithms, interfaces, procedures and exact outstanding work. P7a's V3 and M0 ownership/bindings remain unchanged.
+The [accepted section inventory](development/model-documentation-architecture.md#reviewable-implementation-packages) supplies the source IDs below. These are assurance destinations; linked owners keep algorithms, interfaces, procedures and exact outstanding work. V3's empirical meanings remain unchanged; current M0 bindings follow contract 3 in DATA.
 
 | Accepted source sections / owner | Validation destination and retained boundary |
 |---|---|
 | S001–S006 AGENTS evidence/correctness and S022 CONTRIBUTING numerical standards | V0/V1/V2/V4 evidence distinctions and independent-oracle duty; governance and check procedures remain with AGENTS/CONTRIBUTING |
 | S156–S164 Season; S175–S181 Transactions; S188/S195 search correctness/coverage | V1 mechanics/reference map and V4 proxy/coverage limits; algorithms remain in current owners and M3/M5/M8/M9 |
-| S128–S136 Partial Week; S079/S081/S084–S085 DATA | V1 fail-closed evidence and V2 pregame equivalence; DATA/PARTIAL_WEEK retain source/permission/companion details, seven-role register unchanged |
+| S128–S136 Partial Week; S079/S081/S084–S085 DATA | V1 fail-closed evidence and V2 pregame equivalence; DATA/PARTIAL_WEEK retain source/permission/companion details; all seven role names/identities/limits remain unchanged, with consolidated section bindings in contract 3 |
 | S108–S117 Monte Carlo; S139–S143 Outcome; S192 progressive evaluation | V2 identities, estimator/reference/recovery, six artifacts and WR-025; numerical formulas/bytes and execution interfaces remain with owners/M2/M6/M7 |
 | S144–S154 RESEARCH and S143 Outcome promotion | Existing V3 unchanged; V4 independent component-specific gate links, not a research-result or family transition |
 | S019–S022 CONTRIBUTING; S035–S050 Application; S047 test/source map; S067/S069 C13 | V1 cross-layer and V5 operational/retention evidence limits; developer commands and runtime/API/retention interfaces remain with current owners, not P7c/P7d transfer |
 | S055/S057–S066 BACKLOG release/mechanics/research/numerical/cleanup/output obligations | V1/V2/V4 gaps and V5 exact acceptance inventory; all outstanding criteria, priorities/statuses and independent gates remain unchanged in BACKLOG |
 
-No additional Markdown authority/inventory exception, production behavior, numerical identity, artifact change, M0 migration, P7c implementation or release declaration is included.
+No additional Markdown authority/inventory exception, analytical production behavior, numerical identity, artifact change, authority retirement or release declaration is included. Current executable M0 bindings are defined by contract 3.

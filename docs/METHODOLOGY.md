@@ -56,6 +56,8 @@ The snapshot supplies observed identities, ownership, rosters, standings, eligib
 
 ESPN is the sole initial projection source. War Room initially converts those forecasts into uncertain league outcomes rather than attempting to outperform ESPN's player means. No third-party fallback, arbitrary horizon inflation/discount or unapproved injury adjustment is permitted. The empirical transformation below can have a mean different from its target projection because of its fitted residual/zero atoms; that implemented provisional policy is distinct from authorizing a new general bias-correction method.
 
+Prospective pregame collection is optional, not a V1 prerequisite or a scheduled collection mandate. If pursued, its cadence/horizon, retained exact source bytes, scoring/identity context and independent trust authority require a separately approved plan. M0's original GO_WITH_EXPLICIT_UNRESOLVED_METADATA is bounded exploratory permission, not approval of later capabilities, a calibrated model or a release. Current projections and capability-specific evidence gates remain the basis of execution.
+
 Let $S$ be the immutable observed snapshot, $\pi$ the explicit league/lineup/transaction policies and $\theta$ the outcome-model configuration, including fitted evidence where applicable. Let $a$ identify a legal hypothetical action or completed roster state; $a=0$ denotes the baseline. This notation describes the experiment, not a new API. A path supplies player-week outcomes $X^{(i)}$. One shared deterministic engine maps them to a season:
 
 $$

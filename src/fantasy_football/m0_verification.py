@@ -24,10 +24,11 @@ LOGGER = logging.getLogger(__name__)
 # These are checked local documents, never stand-ins for retired historical bytes.
 EVIDENCE_DOCUMENTS = (
     "docs/DATA.md",
-    "docs/RESEARCH.md",
-    "docs/PLAYER_OUTCOME_MODEL.md",
+    "docs/METHODOLOGY.md",
+    "docs/VALIDATION.md",
+    "docs/TECHNICAL_REFERENCE.md",
 )
-EVIDENCE_ROLE_CONTRACT_VERSION = 2
+EVIDENCE_ROLE_CONTRACT_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,10 +107,14 @@ EVIDENCE_ROLES = (
     EvidenceRole(
         "historical_projections",
         (
-            "docs/RESEARCH.md#evidence-and-hypotheses",
-            "docs/RESEARCH.md#external-trust-and-exact-row-binding",
-            "docs/RESEARCH.md#coverage-and-leakage",
-            "docs/RESEARCH.md#metrics-and-promotion",
+            "docs/DATA.md#research-source-trust",
+            "docs/VALIDATION.md#evidence-admissibility-before-evaluation",
+            "docs/VALIDATION.md#what-the-retained-evidence-supports",
+            "docs/VALIDATION.md#temporal-evaluation-and-support",
+            "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
+            "docs/VALIDATION.md#independent-component-specific-promotion",
+            "docs/TECHNICAL_REFERENCE.md#research-source-and-dataset-interfaces",
+            "docs/TECHNICAL_REFERENCE.md#evaluation-and-report-interfaces",
         ),
         (
             "fantasy_football.historical_projection_audit:parse_historical_player_page",
@@ -131,6 +136,7 @@ EVIDENCE_ROLES = (
         (
             "docs/DATA.md#identity-rosters-and-player-weeks",
             "docs/DATA.md#canonical-validation-and-serialization",
+            "docs/TECHNICAL_REFERENCE.md#adapter-and-canonical-interfaces",
         ),
         (
             "fantasy_football.canonical.model:SourceReference.payload_sha256",
@@ -152,8 +158,9 @@ EVIDENCE_ROLES = (
         "m0_handoff",
         (
             "docs/DATA.md#m0-consumer-dependency",
-            "docs/DATA.md#projection-contract",
-            "docs/RESEARCH.md#metrics-and-promotion",
+            "docs/METHODOLOGY.md#experiment-inputs-and-estimand",
+            "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
+            "docs/VALIDATION.md#independent-component-specific-promotion",
         ),
         ("fantasy_football.m0_verification:build_report",),
         "https://github.com/tdkelley2001/fantasy_football/blob/efa2e0599b4085feef20782b71b3f0b4e1a259c5/docs/M0_FEASIBILITY_AND_M1_HANDOFF.md",
@@ -169,10 +176,10 @@ EVIDENCE_ROLES = (
     EvidenceRole(
         "missing_projection_policy",
         (
-            "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
-            "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
             "docs/DATA.md#projection-contract",
             "docs/DATA.md#identity-rosters-and-player-weeks",
+            "docs/METHODOLOGY.md#projection-classes-and-complete-outcome-universe",
+            "docs/TECHNICAL_REFERENCE.md#missing-projection-policy-and-identity-boundary",
         ),
         (
             "fantasy_football.canonical.model:ProjectionClass",

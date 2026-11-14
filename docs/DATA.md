@@ -2,7 +2,7 @@
 
 This is the current data lifecycle reference. [RESEARCH](RESEARCH.md) owns historical temporal trust/evaluation; [TRANSACTIONS](TRANSACTIONS.md) owns hypothetical state/legality; [SEASON_SIMULATOR](SEASON_SIMULATOR.md) owns scoring/brackets; [Partial Week](PARTIAL_WEEK.md) owns execution permission/composition. [APPLICATION_SERVICE](APPLICATION_SERVICE.md) owns HTTP refresh and separate job/result persistence. Operator commands/configuration precedence live in [OPERATIONS](OPERATIONS.md). Approved requirements in this domain and linked [BACKLOG](BACKLOG.md) obligations remain binding under [engineering governance](../AGENTS.md#authority-and-precedence).
 
-P7a organizes this retained authority into D1–D6. [Empirical validity](VALIDATION.md#empirical-validity) and [technical source contracts](TECHNICAL_REFERENCE.md#canonical-source-and-evidence-data-contracts) are scoped reader pilots; RESEARCH retains its substantive authority and executable M0 bindings. This package changes neither source meaning nor execution permission.
+This retained authority is organized into D1–D6. [Empirical validity](VALIDATION.md#empirical-validity) and [technical source contracts](TECHNICAL_REFERENCE.md#canonical-source-and-evidence-data-contracts) are scoped reader pilots; RESEARCH retains its substantive authority; the M0 register binds the consolidated DATA/METHODOLOGY/VALIDATION/TECHNICAL_REFERENCE evidence homes. Source meaning and execution permission are unchanged.
 
 - [D1: Data lifecycle and source provenance](#data-lifecycle-and-source-provenance)
 - [D2: Source trust, coverage and research data](#source-trust-coverage-and-research-data)
@@ -42,6 +42,10 @@ Default retry policy allows at most two retries after the initial request for co
 Historical retrieval supplies what ESPN returns now, not proof of what a manager could know before a game. [RESEARCH's exact capture gate](RESEARCH.md#external-trust-and-exact-row-binding) requires an externally provisioned manifest identity, retained exact payload bytes, capture strictly before the observation period, and identical player/season/week/projection/position/NFL-team rows. A source ID or caller-created hash alone cannot authenticate a row. Actuals need separate post-period source context. Authenticated row binding does not establish participation, a complete universe, unchanged historical scoring or scientific representativeness.
 
 [Coverage and leakage](RESEARCH.md#coverage-and-leakage) keeps raw missing, explicit zero and policy-imputed zero separate. Missing-policy zero is not a forecast/error pair; a genuine ESPN zero can be. The dataset's source evidence label and temporal-provenance enum are independent of both numerical policy and model approval. Historical pairs remain unverified pregame; prospective capture requires independent operational trust provisioning, not just the tested validator. [V3](VALIDATION.md#empirical-validity) explains evaluation and promotion limits; [T2](TECHNICAL_REFERENCE.md#research-source-and-dataset-interfaces) records the typed interfaces.
+
+Coverage is computed from selected player-week rows, not caller totals: report raw projections, actuals, structural pairs, authenticated versus unverified pairs, missing forecasts, explicit zeros and disclosed policy imputation by season/week, raw position and descriptive projection bands. These audit bands are not universal thresholds or approved model strata. Weekly source-1/split-1 forecasts and source-0/split-1 actuals remain separate; period-zero totals are not weekly observations. Duplicate/wrong-context/nonfinite records and inconsistent scoring signatures reject rather than manufacture pairs.
+
+A currently returned scoring signature establishes configuration agreement, not unchanged game-date rules. Historical position/team wrappers, selected seasons/weeks, missingness and revisions can bias support; the independent full-universe denominator is unknown. Actual-record presence, zero scores, component stats and as-of-like fields do not prove participation or pregame availability. Stable retrospective requests show current-response coherence, not an authenticated forecast vintage, revision sequence or lead-time history. V3 retains the bounded observations, temporal evaluation limitations and independent promotion requirements; T2 retains exact manifest/payload/row interfaces. None upgrades historical projections to authenticated pregame evidence.
 
 ### Source observations and limitations
 
@@ -92,7 +96,7 @@ Historical provenance: the 15 October 2026 M0.3 follow-up used current-week kona
 | Present positive | present | unchanged raw | espn | Yes |
 | Present finite negative | present | unchanged raw | espn | No |
 
-Availability is derived as `effective_projection > 0`. Values are finite, neither rounded nor clamped. The old M0 negative-value design question is resolved by the accepted canonical contract. This data rule does not floor realized scores. The [outcome-model owner](PLAYER_OUTCOME_MODEL.md) owns WR-022 deterministic missing draws/public policy identity; [generated missing-policy authority](PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections) is checked by M0 contract 2. No position-average, injury-return or replacement projection fallback is permitted. Future weeks use currently returned ESPN projections without predicting revisions or applying horizon mean/variance factors.
+Availability is derived as `effective_projection > 0`. Values are finite, neither rounded nor clamped. The old M0 negative-value design question is resolved by the accepted canonical contract. This data rule does not floor realized scores. The [outcome-model owner](PLAYER_OUTCOME_MODEL.md) owns WR-022 deterministic missing draws/public policy identity; [consolidated missing-policy evidence](METHODOLOGY.md#projection-classes-and-complete-outcome-universe) is checked with DATA/T2 by M0 contract 3. No position-average, injury-return or replacement projection fallback is permitted. Future weeks use currently returned ESPN projections without predicting revisions or applying horizon mean/variance factors.
 
 #### Roster, scoring and transaction settings
 
@@ -194,17 +198,19 @@ For partial-week execution, canonical roster slots establish observed assignment
 
 `python -m fantasy_football.m0_verification` remains an offline historical evidence/diagnostic-availability verifier, never a current ESPN compatibility or release-readiness certificate. The original disposition is GO_WITH_EXPLICIT_UNRESOLVED_METADATA. Its static unresolved-rule list is historical (some cases are subsequently resolved); provisional M0/M1 permission never authorizes later unsupported capabilities. Current ESPN projections/no unapproved horizon adjustments and capability-specific evidence gates remain binding under the owning contracts.
 
-Evidence-role contract **2** below is executable metadata. Each of seven roles binds required authoritative sections to inspectable implementation definitions and, for the six retired sources, an immutable accepted Git reference plus SHA-256 of the original Git blob bytes at that revision. The verifier checks the exact role set/mapping/identity and declared evidence limits against its accepted contract, unique nonempty section anchors (excluding fenced examples), and Python definitions/annotated canonical fields without importing or running the listed diagnostic implementations. Keep the JSON block within this section; ordering/whitespace of records is immaterial. Changes to role ownership/interfaces or historical identities require a reviewed contract update, not an arbitrary prose phrase match.
+Evidence-role contract **3** below is executable metadata. Each of seven roles binds required authoritative sections to inspectable implementation definitions and, for the six retired sources, an immutable accepted Git reference plus SHA-256 of the original Git blob bytes at that revision. The verifier checks the exact role set/mapping/identity and declared evidence limits against its accepted contract, unique nonempty section anchors (excluding fenced examples), and Python definitions/annotated canonical fields without importing or running the listed diagnostic implementations. Keep the JSON block within this section; ordering/whitespace of records is immaterial. Changes to role ownership/interfaces or historical identities require a reviewed contract update, not an arbitrary prose phrase match.
 
-Local checks establish section structure, declared evidence limits and implementation-definition availability, not full natural-language correctness or ESPN semantics. Historical **identity/reference** is checked against the recorded pin; the old source bytes are **not inspected or authenticated offline**. No network, Git command, repository history or fallback is used. A shallow/source-only checkout can run with the installed Python source available. Original reports can be inspected separately through the immutable citations, but the verifier never claims to have fetched or authenticated them. The missing-policy role now binds current Outcome Model and DATA sections. Its original dated report is an [immutable historical citation](https://github.com/tdkelley2001/fantasy_football/blob/4eea42d829e066ad9816e77399f09b9e28163de8/docs/MISSING_PROJECTION_POLICY.md), not a locally authenticated artifact; the verifier neither fetches it nor claims its complete bytes were inspected offline.
+Local checks establish section structure, declared evidence limits and implementation-definition availability, not full natural-language correctness or ESPN semantics. Historical **identity/reference** is checked against the recorded pin; the old source bytes are **not inspected or authenticated offline**. No network, Git command, repository history or fallback is used. A shallow/source-only checkout can run with the installed Python source available. Original reports can be inspected separately through the immutable citations, but the verifier never claims to have fetched or authenticated them. The missing-policy role binds DATA source semantics, M2 outcome policy and T2 policy/identity evidence; PLAYER_OUTCOME_MODEL remains the generation authority. Its original dated report is an [immutable historical citation](https://github.com/tdkelley2001/fantasy_football/blob/4eea42d829e066ad9816e77399f09b9e28163de8/docs/MISSING_PROJECTION_POLICY.md), not a locally authenticated artifact; the verifier neither fetches it nor claims its complete bytes were inspected offline.
 
-`evidence_documents` retains its meaning: the local files checked by this run, now DATA, RESEARCH and PLAYER_OUTCOME_MODEL. It no longer lists retired files as though locally present. All other existing report fields/meanings, CLI flags --project-root/--check-config/--json, default offline behavior, optional settings validation and failure exit 2 remain. Additive evidence_role_contract_version/evidence_roles expose section/interface checks and distinguish historical_identity_verified from historical_content_verified=False and not_inspected_or_authenticated_offline. Historical evidence_state/m1_gate/unresolved_rules and live_verification_performed=False are preserved. Diagnostic module availability is checked; reproduction commands are listed, never executed. Config failures are sanitized; detailed local exception values are not echoed. No credentials are required by default.
+`evidence_documents` retains its meaning: the local files checked by this run, now DATA, METHODOLOGY, VALIDATION and TECHNICAL_REFERENCE. It no longer lists retired files as though locally present. All other existing report fields/meanings, CLI flags --project-root/--check-config/--json, default offline behavior, optional settings validation and failure exit 2 remain. Additive evidence_role_contract_version/evidence_roles expose section/interface checks and distinguish historical_identity_verified from historical_content_verified=False and not_inspected_or_authenticated_offline. Historical evidence_state/m1_gate/unresolved_rules and live_verification_performed=False are preserved. Diagnostic module availability is checked; reproduction commands are listed, never executed. Config failures are sanitized; detailed local exception values are not echoed. No credentials are required by default.
 
-Contract 2 changes only checked-local-document membership and the seventh role's section mappings from contract 1. The role count, other six complete records, seventh canonical interfaces/evidence limits, historical identity/content status, report field meanings and JSON object shape are preserved. The numeric register schema_version and report evidence_role_contract_version are now 2; version-1 registers are rejected rather than silently interpreted under changed ownership. Callers pinning the old membership/version must update their expectation; this is not a new public report schema or numerical/snapshot version.
+Contract 3 changes checked-local-document membership and the exact section bindings for historical_projections, data_dictionary, m0_handoff and missing_projection_policy. The first three roles retain their already consolidated DATA sections. All seven names, interfaces, historical URLs/digests/None semantics and evidence limits are unchanged. The register schema_version and report evidence_role_contract_version are 3; version-1/version-2 registers reject explicitly rather than silently acquiring new ownership. Callers pinning the previous version, document list or section arrays must update. Report keys, CLI flags/output meaning, diagnostic availability, unresolved-rule disposition and offline/configuration behavior remain unchanged; this is not an API, canonical, dataset, numerical or checkpoint schema change.
+
+The exact section arrays below are the binding map: connectivity uses D1/D2; future_data D1/D3; league_rules D3/D5; historical_projections D2/V3/T2; data_dictionary D3/D4/T2; m0_handoff D6/M1/V3; missing_projection_policy D3/M2/T2. Each destination contains the substantive source/policy/evidence limits, not a substitute role marker or link-only stub. Local verification still checks nonempty unfenced structure/interfaces and recorded identity, not independent natural-language completeness, historical bytes or real-world source semantics. RESEARCH and PLAYER_OUTCOME_MODEL remain current authorities with preserved content; removing them from the executable document list does not authorize their retirement.
 
 ```json m0-evidence
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "roles": [
     {
       "role": "connectivity",
@@ -270,10 +276,14 @@ Contract 2 changes only checked-local-document membership and the seventh role's
     {
       "role": "historical_projections",
       "sections": [
-        "docs/RESEARCH.md#evidence-and-hypotheses",
-        "docs/RESEARCH.md#external-trust-and-exact-row-binding",
-        "docs/RESEARCH.md#coverage-and-leakage",
-        "docs/RESEARCH.md#metrics-and-promotion"
+        "docs/DATA.md#research-source-trust",
+        "docs/VALIDATION.md#evidence-admissibility-before-evaluation",
+        "docs/VALIDATION.md#what-the-retained-evidence-supports",
+        "docs/VALIDATION.md#temporal-evaluation-and-support",
+        "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
+        "docs/VALIDATION.md#independent-component-specific-promotion",
+        "docs/TECHNICAL_REFERENCE.md#research-source-and-dataset-interfaces",
+        "docs/TECHNICAL_REFERENCE.md#evaluation-and-report-interfaces"
       ],
       "interfaces": [
         "fantasy_football.historical_projection_audit:parse_historical_player_page",
@@ -294,7 +304,8 @@ Contract 2 changes only checked-local-document membership and the seventh role's
       "role": "data_dictionary",
       "sections": [
         "docs/DATA.md#identity-rosters-and-player-weeks",
-        "docs/DATA.md#canonical-validation-and-serialization"
+        "docs/DATA.md#canonical-validation-and-serialization",
+        "docs/TECHNICAL_REFERENCE.md#adapter-and-canonical-interfaces"
       ],
       "interfaces": [
         "fantasy_football.canonical.model:SourceReference.payload_sha256",
@@ -316,8 +327,9 @@ Contract 2 changes only checked-local-document membership and the seventh role's
       "role": "m0_handoff",
       "sections": [
         "docs/DATA.md#m0-consumer-dependency",
-        "docs/DATA.md#projection-contract",
-        "docs/RESEARCH.md#metrics-and-promotion"
+        "docs/METHODOLOGY.md#experiment-inputs-and-estimand",
+        "docs/VALIDATION.md#diagnostics-and-recommendation-boundaries",
+        "docs/VALIDATION.md#independent-component-specific-promotion"
       ],
       "interfaces": [
         "fantasy_football.m0_verification:build_report"
@@ -335,10 +347,10 @@ Contract 2 changes only checked-local-document membership and the seventh role's
     {
       "role": "missing_projection_policy",
       "sections": [
-        "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
-        "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
         "docs/DATA.md#projection-contract",
-        "docs/DATA.md#identity-rosters-and-player-weeks"
+        "docs/DATA.md#identity-rosters-and-player-weeks",
+        "docs/METHODOLOGY.md#projection-classes-and-complete-outcome-universe",
+        "docs/TECHNICAL_REFERENCE.md#missing-projection-policy-and-identity-boundary"
       ],
       "interfaces": [
         "fantasy_football.canonical.model:ProjectionClass",
@@ -367,7 +379,7 @@ Source: [adapter](../src/fantasy_football/espn_adapter.py), [canonical model](..
 
 ### P7a source-section mapping and retained ownership
 
-The accepted [section inventory](development/model-documentation-architecture.md#inventory--datamd) supplies stable source IDs. Existing anchors and all seven role bindings remain; no M0 role transfers to either pilot.
+The accepted [section inventory](development/model-documentation-architecture.md#inventory--datamd) supplies stable source IDs. Existing anchors remain available; the current executable role destinations and limits are recorded in contract 3 above. Current authorities remain in place.
 
 | Accepted source sections | P7a destination / disposition | Continuing owner or deferred mapping |
 |---|---|---|
@@ -376,8 +388,8 @@ The accepted [section inventory](development/model-documentation-architecture.md
 | S074–S078, S080 raw dictionary/projections/settings/calendar/manual rules | D3, original anchors retained | DATA; numerical use remains M2/M3/M5 and current domain owners |
 | S079, S082 canonical/publication | D4, original anchors retained | DATA retains exact serialization/storage text; T2 links it; broader T8 transfer deferred |
 | S081 and S130–S133 partial source evidence | D5, original live anchor plus source-boundary guidance | PARTIAL_WEEK retains companion/permission contracts; T4 and V1/V2 transfer deferred |
-| S084–S085 M0 register/source checks | D6, original anchors and JSON unchanged | DATA; executable binding migration deferred to separately authorized P8 |
-| S144–S149, S154 RESEARCH trust/coverage/limitations | D2 links current substantive sections | RESEARCH retained, especially all M0-bound sections |
+| S084–S085 M0 register/source checks | D6, original anchors and JSON unchanged | DATA; executable bindings use contract 3, with authority retirement separately gated |
+| S144–S149, S154 RESEARCH trust/coverage/limitations | D2 links current substantive sections | RESEARCH retained as authority; consolidated executable homes are recorded in D6 |
 | S145, S149–S154 evaluation/metrics/promotion/reproduction | V3 substantive reader pilot | RESEARCH retains authoritative design, results and component-specific promotion; V0–V2/V4–V5 not transferred |
 | S072, S079, S146–S148, S150, S153 interfaces/identity | T2 substantive source/dataset pilot | DATA/RESEARCH retain binding details; T1 and T3–T8 not transferred |
 | S139, S141, S143 outcome classification/empirical/promotion | D3/V3 links only | PLAYER_OUTCOME_MODEL retained; no model/identity transition or retirement |
