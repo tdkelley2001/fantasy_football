@@ -465,7 +465,13 @@ def test_data_research_authority_and_m0_role_checks_remain_discoverable() -> Non
     assert report.evidence_documents == EVIDENCE_DOCUMENTS
     assert len(report.evidence_roles) == 7
     assert all(not row["historical_content_verified"] for row in report.evidence_roles)
-    assert "docs/PLAYER_OUTCOME_MODEL.md" in report.evidence_documents
+    assert set(report.evidence_documents) == {
+        "docs/DATA.md",
+        "docs/METHODOLOGY.md",
+        "docs/VALIDATION.md",
+        "docs/TECHNICAL_REFERENCE.md",
+    }
+    assert "docs/PLAYER_OUTCOME_MODEL.md" not in report.evidence_documents
     assert "docs/MISSING_PROJECTION_POLICY.md" not in report.evidence_documents
     backlog = read("docs/BACKLOG.md")
     assert "M0 migration is independently accepted at `06b408f`" in backlog
@@ -627,12 +633,18 @@ def test_numerical_domain_owners_and_missing_policy_role_are_discoverable() -> N
     role = next(
         role for role in EVIDENCE_ROLES if role.role == "missing_projection_policy"
     )
-    assert "docs/PLAYER_OUTCOME_MODEL.md" in report.evidence_documents
+    assert set(report.evidence_documents) == {
+        "docs/DATA.md",
+        "docs/METHODOLOGY.md",
+        "docs/VALIDATION.md",
+        "docs/TECHNICAL_REFERENCE.md",
+    }
+    assert "docs/PLAYER_OUTCOME_MODEL.md" not in report.evidence_documents
     assert "docs/MISSING_PROJECTION_POLICY.md" not in report.evidence_documents
-    assert report.evidence_role_contract_version == 2
+    assert report.evidence_role_contract_version == 3
     assert set(role.sections) == {
-        "docs/PLAYER_OUTCOME_MODEL.md#missing-zero-and-present-projections",
-        "docs/PLAYER_OUTCOME_MODEL.md#identity-and-compatibility",
+        "docs/METHODOLOGY.md#projection-classes-and-complete-outcome-universe",
+        "docs/TECHNICAL_REFERENCE.md#missing-projection-policy-and-identity-boundary",
         "docs/DATA.md#projection-contract",
         "docs/DATA.md#identity-rosters-and-player-weeks",
     }

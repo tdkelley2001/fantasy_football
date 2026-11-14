@@ -2,7 +2,7 @@
 
 [Manual scenarios](../MANUAL_SCENARIOS.md) owns explicit hypothetical completion; [Unified action search](../UNIFIED_ACTION_SEARCH.md) owns candidate grammar, state grouping and search orchestration. Shared legality/V(R) remains in TRANSACTIONS and numerical inference in MONTE_CARLO. Approved requirements in this domain and linked [BACKLOG](../BACKLOG.md) obligations remain binding under [engineering governance](../../AGENTS.md#authority-and-precedence).
 
-[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. M0 role contract 2 checks DATA, RESEARCH and PLAYER_OUTCOME_MODEL; retired historical filenames are not executable dependencies.
+[DATA](../DATA.md) owns source interpretation, canonical schemas/validation and snapshot integrity; [RESEARCH](../RESEARCH.md) owns historical temporal trust/evaluation. M0 role contract 3 checks DATA, METHODOLOGY, VALIDATION and TECHNICAL_REFERENCE; retired historical filenames are not executable dependencies.
 
 [Season mechanics](../SEASON_SIMULATOR.md) owns lineup/scoring/standings/postseason; [Transactions](../TRANSACTIONS.md) owns evolving legality, operational acquisitions, V(R) and distinct independent references.
 
