@@ -351,6 +351,39 @@ def test_equal_record_and_points_for_remain_explicitly_unresolved() -> None:
         table.require_unique_order()
 
 
+
+def test_seeded_fallback_does_not_override_unsupported_secondary_tiebreak() -> None:
+    snapshot = _supported_snapshot()
+    secondary_id = snapshot.rules.standings.secondary_tiebreak_rule_id
+    unsupported = tuple(
+        replace(rule, status=InterpretationStatus.UNSUPPORTED)
+        if rule.rule_id == secondary_id else rule
+        for rule in snapshot.rules.interpretations
+    )
+    snapshot = replace(
+        snapshot,
+        rules=replace(snapshot.rules, interpretations=unsupported),
+    )
+    standings = (
+        ModeledStanding(1, 5, 5, 0, 100, 0),
+        ModeledStanding(2, 5, 5, 0, 100, 0),
+        ModeledStanding(3, 4, 6, 0, 90, 0),
+        ModeledStanding(4, 3, 7, 0, 80, 0),
+    )
+    with pytest.raises(WeeklyEngineError, match="secondary tiebreaker.*unsupported"):
+        rank_standings(snapshot, standings, fallback_seed=123)
+
+    # An unsupported deeper rule does not matter if earlier rules distinguish
+    # every team; the fallback is not needed to decide their order.
+    distinct = (
+        replace(standings[0], points_for=101),
+        *standings[1:],
+    )
+    assert rank_standings(snapshot, distinct, fallback_seed=123).require_unique_order() == (
+        1, 2, 3, 4
+    )
+
+
 def test_unsupported_first_seeding_tiebreak_remains_visible() -> None:
     snapshot = _supported_snapshot()
     rules = replace(
