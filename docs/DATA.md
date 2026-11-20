@@ -196,7 +196,28 @@ For partial-week execution, canonical roster slots establish observed assignment
 
 Source observations do not automatically become transaction permissions. The sole implemented release/strict-IR evidence boundary is `validate_eligibility_evidence_artifact()` in [evolving_state.py](../src/fantasy_football/evolving_state.py). It checks exact artifact bytes against canonical `SourceReference.payload_sha256`, view `transaction_eligibility_evidence_v1`, parameter `evidence_contract=transaction_eligibility_v1`, payload schema `transaction_eligibility_v1` and coherent player, boundary, condition and status claims. Only registered immutable determinations returned by this validator may enter execution; retaining a source label or recomputing a hash is insufficient.
 
-The accepted classification is currently **`verified_by_tests`**, yielding **`validated_fixture`** evidence for controlled sanitized fixtures, not Verified live ESPN permission. `verified_source` is reserved for a future source-specific parser; callers cannot mint it by relabeling a response. `approved_assumption` applies only to the approved projection-based IR policy. No approved assumption supplies strict future IR eligibility or releases ESPN waiver holds. Advancing a hypothetical cycle does not clear a source hold; affirmative drop/release authority remains distinct from ownership, slot eligibility and structural completion assumptions. [Roster evolution and transaction rules](METHODOLOGY.md#roster-evolution-and-transaction-rules) explains analytical policy, [Weekly integration and execution boundaries](TECHNICAL_REFERENCE.md#weekly-integration-and-execution-boundaries) the execution boundary, and [transaction methodology](DATA.md#transaction-eligibility-authority) retains current authority. Exact Finite-Score Objective Ordering; Incomplete-Valuation Transaction Selection and unsupported source permissions remain open.
+The accepted classification is currently **`verified_by_tests`**, yielding **`validated_fixture`** evidence for controlled sanitized fixtures, not Verified live ESPN permission. `verified_source` is reserved for a future source-specific parser; callers cannot mint it by relabeling a response. `approved_assumption` labels the approved projection-based IR policy and the separate modeled-own-drop future-window convention described below. No approved assumption supplies strict future IR eligibility or releases ESPN waiver holds. Advancing a hypothetical cycle does not clear a source hold; affirmative drop/release authority remains distinct from ownership, slot eligibility and structural completion assumptions. [Roster evolution and transaction rules](METHODOLOGY.md#roster-evolution-and-transaction-rules) explains analytical policy, [Weekly integration and execution boundaries](TECHNICAL_REFERENCE.md#weekly-integration-and-execution-boundaries) the execution boundary, and [transaction methodology](DATA.md#transaction-eligibility-authority) retains current authority. Exact Finite-Score Objective Ordering; Incomplete-Valuation Transaction Selection and unsupported source permissions remain open.
+
+### Automatic roster ownership observations
+
+The opt-in automatic roster policy consumes the raw ESPN
+`kona_player_info` player record's `player.ownership.percentOwned` (including the
+`players[].player` envelope), expressed on the 0–100 percentage scale. No
+`espn-api` transformation or normalization into a probability is applied. A
+snapshot-bound companion retains exact captured JSON text and source IDs;
+SHA-256 must match the immutable canonical source record. Duplicate/conflicting
+observations, malformed percentages or missing percentages needed for a drop
+cannot be replaced with zero. Canonical player records, schema versions and
+stored snapshot bytes are unchanged. These mappings are **Verified by tests**
+using sanitized fixtures; live semantics remain **Unverified** by this integration.
+
+The separate modeled-own-drop release assumption applies only to drops recorded
+in this hypothetical path's transaction history and source-supported waiver
+hours, at a later modeled cycle. It never clears an original ESPN/source hold,
+invents a real clearance time or supplies strict future IR permission. The
+registered fixture release provider above remains the only affirmative external
+release/strict-IR evidence provider. Its reserved live classification and all
+unsupported source gates remain unchanged.
 
 ## Evidence-role register and verification references
 

@@ -19,6 +19,17 @@ Statuses: Backlog, Ready, In Progress, In Review, Blocked, Done. Ready requires 
 
 ## Work items
 
+<a id="enhanced-automatic-drop-valuation"></a>
+**Enhanced Automatic Drop Valuation** — Enhancement / P2; Backlog; unassigned.
+The consolidated policy's full-horizon marginal projected-lineup proxy is the
+provisional baseline, not an empirically validated manager model. More
+sophisticated replacement availability, positional scarcity valuation and future
+roster/IR-state forecasting require separately approved methodology, an
+independent reference, decision-quality evidence and a representative performance
+comparison. No implementation is authorized by this entry; these enhancements do
+not block review of the approved provisional integration. See
+[the owning algorithm](METHODOLOGY.md#operational-essential-acquisitions).
+
 | Work item | Description | Type / priority | Status | Gate / dependencies | Owner | Legacy reference |
 |---|---|---|---|---|---|---|
 | <a id="node-toolchain-compatibility"></a>**Node Toolchain Compatibility** | Align installer/documented Node support with the locked frontend/test dependency engines. | Bug / P1 | Backlog | Confirmed mismatch, fix scope approval needed. [R1 D01](https://github.com/tdkelley2001/fantasy_football/blob/14fd6dba46cfe5827c0b3da110bfefa4a683b647/docs/R1_REPOSITORY_AUDIT.md); `scripts/setup-local.ps1`, frontend manifests. | — | WR-003 |

@@ -81,20 +81,25 @@ class LineupOptimizationWorkspace:
     """
 
     __slots__ = (
-        "snapshot",
-        "players",
-        "team_ids",
-        "week_records",
-        "slots",
-        "reserve_slot_ids",
         "candidate_cache",
-        "starting_cache",
-        "maximum_cache_entries",
         "candidate_hits",
+        "maximum_cache_entries",
+        "ownership_cache",
+        "players",
+        "prepared_season",
+        "reserve_slot_ids",
+        "slots",
+        "snapshot",
+        "starting_cache",
         "starting_hits",
+        "team_ids",
+        "validated_rosters",
+        "week_records",
     )
 
-    def __init__(self, snapshot: LeagueSnapshot, *, maximum_cache_entries: int = 20_000):
+    def __init__(
+        self, snapshot: LeagueSnapshot, *, maximum_cache_entries: int = 20_000
+    ):
         if maximum_cache_entries <= 0:
             raise LineupOptimizationError("maximum_cache_entries must be positive")
         self.snapshot = snapshot
@@ -118,6 +123,31 @@ class LineupOptimizationWorkspace:
         self.maximum_cache_entries = maximum_cache_entries
         self.candidate_hits = 0
         self.starting_hits = 0
+        self.prepared_season = None
+        self.validated_rosters = OrderedDict()
+        self.ownership_cache = OrderedDict()
+
+    def validate_roster(self, entries):
+        # Strict type checks precede equality-based caching: True == 1 must
+        # never let a malformed record alias an accepted integer ID.
+        cacheable = isinstance(entries, tuple) and all(
+            type(entry) is RosterEntry
+            and type(entry.player_id) is int
+            and type(entry.team_id) is int
+            and type(entry.lineup_slot_id) is int
+            and (
+                entry.raw_owner_team_id is None or type(entry.raw_owner_team_id) is int
+            )
+            for entry in entries
+        )
+        if cacheable and entries in self.validated_rosters:
+            self.validated_rosters.move_to_end(entries)
+            return
+        validate_roster_state(self.snapshot, entries)
+        if cacheable:
+            self.validated_rosters[entries] = True
+            while len(self.validated_rosters) > 128:
+                self.validated_rosters.popitem(last=False)
 
     def _get(self, cache, key):
         value = cache.get(key)
@@ -438,8 +468,15 @@ def optimize_starting_lineup(
         )
 
     modeled_roster = snapshot.roster_entries if roster_entries is None else roster_entries
-    validate_roster_state(snapshot, modeled_roster)
-    cache_key = (team_id, scoring_week, modeled_roster)
+    prepared.validate_roster(modeled_roster)
+    # A team's exact starting lineup is unaffected by other teams' rosters.
+    team_entries = tuple(
+        sorted(
+            (entry for entry in modeled_roster if entry.team_id == team_id),
+            key=lambda item: item.player_id,
+        )
+    )
+    cache_key = (team_id, scoring_week, team_entries)
     cached = prepared._get(prepared.starting_cache, cache_key)
     if cached is not None:
         prepared.starting_hits += 1
@@ -448,7 +485,6 @@ def optimize_starting_lineup(
     week_records = prepared.week_records[scoring_week]
     slots = prepared.slots
     reserve_slot_ids = prepared.reserve_slot_ids
-    team_entries = tuple(sorted((entry for entry in modeled_roster if entry.team_id == team_id), key=lambda item: item.player_id))
     projections = {entry.player_id: week_records[entry.player_id].effective_projection for entry in team_entries}
 
     candidate_ids = tuple(

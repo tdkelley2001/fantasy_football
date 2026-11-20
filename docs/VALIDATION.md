@@ -87,6 +87,41 @@ Keep all six files unchanged:
 
 [Canonical-LF integrity tests](../tests/test_domain_authority.py) hash bytes after **only CRLF-to-LF normalization**, against hashes computed from accepted C13 `14fd6dba46cfe5827c0b3da110bfefa4a683b647` Git blobs. No arbitrary whitespace normalization, JSON parsing/reserialization, reformatting or regenerated artifacts are allowed. LF/CRLF must agree; substantive/other-byte changes must fail. Historical identity preservation is separate from accepting a changed model's outputs. Never update frozen constants merely to make tests pass.
 
+### Consolidated execution benchmark and scope
+
+The reproducible credential-free workload in
+[benchmark_integrated_season.py](../benchmarks/benchmark_integrated_season.py)
+uses 14 synthetic teams, 1,050 canonical players, 224 rostered players, nine
+starting slots plus seven bench slots per team, and eight scoring weeks with
+championship byes and a two-week final plus consolation placements. It exercises
+full-universe Normal draws, ordinary weekly coordination and all-team summary
+aggregation. Its rosters have projected coverage: it is not a stress benchmark
+of forced drops or IR branching. Those behaviors have hand-checkable tests in
+[test_automatic_rosters.py](../tests/test_automatic_rosters.py).
+
+On Windows 11 build 26300, Python 3.12.10 x64, the identified 100-path workload
+produced the following fresh-process measurements. Memory is the **driver**
+process's OS peak working set, including imports/preparation; parallel worker
+memory is not included. Timing covers execution/preparation/aggregation, not
+fixture construction, and includes worker startup in the parallel case.
+
+| Policy / execution | Seconds | Paths / second | Driver peak MiB |
+|---|---:|---:|---:|
+| V1 / sequential | 26.90 | 3.72 | 65.9 |
+| Consolidated / sequential | 28.00 | 3.57 | 67.5 |
+| Consolidated / two workers, ten paths/task | 23.39 | 4.28 | 65.6 |
+
+All three produced the exact same path-result digest
+`ffb1a299d146a8b678f90824bdd39d20d036671c8fb952959d298e0adb3120ab`;
+the opt-in policy deliberately has a different configuration identity. The
+observed sequential overhead is about 4.1%; these single workload measurements
+are not a universal speedup or precision/runtime guarantee. A short profile
+identified repeated roster validation and preparation, motivating bounded
+snapshot-bound caches and reuse per batch/worker. No outcome formula or horizon
+was shortened. There was no retained real-league snapshot available for this
+run; this is **Verified by tests** synthetic behavior, not live ESPN validation,
+an empirical manager-policy validation or release acceptance.
+
 ## Empirical validity
 
 The question is whether a method predicts or supports decisions on authentic, representative future cases. A synthetic oracle can prove that code implements an equation or preserves path identity; it cannot prove that an ESPN forecast existed before kickoff, that its error distribution is calibrated, or that a decision proxy improves championships. [Player outcome generation and assumptions](METHODOLOGY.md#player-outcome-generation-and-assumptions), [Monte Carlo simulation and estimators](METHODOLOGY.md#monte-carlo-simulation-and-estimators) and [Statistical inference, precision and uncertainty](METHODOLOGY.md#statistical-inference-precision-and-uncertainty) describe the mathematical experiment. Monte Carlo sampling uncertainty conditional on a model is separate from empirical model/data uncertainty.

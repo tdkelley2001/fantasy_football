@@ -478,6 +478,62 @@ The modeled weekly pregame window and reverse-opening-priority free-agent order 
 
 ### Operational essential acquisitions
 
+The existing V1 policy remains the default. The opt-in consolidated policy
+`mandatory-marginal-lineup-v1` uses the same season, lineup, scoring and postseason
+machinery, with the following provisional manager policy instead of the legacy
+V(R)-ranked acquisition search described below:
+
+1. Reconcile each acting team's IR jointly before claims: use eligible open IR
+   space, activate recovered occupants, allow a legal atomic swap with an eligible
+   injured ordinary occupant, then choose an unavoidable drop if needed. A
+   recovered player is itself a possible drop. Strict evidence remains mandatory
+   under strict IR; projection-based recovery remains an explicit assumption.
+2. Identify coverage-improving acquisitions using exact relaxed slot matching,
+   including FLEX competition. Prioritize the least supplied vacant slot, then
+   descending current-week ESPN projection and stable player ID. All players in
+   the supported available pool remain candidates; there is no top-three or total
+   acquisition cap. A complete lineup never triggers a voluntary upgrade.
+3. Attempt the acquisition without a drop. If a drop is necessary, examine the
+   lowest ESPN-owned legally droppable player at each rostered position, moving
+   to the next ownership-ranked player only when that choice cannot produce a
+   legal coverage-improving acquisition. Unknown protection or required ownership
+   evidence fails closed, rather than making a low-ownership assumption.
+4. For each feasible position representative, compute
+   $L(R)=\sum_{u=w}^{W}\operatorname{optimalProjectedLineupPoints}(R,u)$ on the
+   resulting roster, including the incoming player. The common pre-drop reference
+   roster cancels when comparing marginal losses, so maximize $L(R)$; break ties
+   by lower dropped-player ownership percentage, then player ID. The shared exact
+   lineup optimizer and snapshot-bound caches cover the **entire** remaining
+   horizon. This deterministic proxy forecasts neither future transactions nor
+   changes to current reserve assignments; it is not nested Monte Carlo or V(R).
+5. Preserve one success per team per pass, repeated passes, successful waiver
+   priority movement and the reverse-frozen-opening-priority free-agent order.
+   Reset priority only when the canonical league setting authorizes it.
+
+Only under the modeled weekly waiver boundary, a drop made on this hypothetical
+path may return to waivers at a **future** modeled weekly window. Its delay is
+$\max(1,\lceil\text{source waiver hours}/168\rceil)$ cycles. Missing waiver hours,
+an unresolved modeled boundary or a known real clearance timestamp rejects the
+affected future window; a known later hold boundary defers release. The policy
+cannot silently retain every path-generated drop forever and report completeness.
+This is an approved modeling assumption for path-generated drops, not a timestamp
+or permission claim about ESPN. Initial/source holds still require the existing
+validated release authority. [DATA](DATA.md#transaction-eligibility-authority)
+owns that distinction.
+
+An explicitly configured standings fallback seed enables winning percentage,
+points for and a reproducible seeded final lottery. It cannot override an
+unsupported configured primary tiebreaker or a known unsupported secondary rule
+when that rule is needed. Without that explicit configuration,
+V1's unresolved deeper ties remain unresolved. The lottery order is fixed by the
+supplied seed and snapshot, including across common-path scenario comparisons.
+This does not manufacture historical head-to-head evidence.
+
+[Enhanced Automatic Drop Valuation](BACKLOG.md#enhanced-automatic-drop-valuation)
+retains more sophisticated replacement, scarcity and future roster forecasting.
+The legacy V(R) completeness defect and progressive-inference obligations remain
+open; selecting this separate provisional policy does not resolve them.
+
 Let $d_{tw}(E)$ be current mandatory starter vacancies under the **owned-only** positive-projection optimum. A full legal acquisition plan $c$ is essential iff
 
 $$

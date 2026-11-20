@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
-from dataclasses import dataclass
 import multiprocessing
 import pickle
 import time
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from dataclasses import dataclass
 
 from fantasy_football.canonical.model import LeagueSnapshot
+from fantasy_football.canonical.validation import validated_snapshot
 from fantasy_football.monte_carlo import (
     MonteCarloBatchResult,
     MonteCarloConfig,
@@ -74,6 +75,7 @@ class ParallelMonteCarloResult:
 _WORKER_SNAPSHOT: LeagueSnapshot | None = None
 _WORKER_CONFIG: MonteCarloConfig | None = None
 _WORKER_MODEL: PlayerOutcomeModel | None = None
+_WORKER_LINEUPS = None
 
 
 def _initialize_worker(
@@ -81,21 +83,31 @@ def _initialize_worker(
     config: MonteCarloConfig,
     model: PlayerOutcomeModel,
 ) -> None:
-    global _WORKER_SNAPSHOT, _WORKER_CONFIG, _WORKER_MODEL
+    global _WORKER_SNAPSHOT, _WORKER_CONFIG, _WORKER_MODEL, _WORKER_LINEUPS
     _WORKER_SNAPSHOT = snapshot
     _WORKER_CONFIG = config
     _WORKER_MODEL = model
+    from fantasy_football.lineup_optimizer import prepare_lineup_optimization
+
+    _WORKER_LINEUPS = prepare_lineup_optimization(snapshot)
 
 
-def _run_worker_chunk(path_indices: tuple[int, ...]) -> tuple[MonteCarloPathSummary, ...]:
+def _run_worker_chunk(
+    path_indices: tuple[int, ...],
+) -> tuple[MonteCarloPathSummary, ...]:
     if _WORKER_SNAPSHOT is None or _WORKER_CONFIG is None or _WORKER_MODEL is None:
         raise ParallelExecutionError("Monte Carlo worker was not initialized")
-    return tuple(
-        run_monte_carlo_path(
-            _WORKER_SNAPSHOT, _WORKER_CONFIG, _WORKER_MODEL, path_index
-        )[0]
-        for path_index in path_indices
-    )
+    with validated_snapshot(_WORKER_SNAPSHOT):
+        return tuple(
+            run_monte_carlo_path(
+                _WORKER_SNAPSHOT,
+                _WORKER_CONFIG,
+                _WORKER_MODEL,
+                path_index,
+                lineup_workspace=_WORKER_LINEUPS,
+            )[0]
+            for path_index in path_indices
+        )
 
 
 def _chunks(values: tuple[int, ...], size: int) -> tuple[tuple[int, ...], ...]:

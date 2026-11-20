@@ -30,6 +30,7 @@ from fantasy_football.evolving_state import (
 )
 from fantasy_football.lineup_optimizer import (
     LineupAssignment,
+    LineupOptimizationWorkspace,
     LineupVacancy,
     OptimizedLineup,
     StartingSlot,
@@ -478,6 +479,7 @@ def _freeze_and_score(
     scoring_week: int,
     team_ids: tuple[int, ...],
     score_index: dict[tuple[int, int], RealizedPlayerScore],
+    lineup_workspace: LineupOptimizationWorkspace,
 ) -> tuple[tuple[OptimizedLineup, ...], tuple[FrozenTeamWeek, ...]]:
     lineups = tuple(
         optimize_starting_lineup(
@@ -485,6 +487,7 @@ def _freeze_and_score(
             team_id,
             scoring_week,
             roster_entries=state.roster_entries,
+            workspace=lineup_workspace,
         )
         for team_id in sorted(team_ids)
     )
@@ -894,6 +897,7 @@ def simulate_deterministic_season(
     matchup_acquisition_counts: dict[int, int] | None = None,
     ir_eligibility_evidence: tuple[IREligibilityEvidence, ...] = (),
     initial_evolving_state: EvolvingLeagueState | None = None,
+    lineup_workspace: LineupOptimizationWorkspace | None = None,
     partial_week: DeterministicPartialWeekInput | None = None,
 ) -> DeterministicSeasonResult:
     """Execute one settings-driven deterministic path without network or randomness."""
@@ -915,6 +919,13 @@ def simulate_deterministic_season(
     configuration_provenance = (
         f"postseason_transactions:{postseason_transaction_policy.provenance.value}:{participation_reference}",
     )
+    fallback_seed = None
+    if transaction_policy.automatic_rosters is not None:
+        fallback_seed = transaction_policy.automatic_rosters.standings_fallback_seed
+        configuration_provenance += (
+            f"automatic_rosters:{transaction_policy.automatic_rosters.policy_id}",
+            f"standings_fallback_seed:{fallback_seed}",
+        )
     if partial_week is not None:
         configuration_provenance += (f"partial_week:v1:{partial_identity}",)
     phases = _phase_by_week(snapshot)
@@ -966,7 +977,12 @@ def simulate_deterministic_season(
         validate_evolving_state(evolving, snapshot)
     postseason: PostseasonState | None = None
     weeks: list[SeasonWeekTransition] = []
-    lineup_workspace = prepare_lineup_optimization(snapshot)
+    if lineup_workspace is None:
+        lineup_workspace = prepare_lineup_optimization(snapshot)
+    elif lineup_workspace.snapshot is not snapshot:
+        raise SeasonSimulationError(
+            "lineup workspace belongs to a different snapshot object"
+        )
 
     for scoring_week in range(
         snapshot.first_simulation_week, snapshot.final_simulation_week + 1
@@ -979,7 +995,9 @@ def simulate_deterministic_season(
                 scoring_week=scoring_week,
             )
             if snapshot.rules.acquisition.waiver_order_resets is True:
-                ranking = rank_standings(snapshot, standings)
+                ranking = rank_standings(
+                    snapshot, standings, fallback_seed=fallback_seed
+                )
                 if not ranking.has_unique_order:
                     return _incomplete_result(
                         scenario=scenario,
@@ -1000,7 +1018,9 @@ def simulate_deterministic_season(
 
         phase = phases[scoring_week]
         if phase is MatchupPhase.POSTSEASON and postseason is None:
-            final_ranking = rank_standings(snapshot, standings)
+            final_ranking = rank_standings(
+                snapshot, standings, fallback_seed=fallback_seed
+            )
             if not final_ranking.has_unique_order:
                 return _incomplete_result(
                     scenario=scenario,
@@ -1018,6 +1038,7 @@ def simulate_deterministic_season(
                     snapshot,
                     standings,
                     consolation_configuration=consolation_configuration,
+                    fallback_seed=fallback_seed,
                 )
                 if (
                     partial_week is not None
@@ -1118,7 +1139,12 @@ def simulate_deterministic_season(
             )
         else:
             lineups, frozen = _freeze_and_score(
-                snapshot, evolving, scoring_week, team_ids, score_index
+                snapshot,
+                evolving,
+                scoring_week,
+                team_ids,
+                score_index,
+                lineup_workspace,
             )
             scores = _scenario_week_scores(score_index, scoring_week)
         regular_transition = None
@@ -1167,7 +1193,7 @@ def simulate_deterministic_season(
             )
         )
 
-    ranking = rank_standings(snapshot, standings)
+    ranking = rank_standings(snapshot, standings, fallback_seed=fallback_seed)
     unresolved = ()
     status = SeasonCompletionStatus.COMPLETE
     if postseason is None:

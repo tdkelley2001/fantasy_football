@@ -267,6 +267,49 @@ Each later week advances the evolving cycle, retains holds unless separately aut
 
 Postseason uses immutable `BracketGraph`/`BracketGraphNode`/`BracketSource` topology and `PostseasonState` from [postseason.py](../src/fantasy_football/postseason.py). Initialization binds uniquely ranked modeled standings to seeds and reconciles canonical first-round pairings. `score_frozen_postseason_week()` consumes player outcomes; `apply_postseason_team_scores()` consumes audited `WeeklyTeamScore(scoring_week, team_id, points)`. Neither changes ownership nor samples. Championship/consolation keep independent round calendars and explicit bye/advancement/placement obligations. Unresolved seeding, authorization or placement can return `SeasonCompletionStatus.INCOMPLETE` with exact reasons rather than a complete champion/placement certificate. Structural contradictions raise at their owning boundary; supported incompleteness is not catch-and-continue repair.
 
+### Consolidated automatic-roster execution
+
+`WeeklyTransactionPolicy.automatic_rosters=None` preserves the accepted V1
+interface and policy identity. An explicit `AutomaticRosterPolicy` binds the
+published snapshot, immutable `(source_id, exact JSON text)` ownership sources,
+`policy_id="mandatory-marginal-lineup-v1"` and optional
+`standings_fallback_seed`. Source pairs are sorted by ID for stable identity;
+their exact JSON text is preserved. [METHODOLOGY](METHODOLOGY.md#operational-essential-acquisitions)
+owns its decision algorithm; [DATA](DATA.md#automatic-roster-ownership-observations)
+owns source interpretation. The shared coordinator and V1 Normal model produce
+all-team path summaries, standings, championship/consolation placements and
+existing precision/paired statistics. The experimental hardcoded-calendar runner
+and proportional/clamped scoring model are not alternate execution backends.
+
+`PreparedSeason` holds dense canonical IDs, projection rows and eligibility masks.
+`CompactSeasonState` forks path-local indexed ownership, slots, availability,
+queues and counters while preserving source linkage and transaction diagnostics.
+Selected effects return to the shared season coordinator; canonical snapshots
+remain immutable. A bounded snapshot-bound lineup workspace is reused per batch
+or initialized worker, including exact team-local lineup keys, at most 128
+validated full-roster entries and four source-policy preparations. Validation
+precedes cache admission; changed source text and malformed/changed rosters cannot
+reuse an unrelated entry. No cross-run global snapshot cache is introduced.
+The two per-search opponent valuation caches are separately bounded to 2,048
+entries each; eviction changes reuse, not the selected legal effect.
+
+The configuration fingerprint explicitly retains exactly the original two
+transaction-policy fields for ordinary V1 calls. Only an opted-in policy adds
+its complete companion/policy inputs to configuration identity. Existing model
+parameters, draw serialization, path IDs, goldens and checkpoint format remain
+unchanged. A changed companion or policy rejects incompatible numerical resume;
+application retained history remains separate from numerical checkpoints.
+
+The existing `SimulationConfiguration` accepts optional
+`automatic_roster_policy="mandatory_marginal_lineup_v1"` and an integer/null
+`standings_fallback_seed`. Omitted/`"legacy_v1"` and null seed retain the previous
+serialized request shape. A fallback seed requires the explicit automatic policy.
+The application loads ownership text from immutable stored sources; it does not
+retrieve ESPN or accept invented ownership defaults. Existing baseline, scenario,
+search and background result handling continue through their shared interfaces.
+No new UI switch or experimental preview route is required. The public interface
+still does not accept engine-only partial-week companions.
+
 ### Companion envelope and preservation contract
 
 `PartialWeekEvidence` is the standalone frozen/slotted companion, **PARTIAL_WEEK_ARTIFACT_VERSION = 1**, independent of canonical snapshot schema 2/3/4. Its exact field definitions and nested records live in [partial_week.py](../src/fantasy_football/partial_week.py): snapshot/league/season and scoring/period membership, UTC retrieval interval, source IDs/basis digest, authority/unresolved capabilities, player states, observed assignments, matchups and standings cutoff. Nested tuples preserve order. Optional actuals/carry/cutoff remain `None` when unavailable, distinct from a confirmed zero. The companion is not added to canonical JSON or automatically stored/published by passing it to the engine.
@@ -426,7 +469,7 @@ After validation, background submission checks closing/queue capacity under lock
 | `LiveScoringSummary` | `current_scoring_period: integer`; `last_fully_completed_period: integer or null`; `earliest_unresolved_period: integer or null`; `next_fully_unplayed_period: integer or null`; `supported_simulation_week: integer or null`; `partial_week_simulation_required: boolean`; `boundary_method: "automatic" / "manual_override" / "unresolved"`; `boundary_rationale: string`; `weeks: ScoringWeekStateSummary[]`; `unresolved_capabilities: string[]` |
 | `SnapshotSummary` | `api_schema_version?: "1.0"="1.0"`; `snapshot_id: string`; `league_id: integer`; `league_name?: string or null=null`; `season: integer`; `canonical_schema_version: integer`; `canonical_sha256: string`; `source_count: integer`; `source_ids?: string[]=[]`; `published_at_utc: string(date-time)`; `retrieval_finished_at_utc: string(date-time)`; `first_simulation_week: integer`; `final_simulation_week: integer`; `team_count: integer or null`; `teams?: TeamSummary[]=[]`; `players?: PlayerSummary[]=[]`; `roster_assignments?: RosterAssignment[]=[]`; `matchup_periods?: MatchupPeriodSummary[]=[]`; `matchups?: MatchupSummary[]=[]`; `league_structure?: LeagueStructure or null=null`; `capabilities?: RuleCapability[]=[]`; `live_scoring?: LiveScoringSummary or null=null` |
 | `NormalOutcomeModelConfiguration` | `model_type?: "provisional_normal"="provisional_normal"`; `base_stddev_points: number{>=0.0}`; `projection_scale: number{>=0.0}` |
-| `SimulationConfiguration` | `master_seed: integer`; `path_count: integer{<=10000,>0}`; `first_path_index?: integer{>=0}=0`; `ir_policy: "projection_based" / "strict"`; `waiver_boundary: "unresolved" / "modeled_weekly_v1"`; `reject_incomplete_valuations?: boolean=true`; `require_complete?: boolean=true` |
+| `SimulationConfiguration` | `master_seed: integer`; `path_count: integer{<=10000,>0}`; `first_path_index?: integer{>=0}=0`; `ir_policy: "projection_based" / "strict"`; `waiver_boundary: "unresolved" / "modeled_weekly_v1"`; `reject_incomplete_valuations?: boolean=true`; `require_complete?: boolean=true`; `automatic_roster_policy?: "legacy_v1" / "mandatory_marginal_lineup_v1"="legacy_v1"`; `standings_fallback_seed?: integer or null=null` |
 | `PrecisionSettings` | `family_confidence_level: number{>0.0,<1.0}`; `target_half_width_probability: number{>0.0,<1.0}`; `minimum_paths: integer{<=10000,>0}`; `maximum_paths: integer{<=10000,>0}`; `evaluation_interval_paths: integer{<=10000,>0}` |
 | `BuildProvenance` | `package_version: string`; `build_revision: string or null`; `revision_status: "explicit" / "unknown"` |
 | `RunIdentity` | `identity_schema_version: "application-run-identity-v1"`; `analytical_equivalence_sha256: string`; `application_execution_sha256: string`; `presentation_query_sha256: string`; `execution_nonce: string`; `build: BuildProvenance` |

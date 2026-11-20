@@ -133,6 +133,16 @@ Missing projections are not confirmed actual zeros or proof a player will not pa
 
 ## Run a baseline and evaluate hypothetical changes
 
+Existing application controls continue to use the V1 policy. Advanced API
+callers may explicitly select the
+[consolidated automatic-roster policy](TECHNICAL_REFERENCE.md#consolidated-automatic-roster-execution)
+in simulation configuration; it uses ownership observations retained with the
+selected immutable snapshot and fails when evidence needed for a drop is absent.
+An optional standings fallback seed is explicit modeled configuration, not a
+substitute for unsupported source rules. No live permissions are inferred and
+no snapshot needs to be rewritten. Keep ordinary V1 settings to reproduce an
+existing V1 numerical checkpoint; opted-in policy identities are incompatible.
+
 ### First workflow: baseline, then a specific exchange
 
 This walkthrough uses your selected validated snapshot and real roster records. It asserts no observed league result or recommended trade.

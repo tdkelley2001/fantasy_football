@@ -16,6 +16,10 @@ from fantasy_football.canonical.model import (
 from fantasy_football.canonical.serialization import snapshot_to_json
 from fantasy_football.canonical.validation import validated_snapshot
 from fantasy_football.evolving_state import EvolvingLeagueState, IRPolicy
+from fantasy_football.lineup_optimizer import (
+    LineupOptimizationWorkspace,
+    prepare_lineup_optimization,
+)
 from fantasy_football.partial_week import (
     DeterministicPlayerValue,
     PartialWeekEvidence,
@@ -188,6 +192,16 @@ SIMULATION_SEMANTICS = (
 
 
 def _deterministic_value(value):
+    if isinstance(value, WeeklyTransactionPolicy):
+        # These are the exact accepted V1 keys. Added optimization defaults
+        # must not invalidate historical checkpoints or change published IDs.
+        result = {
+            "waiver_boundary": _deterministic_value(value.waiver_boundary),
+            "reject_incomplete_valuations": value.reject_incomplete_valuations,
+        }
+        if value.automatic_rosters is not None:
+            result["automatic_rosters"] = _deterministic_value(value.automatic_rosters)
+        return result
     if is_dataclass(value):
         return {
             item.name: _deterministic_value(getattr(value, item.name))
@@ -485,6 +499,7 @@ def run_monte_carlo_path(
     path_index: int,
     *,
     retain_result: bool = False,
+    lineup_workspace: LineupOptimizationWorkspace | None = None,
 ) -> tuple[MonteCarloPathSummary, DeterministicSeasonResult | None]:
     if path_index not in config.path_indices:
         raise MonteCarloError(f"path_index={path_index} is outside configured range")
@@ -508,6 +523,7 @@ def run_monte_carlo_path(
                 postseason_transaction_policy=config.postseason_transaction_policy,
                 consolation_configuration=config.consolation_configuration,
                 initial_evolving_state=config.initial_evolving_state,
+                lineup_workspace=lineup_workspace,
                 partial_week=partial,
             )
     except ValueError as exc:
@@ -761,11 +777,15 @@ def run_monte_carlo_batch(
 ) -> MonteCarloBatchResult:
     if not getattr(model, "model_id", None) or not hasattr(model, "generate_scenario"):
         raise MonteCarloError("model does not satisfy PlayerOutcomeModel")
-    paths = tuple(
-        run_monte_carlo_path(snapshot, config, model, path_index)[0]
-        for path_index in config.path_indices
-    )
-    return _aggregate(snapshot, config, model, paths)
+    with validated_snapshot(snapshot):
+        lineup_workspace = prepare_lineup_optimization(snapshot)
+        paths = tuple(
+            run_monte_carlo_path(
+                snapshot, config, model, path_index, lineup_workspace=lineup_workspace
+            )[0]
+            for path_index in config.path_indices
+        )
+        return _aggregate(snapshot, config, model, paths)
 
 
 def aggregate_monte_carlo_paths(
