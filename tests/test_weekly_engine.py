@@ -351,7 +351,6 @@ def test_equal_record_and_points_for_remain_explicitly_unresolved() -> None:
         table.require_unique_order()
 
 
-
 def test_seeded_fallback_does_not_override_unsupported_secondary_tiebreak() -> None:
     snapshot = _supported_snapshot()
     secondary_id = snapshot.rules.standings.secondary_tiebreak_rule_id
@@ -379,9 +378,9 @@ def test_seeded_fallback_does_not_override_unsupported_secondary_tiebreak() -> N
         replace(standings[0], points_for=101),
         *standings[1:],
     )
-    assert rank_standings(snapshot, distinct, fallback_seed=123).require_unique_order() == (
-        1, 2, 3, 4
-    )
+    assert rank_standings(
+        snapshot, distinct, fallback_seed=123
+    ).require_unique_order() == (1, 2, 3, 4)
 
 
 def test_unsupported_first_seeding_tiebreak_remains_visible() -> None:
