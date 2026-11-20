@@ -4,7 +4,7 @@ Use [METHODOLOGY](docs/METHODOLOGY.md) for analytical rules, [DATA](docs/DATA.md
 
 The offline [M0 role verifier](docs/DATA.md#m0-consumer-dependency), `.venv\Scripts\python.exe -m fantasy_football.m0_verification --json`, needs no credentials. Contract 3 checks seven roles against DATA, METHODOLOGY, VALIDATION and TECHNICAL_REFERENCE; preserve exact bindings/identities/limits and the distinction between recorded historical identity and unauthenticated historical bytes.
 
-`tdkelley2001/fantasy_football` is the authoritative repository for accepted code and documentation. Both regular contributors use reviewed pull requests into its `main` branch, whether the work branch is in the original repository or the existing fork. Keep the fork; no migration, remote replacement or permission change is needed.
+`tdkelley2001/fantasy_football` is the authoritative repository for accepted code and documentation. Both regular contributors use pull requests into its `main` branch, whether the work branch is in the original repository or the existing fork. **PR approval is not required by default**; the author may merge an ordinary change after appropriate checks. Request collaborator review when a change affects methodology, league rules, numerical identity, major architecture, or other agreed high-impact behavior. Keep the fork; no migration, remote replacement or permission change is needed.
 
 Start with the [development backlog](docs/BACKLOG.md), [current capabilities](README.md#current-capabilities), [domain authorities](README.md#understand-the-system) and [authority precedence](AGENTS.md#authority-and-precedence). Independently accepted analytical requirements, dependencies and acceptance gates remain binding in their owning references; historical milestones are Git/PR evidence, not a parallel work queue.
 
@@ -19,13 +19,13 @@ Use [README navigation](README.md#understand-the-system) to find user guides, ar
 
 Use the descriptive backlog title and its stable anchor in the branch/PR description. Propose new work or claim an existing item by editing [BACKLOG.md](docs/BACKLOG.md) through an ordinary PR. An owner is optional; agree assignments rather than assigning the other contributor without discussion. A listed proposal is not implementation approval. Record scope, dependencies, acceptance/verification and the governing specification before starting substantive work.
 
-Coordinate overlapping files or interfaces in the backlog entry and PR discussion. Agree sequencing, keep changes small and bring relevant upstream changes into the branch before final review. Do not combine work packages merely because they touch nearby code. Each contributor, including coding agents, follows the same review and evidence rules.
+Coordinate overlapping files or interfaces in the backlog entry and PR discussion. Agree sequencing, keep changes small and bring relevant upstream changes into the branch before merge. Do not combine work packages merely because they touch nearby code. Each contributor, including coding agents, follows the same review and evidence rules.
 
 ## Branches and safe synchronization
 
 The Git examples are instructions, not repository settings. Begin with `git status --short` and `git remote -v`; preserve any local work deliberately. Check which repository each remote names. Do not discard changes, reset main, force-push or rewrite another contributor's published commits. If a fast-forward fails, inspect divergence and coordinate instead of forcing it. “Already up to date” does not prove local main has no extra commits: inspect ahead/behind state and review the complete PR diff against authoritative main.
 
-Use a short branch such as `docs/Documentation Consolidation-current-guides` or `fix/Node Toolchain Compatibility-node-check`. Replace example names with the actual work title and branch. Use a new branch for each independently reviewable change.
+Use a short branch such as `docs/documentation-consolidation` or `fix/node-toolchain-compatibility`. Replace example names with the actual work title and branch. Use a new branch for each independently reviewable change.
 
 ### Working in the original repository
 
@@ -35,10 +35,10 @@ Here `origin` must be `tdkelley2001/fantasy_football`:
 git fetch origin
 git switch main
 git merge --ff-only origin/main
-git switch -c docs/Documentation Consolidation-current-guides
+git switch -c docs/documentation-consolidation
 ```
 
-Update an existing work branch with `git fetch origin`, switch to that branch and `git merge origin/main`. Resolve conflicts with the affected contributor, run the relevant checks, then push **the work branch**, for example `git push -u origin docs/Documentation Consolidation-current-guides`. Open a PR with base `tdkelley2001/fantasy_football:main`. Do not push changes directly to upstream main.
+Update an existing work branch with `git fetch origin`, switch to that branch and `git merge origin/main`. Resolve conflicts with the affected contributor, run the relevant checks, then push **the work branch**, for example `git push -u origin docs/documentation-consolidation`. Open a PR with base `tdkelley2001/fantasy_football:main`. Do not push changes directly to upstream main.
 
 ### Working in the existing fork
 
@@ -55,12 +55,12 @@ git fetch upstream
 git switch main
 git merge --ff-only upstream/main
 git push origin main
-git switch -c docs/Documentation Consolidation-current-guides
+git switch -c docs/documentation-consolidation
 ```
 
 The main push above updates **the fork only**, not authoritative main. If fork/local main contains unrelated commits, preserve that work and agree a branch base containing only the intended contribution; do not reset or delete the fork. Update an existing work branch by fetching upstream and merging `upstream/main` into that branch. Then push the work branch to `origin` and open a PR whose **base repository is the original repository**, not the fork. Both contribution routes receive the same review and verification.
 
-Merging upstream into a shared branch is the default; rebasing or rewriting published history requires explicit coordination and is not needed for this workflow. Review the PR's files and base/head repositories before requesting review.
+Merging upstream into a shared branch is the default; rebasing or rewriting published history requires explicit coordination and is not needed for this workflow. Check the PR's files and base/head repositories before merging or requesting optional review.
 
 ## Development environment and checks
 
@@ -275,4 +275,4 @@ Use an ordinary reviewed PR; no extra committee, tracker, template or workflow i
 
 In the PR description, give the backlog title, objective/change, governing contract, acceptance criteria addressed, exact verification results and skipped checks with reasons. State compatibility/evidence risks and any remaining blockers. No issue/PR template, label system, Project board or new workflow configuration is required.
 
-Request review from the other contributor or an agreed independent reviewer. Do not automatically merge implementation work. Merge only after review, applicable gates and relevant verification are satisfied. A successful local check is not acceptance of a new modeling assumption or a declaration of release. Update current capability documentation when behavior actually changes; update the backlog in the same PR or a small follow-up PR when review disposition is known. Keep items In Review until accepted, then retain their titles/anchors in the completed record with the actual PR/decision reference. See [backlog maintenance](docs/BACKLOG.md#maintaining-this-file).
+**Pull requests do not require routine approval.** The author can merge ordinary bug fixes, documentation and low-risk implementation changes after appropriate tests and a diff check. For substantive methodological, league-rule, statistical, numerical-identity, security or architectural changes, coordinate and obtain explicit agreement on the change before merging; collaborator review is recommended, and an explicitly agreed acceptance gate still applies. Do not make auto-merge the default. Applicable verification and compatibility requirements remain binding. A successful local check is not acceptance of a new modeling assumption or a declaration of release. Update current capability documentation when behavior actually changes; update the backlog in the same PR or a small follow-up PR when review disposition is known. Keep items In Review until their stated acceptance conditions are met; ordinary changes do not require a separate reviewer. Then retain their titles/anchors in the completed record with the actual PR/decision reference. See [backlog maintenance](docs/BACKLOG.md#maintaining-this-file).
