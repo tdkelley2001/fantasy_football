@@ -353,15 +353,23 @@ def test_equal_record_and_points_for_remain_explicitly_unresolved() -> None:
 
 def test_seeded_fallback_does_not_override_unsupported_secondary_tiebreak() -> None:
     snapshot = _supported_snapshot()
-    secondary_id = snapshot.rules.standings.secondary_tiebreak_rule_id
+    secondary_id = "standings_tiebreak_order"
+    assert any(rule.rule_id == secondary_id for rule in snapshot.rules.interpretations)
     unsupported = tuple(
         replace(rule, status=InterpretationStatus.UNSUPPORTED)
-        if rule.rule_id == secondary_id else rule
+        if rule.rule_id == secondary_id
+        else rule
         for rule in snapshot.rules.interpretations
     )
     snapshot = replace(
         snapshot,
-        rules=replace(snapshot.rules, interpretations=unsupported),
+        rules=replace(
+            snapshot.rules,
+            interpretations=unsupported,
+            standings=replace(
+                snapshot.rules.standings, secondary_tiebreak_rule_id=secondary_id
+            ),
+        ),
     )
     standings = (
         ModeledStanding(1, 5, 5, 0, 100, 0),
