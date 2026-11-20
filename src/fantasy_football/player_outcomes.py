@@ -474,6 +474,102 @@ class ProvisionalNormalModel:
         )
 
 
+_NORMAL_GENERATE = ProvisionalNormalModel.generate_scenario
+_NORMAL_DRAW = ProvisionalNormalModel._standard_normal
+
+
+class PreparedNormalOutcomes:
+    """Exact historical keys with immutable JSON fragments prepared once.
+
+    Full canonical draws and their order are retained. This changes encoding
+    work only; the two SHA-256 digests and Box–Muller operations are identical.
+    Custom models, subclasses and overridden methods use their original API.
+    """
+
+    @staticmethod
+    def supports(model):
+        return (
+            type(model) is ProvisionalNormalModel
+            and type(model).generate_scenario is _NORMAL_GENERATE
+            and type(model)._standard_normal is _NORMAL_DRAW
+        )
+
+    def __init__(self, snapshot, model, master_seed):
+        self.identity = master_seed, model.model_id, model.parameters
+        self.model_id = model.model_id
+        self.seed = master_seed
+        self.prefix = (
+            json.dumps(
+                ("fantasy-football-player-week-draw-v1", master_seed),
+                separators=(",", ":"),
+                ensure_ascii=True,
+            ).encode()[:-1]
+            + b","
+        )
+        self.records = tuple(
+            (
+                row.player_id,
+                row.season,
+                row.scoring_week,
+                float(row.effective_projection),
+                model.base_stddev
+                + model.projection_scale * abs(float(row.effective_projection)),
+                None
+                if row.projection_class is ProjectionClass.MISSING
+                else json.dumps(
+                    (
+                        row.player_id,
+                        row.season,
+                        row.scoring_week,
+                        model.version,
+                        model._draw_parameters,
+                    ),
+                    separators=(",", ":"),
+                    ensure_ascii=True,
+                ).encode()[1:],
+            )
+            for row in sorted(
+                snapshot.player_weeks,
+                key=lambda row: (row.player_id, row.season, row.scoring_week),
+            )
+            if snapshot.first_simulation_week
+            <= row.scoring_week
+            <= snapshot.final_simulation_week
+        )
+
+    def generate_scenario(self, path_index):
+        if (
+            isinstance(path_index, bool)
+            or not isinstance(path_index, int)
+            or path_index < 0
+        ):
+            raise PlayerOutcomeError("path_index must be a nonnegative integer")
+        prefix = self.prefix + str(path_index).encode("ascii") + b","
+        scores = []
+        sha256 = hashlib.sha256
+        sqrt, log, cos, pi = math.sqrt, math.log, math.cos, math.pi
+        denominator = float(1 << 256)
+        for player, season, week, mean, sigma, suffix in self.records:
+            if suffix is None:
+                points = 0.0
+            else:
+                key = prefix + suffix
+                first = int.from_bytes(sha256(key + b"\x00").digest(), "big")
+                second = int.from_bytes(sha256(key + b"\x01").digest(), "big")
+                u1 = (first + 0.5) / denominator
+                u2 = (second + 0.5) / denominator
+                draw = sqrt(-2.0 * log(u1)) * cos(2.0 * pi * u2)
+                points = mean + sigma * draw
+            if not math.isfinite(points):
+                raise PlayerOutcomeError(
+                    f"nonfinite generated score for player-week {(player, season, week)}"
+                )
+            scores.append(RealizedPlayerScore(player, season, week, points))
+        return DeterministicScoreScenario(
+            f"mc:{self.model_id}:seed={self.seed}:path={path_index}", tuple(scores)
+        )
+
+
 def projection_class_counts(snapshot: LeagueSnapshot) -> tuple[tuple[str, int], ...]:
     """Report source classes independently of outcome generation."""
 

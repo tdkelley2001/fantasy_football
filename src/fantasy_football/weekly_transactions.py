@@ -58,6 +58,19 @@ def require_supported_transaction_rules(snapshot: LeagueSnapshot) -> None:
         )
 
 
+def require_supported_weekly_policy(policy):
+    if not isinstance(policy, WeeklyTransactionPolicy):
+        raise WeeklyTransactionError("policy must be WeeklyTransactionPolicy")
+    if not isinstance(policy.waiver_boundary, WaiverBoundaryPolicy):
+        raise WeeklyTransactionError(
+            f"unsupported waiver boundary policy {policy.waiver_boundary!r}"
+        )
+    if not policy.reject_incomplete_valuations:
+        raise WeeklyTransactionError(
+            "ranking incomplete roster valuations has no approved capability policy"
+        )
+
+
 class DecisionOutcome(StrEnum):
     NO_ESSENTIAL_VACANCY = "no_essential_vacancy"
     NO_SUITABLE_CANDIDATE = "no_suitable_candidate"
@@ -1021,16 +1034,7 @@ def execute_weekly_essential_transactions(
         raise WeeklyTransactionError(
             "state scoring week is outside the canonical simulation horizon"
         )
-    if not isinstance(policy, WeeklyTransactionPolicy):
-        raise WeeklyTransactionError("policy must be WeeklyTransactionPolicy")
-    if not isinstance(policy.waiver_boundary, WaiverBoundaryPolicy):
-        raise WeeklyTransactionError(
-            f"unsupported waiver boundary policy {policy.waiver_boundary!r}"
-        )
-    if not policy.reject_incomplete_valuations:
-        raise WeeklyTransactionError(
-            "ranking incomplete roster valuations has no approved capability policy"
-        )
+    require_supported_weekly_policy(policy)
     team_ids = {item.team_id for item in snapshot.teams}
     if eligible_team_ids is None:
         eligible = team_ids
@@ -1069,26 +1073,14 @@ def execute_weekly_essential_transactions(
     ownership = None
     if policy.automatic_rosters is not None:
         from fantasy_football.automatic_rosters import (
-            ownership_percentages,
+            prepared_ownership,
             reconcile_ir,
             release_modeled_drops,
         )
 
-        automatic = policy.automatic_rosters
-        ownership_key = (
-            automatic.snapshot_id,
-            automatic.ownership_sources,
-            automatic.policy_id,
-            type(automatic.standings_fallback_seed),
-            automatic.standings_fallback_seed,
+        ownership = prepared_ownership(
+            snapshot, policy.automatic_rosters, lineup_workspace
         )
-        if ownership_key not in lineup_workspace.ownership_cache:
-            lineup_workspace.ownership_cache[ownership_key] = ownership_percentages(
-                snapshot, automatic
-            )
-            while len(lineup_workspace.ownership_cache) > 4:
-                lineup_workspace.ownership_cache.popitem(last=False)
-        ownership = lineup_workspace.ownership_cache[ownership_key]
         current = release_modeled_drops(snapshot, current, modeled_boundary=(
             policy.waiver_boundary is WaiverBoundaryPolicy.MODELED_WEEKLY_V1))
         current = reconcile_ir(

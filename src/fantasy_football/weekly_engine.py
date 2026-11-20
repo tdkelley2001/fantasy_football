@@ -554,6 +554,13 @@ def resolve_regular_season_week(
             tuple(sorted(lineup.vacancies, key=lambda item: item.slot)),
         )
 
+    return _regular_transition(snapshot, scoring_week, current, team_scores, matchups)
+
+
+def _regular_transition(
+    snapshot, scoring_week, current, team_scores, matchups, *, retain_scores=True
+):
+    """Shared record/tie arithmetic after the caller validates score authority."""
     updated = dict(current)
     results: list[MatchupResult] = []
     for matchup in matchups:
@@ -604,6 +611,8 @@ def resolve_regular_season_week(
             )
         )
     updated_tuple = tuple(updated[team_id] for team_id in sorted(updated))
+    if not retain_scores:
+        return updated_tuple
     return WeeklyTransition(
         snapshot.season,
         scoring_week,

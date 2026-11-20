@@ -293,6 +293,38 @@ reuse an unrelated entry. No cross-run global snapshot cache is introduced.
 The two per-search opponent valuation caches are separately bounded to 2,048
 entries each; eviction changes reuse, not the selected legal effect.
 
+Summary-only Monte Carlo uses the same coordinator with a native indexed path.
+`PreparedExecution` prepares default initial state once, forks path-local arrays,
+advances cycles/queues without reconstructing canonical rosters, and uses the
+existing regular-season arithmetic and postseason resolver. Weekly transition,
+roster and lineup-plan tables each retain at most 256 entries. Transition keys
+include ownership, slots, availability/clearance, queues, counters, cycle/period,
+complete history, IR evidence/assumptions, actor eligibility and policy; unrelated
+states cannot reuse an effect. A full-lineup shortcut requires validated policy
+and companion evidence and cannot skip reserve reconciliation or held-player
+clearance. Changed states prepare through the readable transaction path; trial
+acquisitions remain indexed until the selected legal effect is materialized.
+
+`PreparedNormalOutcomes` reuses immutable historical JSON key fragments, preserving
+the full player-week universe, both SHA-256 counters and identical Box–Muller
+operations. It is not a new outcome model or identity. Overridden/custom models
+and partial-week inputs retain their existing generation interface. The
+unlimited-lineup kernel preserves the reference Decimal objective and tie order;
+the readable general solver remains its oracle and handles limited-player cases.
+Equal ordered projection/eligibility profiles may reuse a week-free candidate
+lineup, with Decimal context/traps/flags preserved; team/week artifacts remain
+separate. These profile/candidate tables are bounded by the workspace's existing
+20,000-entry limit; full-horizon projected-value results have a 2,048-entry bound.
+Every remaining week still contributes, including weeks with equal projections.
+
+Sequential precision/checkpoint runs retain one workspace across batches, as do
+initialized workers. Caches are neither global nor checkpoint contents. Explicit
+`retain_result=True` keeps the full readable season trace; summary-only execution
+does not allocate unused weekly diagnostic artifacts. Partial companions keep
+their separate validated composition path. Differential gates are in
+[test_prepared_execution.py](../tests/test_prepared_execution.py); no fingerprint,
+draw/model policy, checkpoint schema or public result contract changes.
+
 The configuration fingerprint explicitly retains exactly the original two
 transaction-policy fields for ordinary V1 calls. Only an opted-in policy adds
 its complete companion/policy inputs to configuration identity. Existing model

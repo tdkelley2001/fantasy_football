@@ -27,7 +27,9 @@ from fantasy_football.evolving_state import (
     validate_player_drop_permission,
 )
 from fantasy_football.lineup_optimizer import (
+    LineupOptimizationError,
     LineupOptimizationWorkspace,
+    optimize_candidate_lineup,
     optimize_starting_lineup,
 )
 
@@ -136,6 +138,25 @@ def ownership_percentages(
     return result
 
 
+def prepared_ownership(snapshot, automatic, workspace):
+    if workspace.snapshot is not snapshot:
+        raise AutomaticRosterError(
+            "ownership workspace belongs to a different snapshot"
+        )
+    key = (
+        automatic.snapshot_id,
+        automatic.ownership_sources,
+        automatic.policy_id,
+        type(automatic.standings_fallback_seed),
+        automatic.standings_fallback_seed,
+    )
+    if key not in workspace.ownership_cache:
+        workspace.ownership_cache[key] = ownership_percentages(snapshot, automatic)
+        while len(workspace.ownership_cache) > 4:
+            workspace.ownership_cache.popitem(last=False)
+    return workspace.ownership_cache[key]
+
+
 def projected_value(
     snapshot: LeagueSnapshot,
     state: EvolvingLeagueState,
@@ -143,15 +164,53 @@ def projected_value(
     workspace: LineupOptimizationWorkspace,
 ) -> float:
     """Full remaining horizon, with the shared exact legal-lineup solver."""
-    return math.fsum(
-        optimize_starting_lineup(
-            snapshot,
-            team_id,
-            week,
-            roster_entries=state.roster_entries,
-            workspace=workspace,
+    if workspace.snapshot is not snapshot:
+        raise LineupOptimizationError(
+            "lineup workspace belongs to a different canonical snapshot object"
+        )
+    workspace.validate_roster(state.roster_entries)
+    entries = tuple(entry for entry in state.roster_entries if entry.team_id == team_id)
+    if state.scoring_week <= snapshot.final_simulation_week and (
+        isinstance(team_id, bool)
+        or not isinstance(team_id, int)
+        or team_id not in workspace.team_ids
+    ):
+        raise LineupOptimizationError(f"unknown fantasy team ID {team_id!r}")
+    owned = tuple(
+        entry.player_id
+        for entry in entries
+        if entry.lineup_slot_id not in workspace.reserve_slot_ids
+    )
+    return _owned_projected_value(snapshot, owned, state.scoring_week, workspace)
+
+
+def _owned_projected_value(snapshot, owned, first_week, workspace):
+    owned = tuple(sorted(owned))
+    key = first_week, owned
+    cached = workspace.projected_values.get(key)
+    if cached is not None:
+        workspace.projected_values.move_to_end(key)
+        return cached
+    value = math.fsum(
+        optimize_candidate_lineup(
+            snapshot, week, owned, workspace=workspace
         ).total_projected_points
-        for week in range(state.scoring_week, snapshot.final_simulation_week + 1)
+        for week in range(first_week, snapshot.final_simulation_week + 1)
+    )
+    workspace.projected_values[key] = value
+    while len(workspace.projected_values) > 2048:
+        workspace.projected_values.popitem(last=False)
+    return value
+
+
+def _compact_ordinary_ids(state, team_id):
+    prepared = state.prepared
+    team = prepared.team_index(team_id)
+    return tuple(
+        prepared.player_ids[i]
+        for i, owner in enumerate(state.owner_by_player)
+        if owner == team
+        and prepared.slot_kinds[state.slot_by_player[i]] != SlotKind.RESERVE.value
     )
 
 
@@ -411,19 +470,32 @@ def acquisition_plans(snapshot, state, team_id, phase, workspace, prepared, owne
         for pid in prepared.player_ids
         if pid in records and records[pid].projected_lineup_available
     )
-    available = [
-        pid
-        for pid in available
-        if optimistic_coverage_possible(
-            prepared,
-            compact,
-            team_id=team_id,
-            candidate_id=pid,
-            baseline_filled=before.filled_starting_slot_count,
-            starting_slot_ids=tuple(slot.lineup_slot_id for slot in workspace.slots),
-            projected_available=eligible,
+    starter_slots = tuple(slot.lineup_slot_id for slot in workspace.slots)
+    starter_mask = sum(1 << prepared.slot_index(slot) for slot in set(starter_slots))
+    possible_by_mask = {}
+    feasible = []
+    for pid in available:
+        # Every available candidate here is unowned and projected available.
+        # The relaxed matching predicate depends only on starter eligibility,
+        # not identity, position caps, price or projected score. Those remain
+        # independently checked by the actual acquisition/drop execution.
+        signature = (
+            prepared.player_eligible_slot_masks[prepared.player_index(pid)]
+            & starter_mask
         )
-    ]
+        if signature not in possible_by_mask:
+            possible_by_mask[signature] = optimistic_coverage_possible(
+                prepared,
+                compact,
+                team_id=team_id,
+                candidate_id=pid,
+                baseline_filled=before.filled_starting_slot_count,
+                starting_slot_ids=starter_slots,
+                projected_available=eligible,
+            )
+        if possible_by_mask[signature]:
+            feasible.append(pid)
+    available = feasible
     available.sort(
         key=lambda pid: (
             min(
@@ -461,16 +533,14 @@ def acquisition_plans(snapshot, state, team_id, phase, workspace, prepared, owne
                     branch.add_player(
                         team_id=team_id, player_id=pid, lineup_slot_id=slot, phase=phase
                     )
-                    candidate = branch.to_reference()
-                    after = optimize_starting_lineup(
+                    after = optimize_candidate_lineup(
                         snapshot,
-                        team_id,
                         state.scoring_week,
-                        roster_entries=candidate.roster_entries,
+                        _compact_ordinary_ids(branch, team_id),
                         workspace=workspace,
                     )
-                    if after.vacancy_count < before.vacancy_count:
-                        return candidate, after
+                    if len(after.vacant_slots) < before.vacancy_count:
+                        return branch, after
                 except TransactionStateError as error:
                     if error.code in {
                         TransactionErrorCode.AUTHORIZATION_UNRESOLVED,
@@ -494,7 +564,12 @@ def acquisition_plans(snapshot, state, team_id, phase, workspace, prepared, owne
         if choices:
             scored = []
             for (candidate, after), dropped in choices:
-                value = projected_value(snapshot, candidate, team_id, workspace)
+                value = _owned_projected_value(
+                    snapshot,
+                    _compact_ordinary_ids(candidate, team_id),
+                    state.scoring_week,
+                    workspace,
+                )
                 evaluations += 1
                 key = (
                     -value,
@@ -504,7 +579,12 @@ def acquisition_plans(snapshot, state, team_id, phase, workspace, prepared, owne
                 scored.append((key, candidate, after, value))
             key, candidate, after, value = min(scored, key=lambda item: item[0])
             plan = _Plan(
-                candidate, pid, before.vacancy_count, after.vacancy_count, value, key
+                candidate.to_reference(),
+                pid,
+                before.vacancy_count,
+                len(after.vacant_slots),
+                value,
+                key,
             )
             diagnostic = _PlanDiagnostics(
                 len(available),

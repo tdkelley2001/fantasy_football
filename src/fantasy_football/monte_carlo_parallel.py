@@ -154,6 +154,7 @@ class ParallelMonteCarloExecutor:
         self._execution = execution
         self._pool: ProcessPoolExecutor | None = None
         self._active = False
+        self._lineup_workspace = None
 
     def __enter__(self) -> ParallelMonteCarloExecutor:
         if self._active:
@@ -205,7 +206,18 @@ class ParallelMonteCarloExecutor:
         workers_used = min(self._execution.worker_count, len(path_chunks))
         started = time.perf_counter()
         if workers_used == 1:
-            batch = run_monte_carlo_batch(self._snapshot, config, self._model)
+            if self._lineup_workspace is None:
+                from fantasy_football.lineup_optimizer import (
+                    prepare_lineup_optimization,
+                )
+
+                self._lineup_workspace = prepare_lineup_optimization(self._snapshot)
+            batch = run_monte_carlo_batch(
+                self._snapshot,
+                config,
+                self._model,
+                _lineup_workspace=self._lineup_workspace,
+            )
         else:
             if self._pool is None:
                 raise ParallelExecutionError("parallel executor is not active")

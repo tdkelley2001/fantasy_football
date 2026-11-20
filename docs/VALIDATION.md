@@ -89,38 +89,67 @@ Keep all six files unchanged:
 
 ### Consolidated execution benchmark and scope
 
-The reproducible credential-free workload in
-[benchmark_integrated_season.py](../benchmarks/benchmark_integrated_season.py)
-uses 14 synthetic teams, 1,050 canonical players, 224 rostered players, nine
-starting slots plus seven bench slots per team, and eight scoring weeks with
-championship byes and a two-week final plus consolation placements. It exercises
-full-universe Normal draws, ordinary weekly coordination and all-team summary
-aggregation. Its rosters have projected coverage: it is not a stress benchmark
-of forced drops or IR branching. Those behaviors have hand-checkable tests in
-[test_automatic_rosters.py](../tests/test_automatic_rosters.py).
+[benchmark_season_execution.py](../benchmarks/benchmark_season_execution.py)
+compares original V1 (`4ec1d2e`), native V2 (`da4d49c`), the initial consolidated
+implementation (`bb7b5fd`) and the native prepared implementation. Each runs in
+an isolated process on the same synthetic 14-team, 1,050-player, 224-rostered,
+nine-starter/eight-week configuration, with championship byes, a two-week final
+and consolation placements. The calendar uses monotone synthetic period IDs to
+satisfy native V2's narrower interface; production calendar IDs are not changed.
 
-On Windows 11 build 26300, Python 3.12.10 x64, the identified 100-path workload
-produced the following fresh-process measurements. Memory is the **driver**
-process's OS peak working set, including imports/preparation; parallel worker
-memory is not included. Timing covers execution/preparation/aggregation, not
-fixture construction, and includes worker startup in the parallel case.
+The baseline has projected roster coverage. The active condition deliberately
+stresses simultaneous K/TE/DST absences, repeated waiver claims, joint IR moves,
+forced drops, future reentry and path-dependent standings-based priority. It
+produces 42 acquisitions and 94 IR transitions per consolidated path. This is a
+synthetic stress fixture, not an empirical NFL population or typical-manager
+frequency estimate. All 8,400 player-week records are nonmissing (including
+explicit zeros), making full-universe generation intentionally draw-heavy.
 
-| Policy / execution | Seconds | Paths / second | Driver peak MiB |
-|---|---:|---:|---:|
-| V1 / sequential | 26.90 | 3.72 | 65.9 |
-| Consolidated / sequential | 28.00 | 3.57 | 67.5 |
-| Consolidated / two workers, ten paths/task | 23.39 | 4.28 | 65.6 |
+Native V2 is timed with an adapter supplying the **same full-universe V1 Normal
+model and scenario digest**, not its original starter-only proportional/clamped
+model. Its manager/drop/IR/release, seeding and narrower placement/aggregation
+contracts still differ; prototype paths finishing do not establish complete V1
+capability or provide a correctness oracle. Original V1 retains its legacy V(R)
+policy. Only the two consolidated versions share the approved new roster policy.
 
-All three produced the exact same path-result digest
-`ffb1a299d146a8b678f90824bdd39d20d036671c8fb952959d298e0adb3120ab`;
-the opt-in policy deliberately has a different configuration identity. The
-observed sequential overhead is about 4.1%; these single workload measurements
-are not a universal speedup or precision/runtime guarantee. A short profile
-identified repeated roster validation and preparation, motivating bounded
-snapshot-bound caches and reuse per batch/worker. No outcome formula or horizon
-was shortened. There was no retained real-league snapshot available for this
-run; this is **Verified by tests** synthetic behavior, not live ESPN validation,
-an empirical manager-policy validation or release acceptance.
+On Windows 11 build 26300, Python 3.12.10 x64, fresh-process measurements include
+input preparation, player scoring, transactions, lineups, progression, postseason
+and aggregation. Steady throughput separately excludes the first cold path and
+batch aggregation. Small two-path and medium ten-path comparisons precede larger
+runs; original V1's active two-path run exceeded a 30-second bound and is not
+reported as completed. Full commands, component times, digests and verification
+results are retained in [PR #161](https://github.com/tdkelley2001/fantasy_football/pull/161).
+
+| Ten-path condition | Original V1 seconds | Native V2 + Normal adapter seconds | Initial consolidated seconds | Native prepared seconds |
+|---|---:|---:|---:|---:|
+| Baseline | 25.39 | 3.62 | 4.75 | 2.04 |
+| Transaction-active | Not practical after small-run timeout | 5.96 | 91.09 | 13.52 |
+
+The active comparison retains the full remaining horizon and matches the initial
+consolidated path digest; it does not substitute native V2's cheaper manager
+policy. Larger final-code runs measured 200 baseline paths in 15.57 seconds
+sequentially and 11.92 seconds with two workers, with the identical full path
+digest. Fifty active paths completed in 39.02 seconds sequentially and 29.44 with
+two workers, also with identical path digests, including 2,100 acquisitions
+and 4,700 IR transitions per run. These measurements are observations, not a universal
+speed or precision/runtime guarantee.
+
+Memory sampling uses benchmark-only psutil 7.2.2 and sums RSS for the simulation
+process **and all descendants**, including workers; shared pages are counted per
+process. The larger runs peaked at 66.4 MiB (sequential baseline), 151.3 MiB
+(two-worker baseline), 136.3 MiB (sequential active) and 248.1 MiB (two-worker
+active). This replaces the earlier driver-only
+comparison; it is sampled process-tree RSS, not an exact private-memory measure.
+
+The 10,000-path/60-second objective and ten-second stretch are **not achieved**;
+10,000-path runs were not attempted at these observed rates. Full-universe
+historical outcome generation/identity dominates the stable workload, while exact
+full-horizon lineup valuation remains the active-workload cost. Further compiled
+kernels would require the same byte-level and independent-reference gates, not a
+shorter horizon, reduced player universe or changed stochastic policy. No real
+league, live ESPN, browser, clean-machine or release validation is claimed. This
+is **Verified by tests** synthetic execution evidence; empirical validity and
+remaining inference/release obligations stay separate.
 
 ## Empirical validity
 
