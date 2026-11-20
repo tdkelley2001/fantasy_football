@@ -412,9 +412,17 @@ def rank_standings(
         secondary = next((rule for rule in snapshot.rules.interpretations
                           if rule.rule_id == secondary_id), None)
         tied_keys = [(row.winning_percentage, row.points_for) for row in rows.values()]
-        if (secondary is not None and secondary.status is InterpretationStatus.UNDERSTOOD
-                and secondary.normalized_value != "random"
-                and len(tied_keys) != len(set(tied_keys))):
+        if (
+            secondary is not None
+            and len(tied_keys) != len(set(tied_keys))
+            and (
+                secondary.status is InterpretationStatus.UNSUPPORTED
+                or (
+                    secondary.status is InterpretationStatus.UNDERSTOOD
+                    and secondary.normalized_value != "random"
+                )
+            )
+        ):
             raise WeeklyEngineError(
                 f"configured secondary tiebreaker {secondary_id!r} is unsupported; fallback cannot override it"
             )
