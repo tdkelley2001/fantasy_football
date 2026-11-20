@@ -87,6 +87,79 @@ def build_current_week_input(
         ) from exc
 
 
+def _reconcile_standings_prefix(teams, schedule, prior_ids, regular_count):
+    """Verify completed standings using exact decimal source amounts."""
+    historical = defaultdict(lambda: [0, 0, 0, Fraction(0), Fraction(0)])
+    settled = set()
+    historical_teams = set()
+    known_teams = {team.team_id for team in teams}
+    for game in schedule:
+        pid = game.get("matchupPeriodId")
+        if pid not in prior_ids:
+            continue
+        winner = game.get("winner")
+        _require(
+            winner in {"HOME", "AWAY", "TIE"},
+            "Prior fantasy matchup settlement is unresolved.",
+        )
+        _require(
+            isinstance(game.get("home"), dict) and isinstance(game.get("away"), dict),
+            "Historical matchup pairing is incomplete.",
+        )
+        for side in ("home", "away"):
+            team_id = game[side].get("teamId")
+            _require(
+                team_id in known_teams and (pid, team_id) not in historical_teams,
+                "Historical matchup contains an unknown or repeated team.",
+            )
+            historical_teams.add((pid, team_id))
+        settled.add(pid)
+        # ESPN cumulative standings are regular-season standings. Previous
+        # postseason periods do not add another regular-season result.
+        if pid > regular_count:
+            continue
+        for side, other in (("home", "away"), ("away", "home")):
+            points = game[side].get("totalPoints")
+            against = game[other].get("totalPoints")
+            _require(
+                type(points) in (int, float)
+                and math.isfinite(points)
+                and type(against) in (int, float)
+                and math.isfinite(against),
+                "Historical fantasy scores are missing or invalid.",
+            )
+            row = historical[game[side].get("teamId")]
+            row[0] += winner == side.upper()
+            row[1] += winner == other.upper()
+            row[2] += winner == "TIE"
+            row[3] += Fraction(str(points))
+            row[4] += Fraction(str(against))
+    _require(
+        settled == prior_ids,
+        "Historical standings cutoff omits a prior matchup period.",
+    )
+    for pid in prior_ids:
+        if pid <= regular_count:
+            _require(
+                {team for period_id, team in historical_teams if period_id == pid}
+                == known_teams,
+                "Historical standings prefix lacks complete team coverage.",
+            )
+    for team in teams:
+        _require(
+            tuple(historical[team.team_id])
+            == (
+                team.wins,
+                team.losses,
+                team.ties,
+                Fraction(str(team.points_for)),
+                Fraction(str(team.points_against)),
+            ),
+            "Cumulative standings do not reconcile with the completed matchup prefix.",
+        )
+    return settled
+
+
 def _build_current_week_input(
     snapshot: LeagueSnapshot, responses: Sequence[CapturedResponse]
 ) -> MonteCarloPartialWeekInput:
@@ -158,75 +231,12 @@ def _build_current_week_input(
     prior_ids = {
         int(pid) for pid, weeks in configured_periods.items() if max(weeks) < start
     }
-    historical = defaultdict(lambda: [0, 0, 0, 0.0, 0.0])
-    settled = set()
-    historical_teams = set()
-    known_teams = {team.team_id for team in snapshot.teams}
-    for game in schedule:
-        pid = game.get("matchupPeriodId")
-        if pid not in prior_ids:
-            continue
-        winner = game.get("winner")
-        _require(
-            winner in {"HOME", "AWAY", "TIE"},
-            "Prior fantasy matchup settlement is unresolved.",
-        )
-        _require(
-            isinstance(game.get("home"), dict) and isinstance(game.get("away"), dict),
-            "Historical matchup pairing is incomplete.",
-        )
-        for side in ("home", "away"):
-            team_id = game[side].get("teamId")
-            _require(
-                team_id in known_teams and (pid, team_id) not in historical_teams,
-                "Historical matchup contains an unknown or repeated team.",
-            )
-            historical_teams.add((pid, team_id))
-        settled.add(pid)
-        # ESPN cumulative standings are regular-season standings. Previous
-        # postseason periods do not add another regular-season result.
-        if pid > root["settings"]["scheduleSettings"]["matchupPeriodCount"]:
-            continue
-        for side, other in (("home", "away"), ("away", "home")):
-            points = game[side].get("totalPoints")
-            against = game[other].get("totalPoints")
-            _require(
-                type(points) in (int, float)
-                and math.isfinite(points)
-                and type(against) in (int, float)
-                and math.isfinite(against),
-                "Historical fantasy scores are missing or invalid.",
-            )
-            row = historical[game[side].get("teamId")]
-            row[0] += winner == side.upper()
-            row[1] += winner == other.upper()
-            row[2] += winner == "TIE"
-            row[3] += points
-            row[4] += against
-    _require(
-        settled == prior_ids,
-        "Historical standings cutoff omits a prior matchup period.",
+    settled = _reconcile_standings_prefix(
+        snapshot.teams,
+        schedule,
+        prior_ids,
+        root["settings"]["scheduleSettings"]["matchupPeriodCount"],
     )
-    regular_count = root["settings"]["scheduleSettings"]["matchupPeriodCount"]
-    for pid in prior_ids:
-        if pid <= regular_count:
-            _require(
-                {team for period_id, team in historical_teams if period_id == pid}
-                == known_teams,
-                "Historical standings prefix lacks complete team coverage.",
-            )
-    for team in snapshot.teams:
-        _require(
-            tuple(historical[team.team_id])
-            == (
-                team.wins,
-                team.losses,
-                team.ties,
-                team.points_for,
-                team.points_against,
-            ),
-            "Cumulative standings do not reconcile with the completed matchup prefix.",
-        )
 
     player_by_id = {p.player_id: p for p in snapshot.players}
     projections = {

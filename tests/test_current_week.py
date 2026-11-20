@@ -2,11 +2,13 @@
 
 from copy import deepcopy
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 from fantasy_football.current_week import (
     CurrentWeekEvidenceError,
+    _reconcile_standings_prefix,
     _reconciled_current_total,
     build_current_week_input,
 )
@@ -217,3 +219,29 @@ def test_started_game_without_completion_has_no_approved_sampler(tmp_path):
         CurrentWeekEvidenceError, match="no approved remaining-performance model"
     ):
         build_current_week_input(snapshot, responses)
+
+
+def test_historical_standings_reconcile_exact_decimal_totals():
+    teams = [
+        SimpleNamespace(
+            team_id=1, wins=2, losses=0, ties=0, points_for=30.3, points_against=3.3
+        ),
+        SimpleNamespace(
+            team_id=2, wins=0, losses=2, ties=0, points_for=3.3, points_against=30.3
+        ),
+    ]
+    schedule = [
+        {
+            "matchupPeriodId": period,
+            "winner": "HOME",
+            "home": {"teamId": 1, "totalPoints": home},
+            "away": {"teamId": 2, "totalPoints": away},
+        }
+        for period, home, away in [(1, 10.1, 1.1), (2, 20.2, 2.2)]
+    ]
+    assert _reconcile_standings_prefix(teams, schedule, {1, 2}, 2) == {1, 2}
+    teams[0].points_for = 30.300000000000004
+    with pytest.raises(
+        CurrentWeekEvidenceError, match="Cumulative standings do not reconcile"
+    ):
+        _reconcile_standings_prefix(teams, schedule, {1, 2}, 2)

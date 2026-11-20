@@ -57,3 +57,31 @@ test("startup prefers latest configured-league evidence over saved selection and
  expect(await screen.findByRole("heading",{name:"Latest configured league"})).toBeInTheDocument();
  expect(localStorage.getItem("war-room-snapshot")).toBe("latest");
 });
+
+test("saved snapshots remain selectable when the configured season has no match", async () => {
+  const user = userEvent.setup();
+  vi.spyOn(globalThis, "fetch").mockImplementation(input => {
+    const url = String(input);
+    if (url.endsWith("/health")) return response(health);
+    if (url.endsWith("/snapshots")) return response([snapshot]);
+    if (url.endsWith("/snapshots/" + snapshot.snapshot_id)) return response(snapshot);
+    if (url.includes("/runs?")) return response([]);
+    if (url.endsWith("/refresh/profile")) return response({
+      profile_id: "configured_local_league",
+      league_id: snapshot.league_id,
+      season: snapshot.season + 1,
+      credential_mode: "public",
+      manual_rule_configuration_available: false,
+      automatic_refresh_enabled: false,
+    });
+    throw new Error(url);
+  });
+  render(<App/>);
+  await screen.findByRole("heading", {name: "No league data yet"});
+  await openSnapshots(user);
+  const selector = screen.getByRole("combobox", {name: "Active snapshot"});
+  expect(selector).toHaveValue("");
+  await user.selectOptions(selector, snapshot.snapshot_id);
+  await user.keyboard("{Escape}");
+  expect(await screen.findByRole("heading", {name: snapshot.league_name!})).toBeInTheDocument();
+});
