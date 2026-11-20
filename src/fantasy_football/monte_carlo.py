@@ -350,6 +350,16 @@ def simulation_configuration_fingerprint(
         }
     if config.effective_trades:
         payload["effective_trades_v1"] = _deterministic_value(config.effective_trades)
+        if (
+            any(
+                trade.scoring_week == snapshot.first_simulation_week
+                for trade in config.effective_trades
+            )
+            and config.partial_week is not None
+        ):
+            payload["effective_trade_current_lineup"] = (
+                "exact_legal_roster_assignment_v1"
+            )
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")

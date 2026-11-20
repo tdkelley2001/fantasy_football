@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 
 from fantasy_football.canonical.model import SlotKind
 from fantasy_football.evolving_state import validate_evolving_state
+from fantasy_football.lineup_optimizer import optimize_roster_slots
 from fantasy_football.partial_week import (
     LockState,
     PlayerScoreState,
@@ -229,6 +230,16 @@ def traded_roster(snapshot, entries, trade, *, evidence=None):
         if row.scoring_week == trade.scoring_week
     }
     result = dict(existing)
+    if evidence is not None:
+        projections = {
+            item.player_id: (
+                0.0
+                if item.score_state is PlayerScoreState.NONPARTICIPATING
+                else projections[item.player_id]
+            )
+            for item in evidence.players
+            if item.player_id not in unavailable
+        }
 
     def assign(pid, visited, slots, occupied):
         for slot in slots:
@@ -259,18 +270,25 @@ def traded_roster(snapshot, entries, trade, *, evidence=None):
                 slot for slot in slots if slot[0] == existing[pid].lineup_slot_id
             )
             slots.remove(slot)
-        occupied = {}
-
-        # Higher projected players are placed last so an augmenting chain gives
-        # them first choice of available starter slots.
-        for pid in sorted(
-            set(roster) - fixed, key=lambda pid: (projections.get(pid, 0), -pid)
-        ):
-            if not assign(pid, set(), slots, occupied):
-                raise EffectiveTradeError(
-                    f"Team {team} cannot fit the complete trade around its locked lineup and configured roster slots."
-                )
-        for (slot_id, _), pid in occupied.items():
+        movable = set(roster) - fixed
+        if evidence is not None:
+            placement = optimize_roster_slots(
+                tuple(slot for slot in slots if roles[slot[0]] is SlotKind.STARTER),
+                tuple(slot for slot in slots if roles[slot[0]] is not SlotKind.STARTER),
+                {pid: players[pid].eligible_lineup_slot_ids for pid in movable},
+                {pid: projections[pid] for pid in movable if pid in projections},
+            )
+        else:
+            occupied = {}
+            for pid in sorted(movable, key=lambda pid: (projections.get(pid, 0), -pid)):
+                if not assign(pid, set(), slots, occupied):
+                    break
+            placement = {pid: slot_id for (slot_id, _), pid in occupied.items()}
+        if placement is None or placement.keys() != movable:
+            raise EffectiveTradeError(
+                f"Team {team} cannot fit the complete trade around its locked lineup and configured roster slots."
+            )
+        for pid, slot_id in placement.items():
             result[pid] = replace(
                 existing[pid],
                 team_id=team,

@@ -974,6 +974,10 @@ def simulate_deterministic_season(
             ).encode("utf-8")
         ).hexdigest()
         configuration_provenance += (f"effective_trades:v1:{trade_digest}",)
+        if current_trades and partial_week is not None:
+            configuration_provenance += (
+                "effective_trade_current_lineup:exact_legal_roster_assignment_v1",
+            )
     if partial_week is not None:
         configuration_provenance += (f"partial_week:v1:{partial_identity}",)
     phases = _phase_by_week(snapshot)

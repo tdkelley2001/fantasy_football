@@ -379,3 +379,135 @@ def test_source_trade_restriction_does_not_clear_at_next_boundary(tmp_path):
     partial = build_current_week_input(snapshot, sources)
     _, eligibility = current_trade_eligibility(snapshot, partial, sources)
     assert 2 not in eligibility
+
+
+def test_traded_roster_maximizes_flex_value_under_full_roster_constraints():
+    from itertools import permutations
+    from types import SimpleNamespace as Record
+
+    from fantasy_football.canonical.model import RosterEntry, SlotKind
+    from fantasy_football.effective_trades import (
+        EffectiveTrade,
+        EffectiveTradeError,
+        TradeTransfer,
+        traded_roster,
+    )
+    from fantasy_football.partial_week import LockState
+
+    # Two overlapping starter positions, two differently eligible bench slots,
+    # and a third starter already locked. The old matcher gave 4/FLEX to
+    # player 1 and position 0 to player 4 (13 points instead of 20).
+    slots = (0, 4, 20, 21)
+    eligible = {
+        1: (0, 4, 20, 21),
+        2: (0, 4, 21),
+        3: (0, 20, 21),
+        4: (0, 4, 6, 20),
+        5: (6,),
+        6: (0,),
+        7: (20,),
+    }
+    projections = {1: 1.0, 2: 4.0, 3: 8.0, 4: 12.0, 5: 999.0, 6: 2.0, 7: 100.0}
+    snapshot = Record(
+        teams=(Record(team_id=1), Record(team_id=2)),
+        rules=Record(
+            lineup_slots=tuple(
+                Record(slot_id=slot, kind=kind, capacity=count)
+                for slot, kind, count in (
+                    (0, SlotKind.STARTER, 1),
+                    (4, SlotKind.STARTER, 1),
+                    (6, SlotKind.STARTER, 1),
+                    (20, SlotKind.BENCH, 2),
+                    (21, SlotKind.BENCH, 1),
+                )
+            )
+        ),
+        players=tuple(
+            Record(player_id=pid, eligible_lineup_slot_ids=allowed)
+            for pid, allowed in eligible.items()
+        ),
+        player_weeks=tuple(
+            Record(player_id=pid, scoring_week=11, effective_projection=points)
+            for pid, points in projections.items()
+        ),
+    )
+    entries = tuple(
+        RosterEntry(pid, team, slot, team)
+        for pid, team, slot in (
+            (1, 1, 4),
+            (2, 1, 21),
+            (3, 1, 20),
+            (4, 2, 0),
+            (5, 1, 6),
+            (6, 1, 0),
+            (7, 1, 20),
+        )
+    )
+    evidence = Record(
+        lineups=tuple(
+            Record(
+                player_id=pid,
+                lock_state=(
+                    LockState.VERIFIED_LOCKED
+                    if pid in (5, 7)
+                    else LockState.VERIFIED_CHANGEABLE
+                ),
+            )
+            for pid in eligible
+        ),
+        players=tuple(
+            Record(
+                player_id=pid,
+                score_state=(
+                    PlayerScoreState.COMPLETED_FIXED
+                    if pid == 5
+                    else PlayerScoreState.NONPARTICIPATING
+                    if pid == 4
+                    else PlayerScoreState.UNSTARTED
+                ),
+            )
+            for pid in eligible
+        ),
+    )
+    trade = EffectiveTrade(11, (TradeTransfer(4, 2, 1), TradeTransfer(6, 1, 2)))
+    for incoming_points in (12.0, 0.0):
+        if incoming_points:
+            tested = Record(**vars(evidence))
+            tested.players = tuple(
+                Record(player_id=4, score_state=PlayerScoreState.UNSTARTED)
+                if row.player_id == 4
+                else row
+                for row in evidence.players
+            )
+        else:
+            tested = evidence
+        result = traded_roster(snapshot, entries, trade, evidence=tested)
+        expected = max(
+            sum(
+                (incoming_points if pid == 4 else projections[pid])
+                for pid, slot in zip((1, 2, 3, 4), assignment, strict=True)
+                if slot in (0, 4)
+            )
+            for assignment in permutations(slots)
+            if all(
+                slot in eligible[pid]
+                for pid, slot in zip((1, 2, 3, 4), assignment, strict=True)
+            )
+        )
+        assert expected == (20.0 if incoming_points else 12.0)
+        assert (
+            sum(
+                incoming_points if row.player_id == 4 else projections[row.player_id]
+                for row in result
+                if row.team_id == 1 and row.lineup_slot_id in (0, 4)
+            )
+            == expected
+        )
+        assert next(row for row in result if row.player_id == 5) == entries[4]
+        assert next(row for row in result if row.player_id == 7) == entries[6]
+        assert next(row for row in result if row.player_id == 4).team_id == 1
+        assert traded_roster(snapshot, entries[::-1], trade, evidence=tested) == result
+
+    overfull = EffectiveTrade(11, (TradeTransfer(4, 2, 1),))
+    with pytest.raises(EffectiveTradeError, match="cannot fit the complete trade"):
+        traded_roster(snapshot, entries, overfull, evidence=evidence)
