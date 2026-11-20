@@ -462,33 +462,20 @@ class ApplicationService:
     def _simulation(
         configuration, *, initial_state=None, loaded=None
     ) -> MonteCarloConfig:
-        automatic = None
-        if configuration.automatic_roster_policy == "mandatory_marginal_lineup_v1":
-            from fantasy_football.automatic_rosters import AutomaticRosterPolicy
-            from fantasy_football.espn_adapter import _raw_json_bytes
+        from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snapshot
 
-            if loaded is None:
-                raise ApplicationServiceError(
-                    "automatic_policy_snapshot_required",
-                    "invalid_request",
-                    "Automatic management requires a loaded immutable snapshot.",
-                )
-            automatic = AutomaticRosterPolicy(
-                loaded.snapshot.snapshot_id,
-                tuple(
-                    (
-                        item.response.source_id,
-                        _raw_json_bytes(item.response.payload).decode("utf-8"),
-                    )
-                    for item in loaded.raw_sources
-                    if item.response.view == "kona_player_info"
-                ),
-                configuration.standings_fallback_seed,
+        if loaded is None:
+            raise ApplicationServiceError(
+                "automatic_policy_snapshot_required",
+                "invalid_request",
+                "Automatic management requires a loaded immutable snapshot.",
             )
+        automatic = automatic_policy_from_loaded_snapshot(
+            loaded, configuration.standings_fallback_seed
+        )
         partial = None
         if (
-            loaded is not None
-            and loaded.snapshot.live_scoring is not None
+            loaded.snapshot.live_scoring is not None
             and (
                 loaded.snapshot.live_scoring.partial_week_simulation_required
                 or configuration.use_observed_current_week_lineup

@@ -207,6 +207,8 @@ class SnapshotRefreshCoordinator:
         operation = "configuration"
         try:
             settings, manual_config = self._configuration()
+            operation = "storage"
+            self.dependencies.store.check_available()
             operation = "retrieval"
             result = self.dependencies.adapter(
                 settings,

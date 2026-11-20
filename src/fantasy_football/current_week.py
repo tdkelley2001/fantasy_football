@@ -88,8 +88,9 @@ def build_current_week_input(
 
 
 def _reconcile_standings_prefix(teams, schedule, prior_ids, regular_count):
-    """Verify completed standings using exact decimal source amounts."""
+    """Verify completed standings against exact source totals."""
     historical = defaultdict(lambda: [0, 0, 0, Fraction(0), Fraction(0)])
+    source_order_totals = defaultdict(lambda: [0.0, 0.0])
     settled = set()
     historical_teams = set()
     known_teams = {team.team_id for team in teams}
@@ -134,6 +135,9 @@ def _reconcile_standings_prefix(teams, schedule, prior_ids, regular_count):
             row[2] += winner == "TIE"
             row[3] += Fraction(str(points))
             row[4] += Fraction(str(against))
+            totals = source_order_totals[game[side]["teamId"]]
+            totals[0] += points
+            totals[1] += against
     _require(
         settled == prior_ids,
         "Historical standings cutoff omits a prior matchup period.",
@@ -146,14 +150,17 @@ def _reconcile_standings_prefix(teams, schedule, prior_ids, regular_count):
                 "Historical standings prefix lacks complete team coverage.",
             )
     for team in teams:
+        wins, losses, ties, points_for, points_against = historical[team.team_id]
+        reported = (team.points_for, team.points_against)
+        # The live capture reports binary sums in source schedule order.
+        # Other snapshots may report exact decimal sums. Both comparisons
+        # are exact and require the same completed matchup prefix.
         _require(
-            tuple(historical[team.team_id])
-            == (
-                team.wins,
-                team.losses,
-                team.ties,
-                Fraction(str(team.points_for)),
-                Fraction(str(team.points_against)),
+            (wins, losses, ties) == (team.wins, team.losses, team.ties)
+            and (
+                (points_for, points_against)
+                == tuple(Fraction(str(value)) for value in reported)
+                or tuple(source_order_totals[team.team_id]) == reported
             ),
             "Cumulative standings do not reconcile with the completed matchup prefix.",
         )

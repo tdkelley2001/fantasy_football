@@ -116,6 +116,9 @@ Profile availability requires YAML to parse and validate for the configured leag
 
 ## Refresh and choose validated data
 
+If the app reports that the configured store is unavailable, restore access to the original database and choose **Try again**. If the database moved, restart with the correct database path. **Open refresh** shows refresh status and allows a retry after storage is available. Refresh uses the same configured store and checks it before contacting ESPN.
+
+
 1. Open **Refresh ESPN league**. Confirm the configured league, season and public/private access mode. If the profile is unavailable, correct its reported configuration problem first; credentials remain server-side.
 2. Submit the refresh. The browser sends no explicit first week and preserves the ESPN current scoring period. Completed and unstarted games can be simulated when lineup, score, standings and carry evidence reconcile. In-progress games or unresolved evidence still block execution.
 3. Review validation findings, missing projections, explicit zeros, unresolved capabilities and the published snapshot ID. A snapshot is an immutable as-of collection of league evidence, not a continuously updated live model. Each publication appends a new identity rather than rewriting the earlier snapshot.
@@ -133,15 +136,8 @@ Missing projections are not confirmed actual zeros or proof a player will not pa
 
 ## Run a baseline and evaluate hypothetical changes
 
-Existing application controls continue to use the V1 policy. Advanced API
-callers may explicitly select the
-[optional marginal-lineup roster policy](TECHNICAL_REFERENCE.md#automatic-roster-execution)
-in simulation configuration; it uses ownership observations retained with the
-selected immutable snapshot and fails when evidence needed for a drop is absent.
-An optional standings fallback seed is explicit modeled configuration, not a
-substitute for unsupported source rules. No live permissions are inferred and
-no snapshot needs to be rewritten. Keep ordinary V1 settings to reproduce an
-existing V1 numerical checkpoint; opted-in policy identities are incompatible.
+Baseline, Trade Lab and action search use the [mandatory marginal-lineup roster policy](TECHNICAL_REFERENCE.md#automatic-roster-execution) for new simulations. When a required acquisition needs a drop, the policy uses the approved full-horizon lineup valuation and snapshot ownership evidence. Missing evidence required for a drop stops the run. Retained historical results keep their original policy and identity.
+
 
 ### First workflow: baseline, then a specific exchange
 
@@ -272,6 +268,6 @@ For an existing authorized local snapshot store, explicit paths avoid launcher/s
 
 Replace `<snapshot-id>` with a listed UUID and change the database argument to the actual private file. These inspect/verify stored evidence; they do not refresh ESPN or establish current live eligibility. Keep output private. Verification failure needs diagnosis, not editing an immutable row. [DATA](DATA.md#immutable-storage) owns read integrity.
 
-The manual-scenario CLI consumes strict scenario JSON and explicit snapshot/output/model/sampling settings; use the current [CLI contract](TECHNICAL_REFERENCE.md#weekly-integration-and-execution-boundaries), not an invented draft-export/import workflow. The offline `python -m fantasy_football.m0_verification --json` checks historical evidence roles, not live compatibility or release readiness.
+The manual-scenario CLI uses the same mandatory marginal-lineup policy for new runs. It consumes strict scenario JSON and explicit snapshot/output/model/sampling settings; use the current [CLI contract](TECHNICAL_REFERENCE.md#weekly-integration-and-execution-boundaries), not an invented draft-export/import workflow. The offline `python -m fantasy_football.m0_verification --json` checks historical evidence roles, not live compatibility or release readiness.
 
 Actually running `live_scoring_diagnostic --json`, `espn_adapter` or snapshot publication retrieval performs **live network access**. The **adapter and snapshot-publication CLIs** require an explicit `--first-simulation-week` and explicit `--manual-config` when needed; they are not the browser's automatic refresh flow. The diagnostic inspects evidence and does not accept that week argument. A manual week still must pass source/boundary validation. Live credentials/private stores are not needed for developer synthetic checks and are not required for credential-free documentation verification. Follow [retrieval boundaries](USER_GUIDE.md#when-espn-cannot-establish-a-rule) before any authorized live operation.

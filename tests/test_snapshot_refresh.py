@@ -501,3 +501,37 @@ def test_safe_refresh_error_preserves_diagnostic_phase(refresh_system, caplog, p
     category = "source_translation" if phase == "translation" else phase
     assert record.error_code == f"refresh_{category}_failed"
     assert "private cookie and payload" not in record.model_dump_json() + caplog.text
+
+def test_unavailable_configured_store_can_recover_at_same_path(refresh_system, tmp_path):
+    _, _, coordinator = refresh_system
+    path = tmp_path / "unavailable.sqlite3"
+    store = SnapshotStore(path)
+    service = ApplicationService(ApplicationDependencies(store))
+    coordinator.dependencies = replace(coordinator.dependencies, store=store, application=service)
+    adapter = coordinator.dependencies.adapter
+    calls = []
+    def tracked(*args, **kwargs):
+        calls.append(True)
+        return adapter(*args, **kwargs)
+    coordinator.dependencies = replace(coordinator.dependencies, adapter=tracked)
+    with TestClient(create_app(service, refresh_coordinator=coordinator)) as client:
+        assert client.get("/api/v1/health").status_code == 200
+        missing = client.get("/api/v1/snapshots")
+        assert missing.json()["error"]["code"] == "snapshot_store_unavailable"
+        failed = _wait(coordinator, coordinator.submit(_request_model()).refresh_id)
+        assert failed.error_code == "refresh_storage_failed"
+        assert not path.exists()
+        path.write_bytes(b"existing invalid database")
+        corrupt = client.get("/api/v1/snapshots")
+        assert corrupt.json()["error"]["code"] == "snapshot_store_unavailable"
+        failed = _wait(coordinator, coordinator.submit(_request_model()).refresh_id)
+        assert failed.error_code == "refresh_storage_failed"
+        assert path.read_bytes() == b"existing invalid database"
+        assert not calls
+        restored = tmp_path / "restored.sqlite3"
+        SnapshotStore(restored).initialize()
+        restored.replace(path)
+        assert client.get("/api/v1/snapshots").json() == []
+        assert _wait(coordinator, coordinator.submit(_request_model()).refresh_id).status == "completed"
+        assert calls == [True]
+        assert len(client.get("/api/v1/snapshots").json()) == 1

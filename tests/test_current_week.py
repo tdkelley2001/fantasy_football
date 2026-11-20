@@ -240,6 +240,9 @@ def test_historical_standings_reconcile_exact_decimal_totals():
         for period, home, away in [(1, 10.1, 1.1), (2, 20.2, 2.2)]
     ]
     assert _reconcile_standings_prefix(teams, schedule, {1, 2}, 2) == {1, 2}
+    teams[0].points_for = teams[1].points_against = 10.1 + 20.2
+    teams[1].points_for = teams[0].points_against = 1.1 + 2.2
+    assert _reconcile_standings_prefix(teams, schedule, {1, 2}, 2) == {1, 2}
     teams[0].points_for = 30.300000000000004
     with pytest.raises(
         CurrentWeekEvidenceError, match="Cumulative standings do not reconcile"

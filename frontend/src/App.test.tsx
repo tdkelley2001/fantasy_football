@@ -85,3 +85,34 @@ test("saved snapshots remain selectable when the configured season has no match"
   await user.keyboard("{Escape}");
   expect(await screen.findByRole("heading", {name: snapshot.league_name!})).toBeInTheDocument();
 });
+
+test("startup storage failure offers refresh and retry against the same store", async () => {
+  const user = userEvent.setup();
+  let restored = false;
+  vi.spyOn(globalThis, "fetch").mockImplementation(input => {
+    const url = String(input);
+    if (url.endsWith("/health")) return response(health);
+    if (url.endsWith("/snapshots")) return restored ? response([snapshot]) : response({
+      api_schema_version: "1.0",
+      error: {code: "snapshot_store_unavailable", message: "The configured snapshot store is unavailable.",
+        category: "invalid_request", context: {}},
+    }, 422);
+    if (url.endsWith("/snapshots/" + snapshot.snapshot_id)) return response(snapshot);
+    if (url.includes("/runs?")) return response([]);
+    if (url.endsWith("/refresh/profile")) return response({
+      profile_id: "configured_local_league", league_id: snapshot.league_id, season: snapshot.season,
+      credential_mode: "public", manual_rule_configuration_available: false,
+    });
+    if (url.endsWith("/refreshes/current")) return response(null);
+    throw new Error(url);
+  });
+  render(<App/>);
+  await screen.findByText("The configured snapshot store is unavailable.");
+  expect(screen.getByText("Connected")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", {name: "Open refresh"}));
+  expect(await screen.findByRole("dialog", {name: "Refresh ESPN league"})).toBeInTheDocument();
+  await user.click(screen.getByRole("button", {name: "Close refresh"}));
+  restored = true;
+  await user.click(screen.getByRole("button", {name: "Try again"}));
+  expect(await screen.findByRole("heading", {name: snapshot.league_name!})).toBeInTheDocument();
+});

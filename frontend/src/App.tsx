@@ -53,7 +53,7 @@ export function App() {
     const version=++requestVersion.current;
     setLoading(true); setError(undefined);
     try {
-      const [nextHealth, nextSnapshots, nextRuns, profile] = await Promise.all([api.health(signal), api.snapshots(signal), api.runs(signal), api.refreshProfile(signal).catch(()=>undefined)]);
+      const [nextHealth, nextSnapshots, nextRuns, profile] = await Promise.all([api.health(signal).then(value=>{if(!signal?.aborted&&version===requestVersion.current)setHealth(value);return value}), api.snapshots(signal), api.runs(signal), api.refreshProfile(signal).catch(()=>undefined)]);
       if(signal?.aborted||version!==requestVersion.current)return;
       setHealth(nextHealth); setSnapshots(nextSnapshots); setRuns(nextRuns);
       setAutomaticRefresh(profile?.automatic_refresh_enabled===true);
@@ -67,7 +67,7 @@ export function App() {
       } else setSelected(undefined);
     } catch (cause) {
       if (!(cause instanceof DOMException&&cause.name==="AbortError")&&version===requestVersion.current) {
-        setHealth(undefined); setError(cause instanceof ApiError?cause:new ApiError("Unexpected application error.",-1));
+        setError(cause instanceof ApiError?cause:new ApiError("Unexpected application error.",-1));
       }
     } finally { if(!signal?.aborted&&version===requestVersion.current)setLoading(false); }
   };
@@ -88,7 +88,7 @@ export function App() {
   const openRun=(run:BackgroundRunRecord)=>{if(run.snapshot_id!==selected?.snapshot_id)return;setPreferredRun(run.run_id);setDestination(run.run_type==="baseline"?"league":run.run_type==="action_search"?"opportunities":"trades");};
   const retry=()=>{activeController.current?.abort();const controller=new AbortController();activeController.current=controller;void load(controller.signal);};
   const activeRuns=runs.filter(run=>["queued","running","cancel_requested"].includes(run.status));
-  const acceptPublication=useCallback((publication:SnapshotRefreshResult)=>{const snapshot=publication.snapshot;setSnapshots(current=>[snapshot,...current.filter(item=>item.snapshot_id!==snapshot.snapshot_id)]);setSelected(snapshot);setPreferredRun(null);localStorage.setItem("war-room-snapshot",snapshot.snapshot_id);},[]);
+  const acceptPublication=useCallback((publication:SnapshotRefreshResult)=>{const snapshot=publication.snapshot;setSnapshots(current=>[snapshot,...current.filter(item=>item.snapshot_id!==snapshot.snapshot_id)]);setSelected(snapshot);setError(undefined);setPreferredRun(null);localStorage.setItem("war-room-snapshot",snapshot.snapshot_id);},[]);
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to analytical content</a>
@@ -105,7 +105,7 @@ export function App() {
         <button ref={menuTrigger} className="icon-button menu-trigger" aria-label="Open navigation" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu/></button>
       </div>
     </header>
-    {profileUnavailable&&<p role="status" className="runtime-caveat">Configured ESPN connection is unavailable. Displayed saved data has not been verified as the current configured league; open Refresh details to check configuration.</p>}<main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)}/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace activeRuns={activeRuns}/>}</main>
+    {profileUnavailable&&<p role="status" className="runtime-caveat">Configured ESPN connection is unavailable. Displayed saved data has not been verified as the current configured league; open Refresh details to check configuration.</p>}<main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry} refresh={()=>setRefreshOpen(true)}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)}/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace activeRuns={activeRuns}/>}</main>
     <LeagueRefresh open={refreshOpen} onClose={()=>setRefreshOpen(false)} onPublished={acceptPublication} automaticStart={automaticRefresh} leagueName={selected?.league_name} onOpen={()=>setRefreshOpen(true)}/>
     {(menuOpen||contextOpen)&&<div className="scrim" aria-hidden="true" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
     {menuOpen&&<aside ref={menuPanel} className="mobile-menu open" role="dialog" aria-modal="true" aria-label="Mobile primary navigation">
@@ -141,7 +141,7 @@ function drawerFocus(open:boolean,panel:React.RefObject<HTMLElement|null>,close:
 }
 
 function FutureWorkspace({activeRuns}:{activeRuns:readonly BackgroundRunRecord[]}) { return <div className="surface"><section className="hero"><div><span className="eyebrow">Application shell · future workspace</span><h1>League Insights</h1><p>A future analytical workspace; no capability is implied yet.</p></div></section><article className="card placeholder"><div className="placeholder-orbit"><Activity/></div><h2>Foundation connected</h2><p>This destination is intentionally non-operational. No analytical capability is implied by this shell.</p><div className="placeholder-status"><span>{activeRuns.length}</span> active backend runs visible</div></article></div>; }
-function FailureState({error,retry}:{error:ApiError;retry:()=>void}) { const disconnected=error.status===0;return <div className="state-card" role="alert"><div className="state-icon">{disconnected?<Database/>:<ShieldCheck/>}</div><span className="eyebrow">{disconnected?"Local service disconnected":"Request failed"}</span><h1>{disconnected?"Reconnect the decision engine":"The War Room could not load"}</h1><p>{error.message}</p><button className="primary-button" onClick={retry}><RefreshCw/>Try again</button></div>; }
+function FailureState({error,retry,refresh}:{error:ApiError;retry:()=>void;refresh:()=>void}) { const disconnected=error.status===0;const storage=error.code==="snapshot_store_unavailable"||error.code==="snapshot_integrity_failure";return <div className="state-card" role="alert"><div className="state-icon">{disconnected?<Database/>:<ShieldCheck/>}</div><span className="eyebrow">{disconnected?"Local service disconnected":"Request failed"}</span><h1>{disconnected?"Reconnect the decision engine":"The War Room could not load"}</h1><p>{error.message}</p>{storage&&<p>Check that the configured snapshot database is accessible. Restore access to that file, then try again. If its location changed, restart War Room with the correct database path.</p>}<button className="primary-button" onClick={retry}><RefreshCw/>Try again</button>{storage&&<button onClick={refresh}>Open refresh</button>}</div>; }
 function EmptyState({refresh}:{refresh:()=>void}){return <div className="state-card"><div className="state-icon"><Database/></div><span className="eyebrow">Your league</span><h1>No league data yet</h1><p>Refresh your configured ESPN league to get started.</p><button className="primary-button" onClick={refresh}><RefreshCw/>Refresh ESPN league</button></div>;}
 function LoadingState(){return <div className="surface" aria-busy="true" aria-label="Loading War Room"><div className="skeleton hero-skeleton"/><div className="league-grid"><div className="skeleton card"/><div className="skeleton card"/></div></div>;}
 function Info({label,value}:{label:string;value:string}){return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>;}
