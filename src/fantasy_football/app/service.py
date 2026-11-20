@@ -316,6 +316,39 @@ class ApplicationService:
                 + (() if live_ready else ("validated_simulation_boundary",))
             ))),
         )
+        if (
+            live_summary is not None
+            and snapshot.first_simulation_week == live.current_scoring_period
+        ):
+            from fantasy_football.current_week import (
+                CurrentWeekEvidenceError,
+                build_current_week_input,
+            )
+
+            try:
+                partial_input = build_current_week_input(
+                    snapshot, tuple(item.response for item in loaded.raw_sources)
+                )
+                missing_count = sum(
+                    p.score_state.value == "missing"
+                    for p in partial_input.evidence.players
+                )
+                live_summary = live_summary.model_copy(
+                    update={
+                        "current_week_execution_available": True,
+                        "current_week_limitations": (
+                            (
+                                f"Current score/projection unavailable for {missing_count} non-starter(s); no starter contribution is assigned.",
+                            )
+                            if missing_count
+                            else ()
+                        ),
+                    }
+                )
+            except CurrentWeekEvidenceError as exc:
+                live_summary = live_summary.model_copy(
+                    update={"current_week_limitations": (str(exc),)}
+                )
         return SnapshotSummary(
             snapshot_id=loaded.metadata.snapshot_id,
             league_id=snapshot.league_id,
@@ -452,6 +485,30 @@ class ApplicationService:
                 ),
                 configuration.standings_fallback_seed,
             )
+        partial = None
+        if (
+            loaded is not None
+            and loaded.snapshot.live_scoring is not None
+            and (
+                loaded.snapshot.live_scoring.partial_week_simulation_required
+                or configuration.use_observed_current_week_lineup
+            )
+        ):
+            from fantasy_football.current_week import (
+                CurrentWeekEvidenceError,
+                build_current_week_input,
+            )
+
+            try:
+                partial = build_current_week_input(
+                    loaded.snapshot, tuple(item.response for item in loaded.raw_sources)
+                )
+            except CurrentWeekEvidenceError as exc:
+                raise ApplicationServiceError(
+                    "current_week_evidence_unresolved",
+                    "unsupported_configuration",
+                    str(exc),
+                ) from exc
         return MonteCarloConfig(
             master_seed=configuration.master_seed,
             path_count=configuration.path_count,
@@ -464,6 +521,7 @@ class ApplicationService:
             ),
             require_complete=configuration.require_complete,
             initial_evolving_state=initial_state,
+            partial_week=partial,
         )
 
     @staticmethod

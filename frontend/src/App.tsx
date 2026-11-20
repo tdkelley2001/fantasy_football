@@ -37,6 +37,8 @@ export function App() {
   const [contextOpen, setContextOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshOpen,setRefreshOpen]=useState(false);
+  const [automaticRefresh,setAutomaticRefresh]=useState(false);
+  const [profileUnavailable,setProfileUnavailable]=useState(false);
   const [preferredRun,setPreferredRun]=useState<string|null>(null);
   const requestVersion=useRef(0);
   const activeController=useRef<AbortController|undefined>(undefined);
@@ -51,12 +53,14 @@ export function App() {
     const version=++requestVersion.current;
     setLoading(true); setError(undefined);
     try {
-      const [nextHealth, nextSnapshots, nextRuns] = await Promise.all([api.health(signal), api.snapshots(signal), api.runs(signal)]);
+      const [nextHealth, nextSnapshots, nextRuns, profile] = await Promise.all([api.health(signal), api.snapshots(signal), api.runs(signal), api.refreshProfile(signal).catch(()=>undefined)]);
       if(signal?.aborted||version!==requestVersion.current)return;
       setHealth(nextHealth); setSnapshots(nextSnapshots); setRuns(nextRuns);
-      if (nextSnapshots.length) {
-        const saved = localStorage.getItem("war-room-snapshot");
-        const id = nextSnapshots.some(item=>item.snapshot_id===saved) ? saved! : nextSnapshots[0].snapshot_id;
+      setAutomaticRefresh(profile?.automatic_refresh_enabled===true);
+      setProfileUnavailable(profile===undefined);
+      const currentSnapshots=[...(profile?nextSnapshots.filter(item=>item.league_id===profile.league_id&&item.season===profile.season):nextSnapshots)].sort((a,b)=>Date.parse(b.retrieval_finished_at_utc)-Date.parse(a.retrieval_finished_at_utc)||Date.parse(b.published_at_utc)-Date.parse(a.published_at_utc));
+      if (currentSnapshots.length) {
+        const id = currentSnapshots[0].snapshot_id;
         const detail=await api.snapshot(id,signal);
         if(signal?.aborted||version!==requestVersion.current)return;
         setSelected(detail); localStorage.setItem("war-room-snapshot",id);
@@ -92,7 +96,7 @@ export function App() {
       <div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Fantasy intelligence</span></div></div>
       <nav className="desktop-nav" aria-label="Primary navigation"><NavButtons destination={destination} navigate={navigate}/></nav>
       <div className="header-tools">
-        <label className="snapshot-control"><span>League</span><select aria-label="Active snapshot" aria-busy={loading} value={selected?.snapshot_id??""} disabled={!snapshots.length} onChange={event=>void chooseSnapshot(event.target.value)}>{!snapshots.length&&<option value="">No snapshots</option>}{snapshots.map(item=><option key={item.snapshot_id} value={item.snapshot_id}>{item.league_name??`League ${item.league_id}`} · {item.season}</option>)}</select></label>
+        <div className="snapshot-control"><strong>{selected?.league_name??"Current league"}</strong>{selected&&<small>Updated {formatDate(selected.retrieval_finished_at_utc)}</small>}</div>
         <button className="icon-button" aria-label="Refresh ESPN league" onClick={()=>setRefreshOpen(true)}><RefreshCw/></button>
         <div className="connection-state" title={health?"Local analytical service connected":"Local analytical service offline"}><span className={`status-dot ${health?"online":""}`}/><span>{health?"Connected":"Offline"}</span></div>
         <div className="run-indicator" aria-live="polite"><Activity/><span>{activeRuns.length?`${activeRuns.length} active`:"No active runs"}</span></div>
@@ -101,8 +105,8 @@ export function App() {
         <button ref={menuTrigger} className="icon-button menu-trigger" aria-label="Open navigation" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu/></button>
       </div>
     </header>
-    <main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)}/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace activeRuns={activeRuns}/>}</main>
-    <LeagueRefresh open={refreshOpen} onClose={()=>setRefreshOpen(false)} onPublished={acceptPublication}/>
+    {profileUnavailable&&<p role="status" className="runtime-caveat">Configured ESPN connection is unavailable. Displayed saved data has not been verified as the current configured league; open Refresh details to check configuration.</p>}<main id="main-content" tabIndex={-1}>{loading&&!selected?<LoadingState/>:error?<FailureState error={error} retry={retry}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)}/>:destination==="league"?<LeagueOverview snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter snapshot={selected} runs={runs} onRunsChange={setRuns} openResult={openRun}/>:<FutureWorkspace activeRuns={activeRuns}/>}</main>
+    <LeagueRefresh open={refreshOpen} onClose={()=>setRefreshOpen(false)} onPublished={acceptPublication} automaticStart={automaticRefresh} leagueName={selected?.league_name} onOpen={()=>setRefreshOpen(true)}/>
     {(menuOpen||contextOpen)&&<div className="scrim" aria-hidden="true" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
     {menuOpen&&<aside ref={menuPanel} className="mobile-menu open" role="dialog" aria-modal="true" aria-label="Mobile primary navigation">
       <div className="drawer-head"><div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Navigation</span></div></div><button ref={menuClose} disabled={!menuOpen} className="icon-button" aria-label="Close navigation" onClick={()=>{setMenuOpen(false);menuTrigger.current?.focus();}}><X/></button></div>
@@ -110,7 +114,7 @@ export function App() {
     </aside>}
     <aside ref={contextPanel} className={`context-panel ${contextOpen?"context-open":""}`} role="dialog" aria-modal={contextOpen||undefined} aria-label="League context" aria-hidden={!contextOpen}>
       <div className="context-head"><div><span className="eyebrow">Decision context</span><h2>Source & build</h2></div><button ref={contextClose} disabled={!contextOpen} className="icon-button" aria-label="Close league context" onClick={()=>{setContextOpen(false);contextTrigger.current?.focus();}}><X/></button></div>
-      {selected?<><Info label="Snapshot" value={selected.snapshot_id}/><Info label="Published" value={formatDate(selected.published_at_utc)}/><Info label="Canonical model" value={`Schema v${selected.canonical_schema_version}`}/><Info label="Evidence sources" value={`${selected.source_count} linked`}/><Info label="Simulation horizon" value={`Weeks ${selected.first_simulation_week}–${selected.final_simulation_week}`}/></>:<p>No snapshot selected.</p>}
+      {selected?<><details><summary>Saved snapshots</summary><label className="snapshot-control"><span>League</span><select aria-label="Active snapshot" aria-busy={loading} value={selected?.snapshot_id??""} disabled={!snapshots.length} onChange={event=>void chooseSnapshot(event.target.value)}>{!snapshots.length&&<option value="">No snapshots</option>}{snapshots.map(item=><option key={item.snapshot_id} value={item.snapshot_id}>{item.league_name??`League ${item.league_id}`} · {item.season}</option>)}</select></label></details><Info label="Snapshot" value={selected.snapshot_id}/><Info label="Published" value={formatDate(selected.published_at_utc)}/><Info label="Canonical model" value={`Schema v${selected.canonical_schema_version}`}/><Info label="Evidence sources" value={`${selected.source_count} linked`}/><Info label="Simulation horizon" value={`Weeks ${selected.first_simulation_week}–${selected.final_simulation_week}`}/></>:<p>No snapshot selected.</p>}
       {health&&<div className="build-card"><ShieldCheck/><div><strong>API contract {health.api_schema_version}</strong><span>{health.package_version} · {health.build_revision??"revision unavailable"}</span></div></div>}
     </aside>
   </div>;
@@ -137,7 +141,7 @@ function drawerFocus(open:boolean,panel:React.RefObject<HTMLElement|null>,close:
 
 function FutureWorkspace({activeRuns}:{activeRuns:readonly BackgroundRunRecord[]}) { return <div className="surface"><section className="hero"><div><span className="eyebrow">Application shell · future workspace</span><h1>League Insights</h1><p>A future analytical workspace; no capability is implied yet.</p></div></section><article className="card placeholder"><div className="placeholder-orbit"><Activity/></div><h2>Foundation connected</h2><p>This destination is intentionally non-operational. No analytical capability is implied by this shell.</p><div className="placeholder-status"><span>{activeRuns.length}</span> active backend runs visible</div></article></div>; }
 function FailureState({error,retry}:{error:ApiError;retry:()=>void}) { const disconnected=error.status===0;return <div className="state-card" role="alert"><div className="state-icon">{disconnected?<Database/>:<ShieldCheck/>}</div><span className="eyebrow">{disconnected?"Local service disconnected":"Request failed"}</span><h1>{disconnected?"Reconnect the decision engine":"The War Room could not load"}</h1><p>{error.message}</p><button className="primary-button" onClick={retry}><RefreshCw/>Try again</button></div>; }
-function EmptyState({refresh}:{refresh:()=>void}){return <div className="state-card"><div className="state-icon"><Database/></div><span className="eyebrow">Snapshot library</span><h1>No canonical snapshots yet</h1><p>Connect the configured ESPN league and publish an immutable canonical snapshot.</p><button className="primary-button" onClick={refresh}><RefreshCw/>Refresh ESPN league</button></div>;}
+function EmptyState({refresh}:{refresh:()=>void}){return <div className="state-card"><div className="state-icon"><Database/></div><span className="eyebrow">Your league</span><h1>No league data yet</h1><p>Refresh your configured ESPN league to get started.</p><button className="primary-button" onClick={refresh}><RefreshCw/>Refresh ESPN league</button></div>;}
 function LoadingState(){return <div className="surface" aria-busy="true" aria-label="Loading War Room"><div className="skeleton hero-skeleton"/><div className="league-grid"><div className="skeleton card"/><div className="skeleton card"/></div></div>;}
 function Info({label,value}:{label:string;value:string}){return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>;}
 function formatDate(value:string){return new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(value));}

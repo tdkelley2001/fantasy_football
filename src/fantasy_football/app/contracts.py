@@ -110,6 +110,8 @@ class LiveScoringSummary(ContractModel):
     boundary_rationale: str
     weeks: tuple[ScoringWeekStateSummary, ...]
     unresolved_capabilities: tuple[str, ...]
+    current_week_execution_available: bool = False
+    current_week_limitations: tuple[str, ...] = ()
 
 
 class SnapshotSummary(ContractModel):
@@ -157,6 +159,9 @@ class SimulationConfiguration(ContractModel):
     waiver_boundary: Literal["unresolved", "modeled_weekly_v1"]
     reject_incomplete_valuations: bool = True
     require_complete: bool = True
+    use_observed_current_week_lineup: bool = Field(
+        default=False, strict=True, exclude_if=lambda value: value is False
+    )
     automatic_roster_policy: Literal["legacy_v1", "mandatory_marginal_lineup_v1"] = (
         Field(default="legacy_v1", exclude_if=lambda value: value == "legacy_v1")
     )
@@ -507,6 +512,7 @@ class LeagueRefreshProfile(ContractModel):
     season: Annotated[int, Field(strict=True, ge=2000)]
     credential_mode: Literal["public", "private_credentials_configured"]
     manual_rule_configuration_available: bool
+    automatic_refresh_enabled: bool = False
 
 
 class SnapshotRefreshRequest(ContractModel):
@@ -515,6 +521,9 @@ class SnapshotRefreshRequest(ContractModel):
     league_id: PositiveInt
     season: Annotated[int, Field(strict=True, ge=2000)]
     first_simulation_week: Annotated[int, Field(strict=True, ge=1, le=25)] | None = None
+    startup_refresh: bool = Field(
+        default=False, strict=True, exclude_if=lambda value: value is False
+    )
 
 
 class SnapshotRefreshSubmission(ContractModel):
