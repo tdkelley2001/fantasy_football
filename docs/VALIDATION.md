@@ -127,7 +127,7 @@ results are retained in [PR #161](https://github.com/tdkelley2001/fantasy_footba
 
 The active comparison retains the full remaining horizon and matches the initial
 consolidated path digest; it does not substitute native V2's cheaper manager
-policy. Larger final-code runs measured 200 baseline paths in 15.57 seconds
+policy. At `ede2689`, larger runs measured 200 baseline paths in 15.57 seconds
 sequentially and 11.92 seconds with two workers, with the identical full path
 digest. Fifty active paths completed in 39.02 seconds sequentially and 29.44 with
 two workers, also with identical path digests, including 2,100 acquisitions
@@ -140,6 +140,26 @@ process. The larger runs peaked at 66.4 MiB (sequential baseline), 151.3 MiB
 (two-worker baseline), 136.3 MiB (sequential active) and 248.1 MiB (two-worker
 active). This replaces the earlier driver-only
 comparison; it is sampled process-tree RSS, not an exact private-memory measure.
+
+The targeted exact-kernel follow-up compared `ede2689` with the same inputs,
+seeds and path ranges on the same host, without rerunning historical V1/V2:
+
+| Condition / paths / workers | Before → after seconds | After paths/sec | Before → after peak MiB |
+|---|---:|---:|---:|
+| Baseline / 200 / 1 | 21.17 → 12.23 | 16.35 | 65.0 → 63.6 |
+| Baseline / 200 / 2 | 12.28 → 11.33 | 17.65 | 151.2 → 153.3 |
+| Active / 50 / 1 | 54.03 → 41.38 | 1.21 | 135.9 → 137.5 |
+| Active / 50 / 2 | 31.27 → 29.06 | 1.72 | 251.7 → 249.2 |
+
+All full-path and configuration digests match, including worker parity. Host
+variation is substantial relative to the earlier observations; sequential wall
+time differences alone overstate the isolated kernel gains. Three alternating
+20-path component repeats measured median generation 0.854 → 0.821 seconds and
+20 identical-scenario digest calls 0.235 → 0.171 seconds. Four repeats of a
+16-player/nine-slot assignment microbenchmark measured best 100-solve times
+0.605 → 0.425 seconds; the three-path active profile independently reduced kernel
+cumulative time from 4.77 to 3.39 seconds with identical final path digest.
+No compiled dependency or alternate numerical implementation was adopted.
 
 The 10,000-path/60-second objective and ten-second stretch are **not achieved**;
 10,000-path runs were not attempted at these observed rates. Full-universe

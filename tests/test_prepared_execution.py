@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 from dataclasses import replace
-from decimal import Decimal, Inexact, localcontext
+from decimal import (
+    ROUND_DOWN,
+    ROUND_HALF_EVEN,
+    ROUND_UP,
+    Decimal,
+    Inexact,
+    localcontext,
+)
 
 import pytest
 
@@ -25,7 +34,11 @@ from fantasy_football.lineup_optimizer import (
     _reference_assignment,
     prepare_lineup_optimization,
 )
-from fantasy_football.monte_carlo import MonteCarloError, run_monte_carlo_path
+from fantasy_football.monte_carlo import (
+    MonteCarloError,
+    _scenario_digest,
+    run_monte_carlo_path,
+)
 from fantasy_football.player_outcomes import (
     PreparedNormalOutcomes,
     ProvisionalNormalModel,
@@ -80,6 +93,83 @@ def test_prepared_draws_match_original_serialization_for_signed_zero_missing_and
                 assert prepared.generate_scenario(path) == model.generate_scenario(
                     snapshot, master_seed=seed, path_index=path
                 )
+                scenario = prepared.last_scenario
+                assert _scenario_digest(scenario, prepared) == _scenario_digest(
+                    scenario
+                )
+
+
+def test_prepared_digest_matches_exact_json_and_rejects_unrelated_scenario_identity():
+    snapshot = _snapshot()
+    for magnitude in (0.0, -0.0, 1e-300, -1e100):
+        fixture = replace(
+            snapshot,
+            player_weeks=tuple(
+                replace(row, effective_projection=magnitude)
+                for row in snapshot.player_weeks
+            ),
+        )
+        model = ProvisionalNormalModel(1e-320, 0.0, 'custom:"\\\u03bb')
+        prepared = PreparedNormalOutcomes(fixture, model, -999999999999999999999)
+        scenario = prepared.generate_scenario(999999999999999999999)
+        payload = tuple(
+            (s.player_id, s.season, s.scoring_week, s.points) for s in scenario.scores
+        )
+        expected = hashlib.sha256(
+            json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode(
+                "utf-8"
+            )
+        ).hexdigest()
+        assert _scenario_digest(scenario, prepared) == expected
+        # Equal copies, reordered rows, integers, nonfinite values and altered
+        # coordinates must use the general encoder, never stale row fragments.
+        for other in (
+            replace(scenario),
+            replace(scenario, scores=scenario.scores[::-1]),
+            replace(scenario, scores=(RealizedPlayerScore(-123, 2000, 1, -0.0),)),
+            replace(scenario, scores=(RealizedPlayerScore(1, 2000, 1, 7),)),
+            replace(scenario, scores=(RealizedPlayerScore(1, 2000, 1, float("inf")),)),
+        ):
+            assert prepared.scenario_digest(other) is None
+            assert _scenario_digest(other, prepared) == _scenario_digest(other)
+        prepared.generate_scenario(0)
+        assert prepared.scenario_digest(scenario) is None
+
+
+def test_encoded_assignment_matches_reference_order_vacancies_and_decimal_contexts():
+    randomizer = random.Random(161042)
+    for size in (0, 1, 2, 3, 4, 7, 8, 9, 16):
+        ids = randomizer.sample(range(-100, 100), size)
+        slots = 5
+        candidates = [
+            _Candidate(
+                pid,
+                value,
+                Decimal.from_float(value),
+                tuple(slot for slot in range(slots) if randomizer.randrange(2)),
+            )
+            for pid, value in zip(
+                ids,
+                (randomizer.choice((0.0, 0.1, 1.0, 1e30)) for _ in ids),
+                strict=True,
+            )
+        ]
+        for precision, rounding in (
+            (1, ROUND_DOWN),
+            (3, ROUND_UP),
+            (28, ROUND_HALF_EVEN),
+        ):
+            with localcontext() as context:
+                context.prec, context.rounding = precision, rounding
+                context.clear_flags()
+                expected = _reference_assignment(
+                    candidates, tuple(range(slots)), frozenset(), None
+                )
+                expected_flags = dict(context.flags)
+                context.clear_flags()
+                actual = _native_unlimited_assignment(candidates, slots)
+                assert actual == expected
+                assert dict(context.flags) == expected_flags
 
 
 def test_native_lineup_kernel_matches_readable_oracle_including_decimal_ties():

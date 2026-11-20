@@ -320,18 +320,29 @@ def _vacancy_reason(
 
 
 def _native_unlimited_assignment(candidates, slot_count):
-    """Same Decimal objective/ties; no per-edge state or tie-key objects.
+    """Exact Decimal DP with integer-encoded lexicographic assignments.
 
-    Within one occupancy mask all None positions agree, so tuple comparison
-    of player IDs is exactly the reference assignment tie order.
+    Each slot is a fixed-width digit: ascending player-ID rank, then None.
+    Integer order therefore equals the reference tie key, including vacancies.
+    This avoids constructing assignment tuples on every legal DP edge. Decimal
+    additions retain candidate order, rounding, traps and flags unchanged.
     """
-    states = {0: (Decimal(0), (None,) * slot_count)}
+    player_ids = tuple(sorted(candidate.player_id for candidate in candidates))
+    ranks = {player: rank for rank, player in enumerate(player_ids)}
+    empty = len(player_ids)
+    width = max(1, empty.bit_length())
+    shifts = tuple(width * (slot_count - slot - 1) for slot in range(slot_count))
+    initial = sum(empty << shift for shift in shifts)
+    states = {0: (Decimal(0), initial)}
     for candidate in candidates:
+        moves = tuple(
+            (1 << slot, (ranks[candidate.player_id] - empty) << shifts[slot])
+            for slot in candidate.eligible_slot_indices
+        )
         updated = dict(states)
         for mask, (total, assignment) in states.items():
             value = None
-            for slot in candidate.eligible_slot_indices:
-                bit = 1 << slot
+            for bit, delta in moves:
                 if mask & bit:
                     continue
                 if value is None:
@@ -340,9 +351,7 @@ def _native_unlimited_assignment(candidates, slot_count):
                 old = updated.get(target)
                 if old is not None and value < old[0]:
                     continue
-                proposed = (
-                    assignment[:slot] + (candidate.player_id,) + assignment[slot + 1 :]
-                )
+                proposed = assignment + delta
                 if old is None or value > old[0] or proposed < old[1]:
                     updated[target] = value, proposed
         states = updated
@@ -358,15 +367,17 @@ def _native_unlimited_assignment(candidates, slot_count):
                     mask.bit_count() > best_mask.bit_count()
                     or (
                         mask.bit_count() == best_mask.bit_count()
-                        and _assignment_tie_key(assignment)
-                        < _assignment_tie_key(best[1])
+                        and assignment < best[1]
                     )
                 )
             )
         ):
             best = total, assignment
             best_mask = mask
-    return _State(*best)
+    digits = player_ids + (None,)
+    digit_mask = (1 << width) - 1
+    assignment = tuple(digits[(best[1] >> shift) & digit_mask] for shift in shifts)
+    return _State(best[0], assignment)
 
 
 def _reference_assignment(

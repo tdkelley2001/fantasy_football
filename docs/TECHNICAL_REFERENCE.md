@@ -308,9 +308,20 @@ acquisitions remain indexed until the selected legal effect is materialized.
 `PreparedNormalOutcomes` reuses immutable historical JSON key fragments, preserving
 the full player-week universe, both SHA-256 counters and identical Box–Muller
 operations. It is not a new outcome model or identity. Overridden/custom models
-and partial-week inputs retain their existing generation interface. The
-unlimited-lineup kernel preserves the reference Decimal objective and tie order;
+and partial-week inputs retain their existing generation interface. The common
+draw key is hashed once and its SHA-256 context copied before appending the two
+historical counter bytes; uniform conversion and floating-point operation order
+are unchanged. Prepared integer-coordinate JSON prefixes and finite-float
+`repr` reproduce the existing scenario JSON encoding without intermediate row
+tuples. This digest path accepts only the workspace's last immutable generated
+scenario by object identity; other scenarios use the general JSON encoder. Each
+workspace retains at most one such scenario and one prefix per canonical draw.
+The unlimited-lineup kernel preserves the reference Decimal objective and tie order;
 the readable general solver remains its oracle and handles limited-player cases.
+Fixed-width digits encode ascending player-ID ranks with vacancies ordered last,
+so integer assignment comparisons reproduce the reference lexicographic tie key.
+Only the winning assignment is decoded; legal DP edges, candidate order, Decimal
+rounding/traps/flags and every remaining week's valuation remain unchanged.
 Equal ordered projection/eligibility profiles may reuse a week-free candidate
 lineup, with Decimal context/traps/flags preserved; team/week artifacts remain
 separate. These profile/candidate tables are bounded by the workspace's existing

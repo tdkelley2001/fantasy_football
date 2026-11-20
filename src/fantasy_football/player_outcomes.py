@@ -490,6 +490,8 @@ class PreparedNormalOutcomes:
     def supports(model):
         return (
             type(model) is ProvisionalNormalModel
+            and type(model.base_stddev) in (int, float)
+            and type(model.projection_scale) in (int, float)
             and type(model).generate_scenario is _NORMAL_GENERATE
             and type(model)._standard_normal is _NORMAL_DRAW
         )
@@ -536,6 +538,14 @@ class PreparedNormalOutcomes:
             <= row.scoring_week
             <= snapshot.final_simulation_week
         )
+        self.digest_prefixes = tuple(
+            json.dumps(
+                (player, season, week), separators=(",", ":"), ensure_ascii=True
+            )[:-1]
+            + ","
+            for player, season, week, *_ in self.records
+        )
+        self.last_scenario = None
 
     def generate_scenario(self, path_index):
         if (
@@ -554,8 +564,12 @@ class PreparedNormalOutcomes:
                 points = 0.0
             else:
                 key = prefix + suffix
-                first = int.from_bytes(sha256(key + b"\x00").digest(), "big")
-                second = int.from_bytes(sha256(key + b"\x01").digest(), "big")
+                common = sha256(key)
+                first_counter = common.copy()
+                first_counter.update(b"\x00")
+                first = int.from_bytes(first_counter.digest(), "big")
+                common.update(b"\x01")
+                second = int.from_bytes(common.digest(), "big")
                 u1 = (first + 0.5) / denominator
                 u2 = (second + 0.5) / denominator
                 draw = sqrt(-2.0 * log(u1)) * cos(2.0 * pi * u2)
@@ -565,9 +579,32 @@ class PreparedNormalOutcomes:
                     f"nonfinite generated score for player-week {(player, season, week)}"
                 )
             scores.append(RealizedPlayerScore(player, season, week, points))
-        return DeterministicScoreScenario(
+        scenario = DeterministicScoreScenario(
             f"mc:{self.model_id}:seed={self.seed}:path={path_index}", tuple(scores)
         )
+        self.last_scenario = scenario
+        return scenario
+
+    def scenario_digest(self, scenario):
+        """Exact JSON bytes for this workspace's latest immutable generated tuple.
+
+        Python's JSON encoder uses float.__repr__ for finite floats. Every
+        generated point is a checked built-in float; the immutable integer
+        coordinates were encoded once. Other scenarios use the general encoder.
+        """
+        if scenario is not self.last_scenario:
+            return None
+        payload = (
+            "["
+            + ",".join(
+                prefix + repr(score.points) + "]"
+                for prefix, score in zip(
+                    self.digest_prefixes, scenario.scores, strict=True
+                )
+            )
+            + "]"
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def projection_class_counts(snapshot: LeagueSnapshot) -> tuple[tuple[str, int], ...]:

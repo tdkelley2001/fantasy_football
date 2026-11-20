@@ -369,7 +369,11 @@ def monte_carlo_run_identity(
     )
 
 
-def _scenario_digest(result) -> str:
+def _scenario_digest(result, prepared: PreparedNormalOutcomes | None = None) -> str:
+    if prepared is not None:
+        digest = prepared.scenario_digest(result)
+        if digest is not None:
+            return digest
     payload = tuple(
         (item.player_id, item.season, item.scoring_week, item.points)
         for item in result.scores
@@ -565,7 +569,10 @@ def run_monte_carlo_path(
     summary = MonteCarloPathSummary(
         path_index,
         scenario.scenario_id,
-        _scenario_digest(scenario),
+        _scenario_digest(
+            scenario,
+            lineup_workspace.outcomes if lineup_workspace is not None else None,
+        ),
         season.status,
         season.unresolved_capabilities,
         teams,
