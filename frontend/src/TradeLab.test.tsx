@@ -57,6 +57,9 @@ test("shows the whole exchange week and remembers a deliberate delay", async () 
   await user.click(screen.getByRole("button", {name: /Avery Runner.*Select/}));
   await user.click(screen.getByRole("button", {name: /Casey Quarterback.*Select/}));
   await user.click(screen.getByRole("button", {name: "Add transaction step"}));
+  expect(screen.getByRole("button", {name: "Run Quick Analysis"})).toBeDisabled();
+  expect(screen.getByRole("button", {name: "Evaluate final state"})).toBeDisabled();
+  await user.click(screen.getByRole("button", {name: "Use effective timing"}));
   expect(screen.getByText("Effective week 9")).toBeInTheDocument();
   expect(screen.queryByRole("combobox", {name: "Scoring week"})).toBeNull();
   await user.click(screen.getByRole("button", {name: "Selected week"}));
@@ -68,7 +71,9 @@ test("shows the whole exchange week and remembers a deliberate delay", async () 
   await user.click(screen.getByRole("button", {name: "Evaluate scenario"}));
   await screen.findByText("Evaluation complete");
   const posted = fetch.mock.calls.find(([input]) => String(input).endsWith("/runs/manual-scenario"));
-  expect(JSON.parse(String(posted?.[1]?.body)).scenario.effective_trades).toEqual([
+  const request = JSON.parse(String(posted?.[1]?.body));
+  expect(request.simulation.use_observed_current_week_lineup).toBe(true);
+  expect(request.scenario.effective_trades).toEqual([
     {selected_week: 10, transfers: [
       {player_id: 101, from_team_id: 1, to_team_id: 2},
       {player_id: 201, from_team_id: 2, to_team_id: 1},
@@ -84,7 +89,18 @@ test("runs Quick Analysis then submits the same committed trade for simulation",
   const fetch=mockEvaluation();
   const simulation=fetch.getMockImplementation()!;
   fetch.mockImplementation((input,init)=>String(input).endsWith("/analyses/trade-quick")?json(preview):simulation(input,init));
-  render(<TradeLab snapshot={snapshot}/>);
+  const unplayed: SnapshotSummary = {
+    ...snapshot,
+    live_scoring: {
+      current_scoring_period: 8, last_fully_completed_period: 7,
+      earliest_unresolved_period: null, next_fully_unplayed_period: 8,
+      supported_simulation_week: 8, partial_week_simulation_required: false,
+      boundary_method: "automatic", boundary_rationale: "", weeks: [],
+      unresolved_capabilities: [], current_week_execution_available: true,
+      supported_trade_weeks: [8, 9, 10], player_earliest_trade_weeks: [[101, 8], [201, 8]],
+    },
+  };
+  render(<TradeLab snapshot={unplayed}/>);
   await user.click(screen.getByRole("button",{name:/Avery Runner.*Select/}));
   await user.click(screen.getByRole("button",{name:/Casey Quarterback.*Select/}));
   await user.click(screen.getByRole("button",{name:"Add transaction step"}));
@@ -101,6 +117,10 @@ test("runs Quick Analysis then submits the same committed trade for simulation",
   expect(quick).not.toHaveProperty("precision");
   expect(quick).not.toHaveProperty("outcome_model");
   expect(manual.snapshot).toEqual(quick.snapshot);
+  expect(quick.scenario).not.toHaveProperty("effective_trades");
+  expect(manual.scenario).not.toHaveProperty("effective_trades");
+  expect(manual.simulation.use_observed_current_week_lineup).toBe(false);
+  expect(manual.simulation.ir_policy).toBe(quick.ir_policy);
   expect(manual.scenario.changes).toEqual(quick.scenario.changes);
   expect(manual.scenario.protected_players).toEqual(quick.scenario.protected_players);
   await user.click(screen.getByRole("button",{name:"Protect Bailey Receiver"}));

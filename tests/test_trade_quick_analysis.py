@@ -109,6 +109,84 @@ def test_quick_only_scores_projections_then_same_http_draft_runs_monte_carlo(
         assert result.json()["matched_path_count"] == 1
 
 
+def test_unplayed_live_week_keeps_untimed_preview_and_simulation_in_the_same_state(
+    monkeypatch,
+):
+    snapshot = translate_bundle(source_bundle()).snapshot
+    live = snapshot.live_scoring
+    assert live is not None
+    assert live.supported_simulation_week == snapshot.first_simulation_week == 2
+    # Give each team one fillable starter slot for an otherwise unchanged live fixture.
+    snapshot = replace(
+        snapshot,
+        snapshot_id="unplayed-live",
+        rules=replace(
+            snapshot.rules,
+            lineup_slots=tuple(
+                slot for slot in snapshot.rules.lineup_slots if slot.slot_id in (0, 21)
+            ),
+            position_limits=(),
+            consolation=replace(
+                snapshot.rules.consolation, rounds=snapshot.rules.championship.rounds
+            ),
+        ),
+        players=tuple(
+            replace(
+                player, eligible_lineup_slot_ids=(0, *player.eligible_lineup_slot_ids)
+            )
+            if player.player_id == -101
+            else replace(player, acquisition_status="UNKNOWN")
+            if player.player_id == 5
+            else player
+            for player in snapshot.players
+        ),
+        roster_entries=tuple(
+            replace(entry, lineup_slot_id=0) if entry.player_id == -101 else entry
+            for entry in snapshot.roster_entries
+        ),
+    )
+    service, draft = make_request(
+        snapshot,
+        changes=(
+            {"player_id": 2, "from_team_id": 2, "to_team_id": 3},
+            {"player_id": 3, "from_team_id": 3, "to_team_id": 2},
+        ),
+    )
+    evaluate = service_module.evaluate_manual_scenario
+    with TestClient(create_app(service)) as client:
+        response = client.post(ROUTE, json=draft.model_dump(mode="json"))
+        assert response.status_code == 200, response.json()
+        quick = response.json()
+        assert quick["first_scoring_week"] == 2
+
+        def record(snapshot, *args, **kwargs):
+            result = evaluate(snapshot, *args, **kwargs)
+            assert (
+                completed_state_fingerprint(snapshot, result.scenario.state)
+                == quick["completed_state_sha256"]
+            )
+            return result
+
+        monkeypatch.setattr(service_module, "evaluate_manual_scenario", record)
+        simulation = ManualScenarioRequest(
+            snapshot=draft.snapshot,
+            scenario=draft.scenario,
+            simulation=_simulation().model_copy(
+                update={
+                    "ir_policy": draft.ir_policy,
+                    "use_observed_current_week_lineup": False,
+                }
+            ),
+            precision=_precision(),
+            outcome_model=_model(),
+        )
+        result = client.post(
+            "/api/v1/analyses/manual-scenario", json=simulation.model_dump(mode="json")
+        )
+        assert result.status_code == 200, result.json()
+        assert result.json()["matched_path_count"] == 1
+
+
 def test_missing_projection_and_explicit_zero_are_separate_and_leave_a_vacancy():
     snapshot = _scenario_snapshot()
     snapshot = replace(
