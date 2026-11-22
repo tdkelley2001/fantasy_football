@@ -556,3 +556,56 @@ def test_projected_baseline_preserves_observed_actual_separately(
     assert bool(score.projection_source_id) == (basis == "projected_final")
     team = next(item for item in result.weeks[0].lineups if item.team_id == 2)
     assert team.realized_points == points
+    assert [assignment.player_id for assignment in team.lineup.assignments] == [2]
+
+
+@pytest.mark.parametrize(
+    "game_status, rationale",
+    [
+        (None, "Game status is missing"),
+        ("STATUS_FINAL", "no verified fantasy-matchup and standings settlement"),
+    ],
+)
+def test_projected_baseline_rejects_unresolved_current_week(
+    tmp_path, monkeypatch, game_status, rationale
+):
+    from fantasy_football.app import projected_baseline
+    from fantasy_football.app.contracts import (
+        ProjectedBaselineRequest,
+        SnapshotSelector,
+    )
+    from fantasy_football.app.service import (
+        ApplicationDependencies,
+        ApplicationService,
+        ApplicationServiceError,
+    )
+
+    bundle = _bundle()
+    for team in bundle.pro_schedule.payload["settings"]["proTeams"]:
+        for game in team.get("proGamesByScoringPeriod", {}).get("2", []):
+            if game_status is None:
+                game.pop("status", None)
+                game["statsOfficial"] = False
+            else:
+                game["status"] = game_status
+    snapshot, _ = _publish(tmp_path, bundle)
+    assert snapshot.live_scoring is not None
+    assert not snapshot.live_scoring.partial_week_simulation_required
+
+    def unexpected(*args, **kwargs):
+        pytest.fail(
+            "Unresolved evidence reached projected score preparation or execution"
+        )
+
+    monkeypatch.setattr(projected_baseline, "projected_scores", unexpected)
+    monkeypatch.setattr(projected_baseline, "build_current_week_input", unexpected)
+    store = SnapshotStore(tmp_path / "snapshots.sqlite3")
+    loaded = store.load(snapshot.snapshot_id)
+    with pytest.raises(ApplicationServiceError, match=rationale) as error:
+        ApplicationService(ApplicationDependencies(store)).run_projected_baseline(
+            ProjectedBaselineRequest(
+                snapshot=SnapshotSelector(snapshot_id=snapshot.snapshot_id),
+                canonical_sha256=loaded.metadata.canonical_sha256,
+            )
+        )
+    assert error.value.code == "current_week_evidence_unresolved"

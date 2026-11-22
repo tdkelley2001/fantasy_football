@@ -6,12 +6,16 @@ from fantasy_football.app.contracts import (
     ProjectedSeasonWeek,
 )
 from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snapshot
-from fantasy_football.canonical.validation import validated_snapshot
+from fantasy_football.canonical.validation import (
+    authoritative_current_matchup_period_scoring_weeks,
+    validated_snapshot,
+)
 from fantasy_football.current_week import (
     CurrentWeekEvidenceError,
     build_current_week_input,
 )
 from fantasy_football.evolving_state import IRPolicy
+from fantasy_football.live_scoring import ScoringPeriodStatus, has_safe_v1_boundary
 from fantasy_football.partial_week import DeterministicPlayerValue, PlayerScoreState
 from fantasy_football.score_resolution import (
     observed_starter_states,
@@ -34,12 +38,41 @@ def project_baseline(loaded, request) -> ProjectedBaselineResult:
     current = None
     with validated_snapshot(snapshot):
         live = snapshot.live_scoring
-        if live is not None and live.partial_week_simulation_required:
-            current = build_current_week_input(
-                snapshot,
-                tuple(item.response for item in loaded.raw_sources),
-                projected_final=True,
-            )
+        if live is not None:
+            membership = authoritative_current_matchup_period_scoring_weeks(snapshot)
+            if snapshot.first_simulation_week != live.current_scoring_period:
+                raise CurrentWeekEvidenceError(
+                    "Projected baseline must begin at the verified current scoring week."
+                )
+            if not has_safe_v1_boundary(
+                live, authoritative_current_matchup_period_scoring_weeks=membership
+            ):
+                current_week = next(
+                    week
+                    for week in live.weeks
+                    if week.scoring_week == live.current_scoring_period
+                )
+                if (
+                    membership is None
+                    or membership != live.current_matchup_period_scoring_weeks
+                ):
+                    raise CurrentWeekEvidenceError(
+                        "Projected baseline requires authoritative current matchup-period membership."
+                    )
+                if current_week.status is not ScoringPeriodStatus.PARTIAL:
+                    rationale = (
+                        live.boundary_rationale
+                        if current_week.status is ScoringPeriodStatus.UNPLAYED
+                        else current_week.rationale
+                    )
+                    raise CurrentWeekEvidenceError(
+                        f"Projected baseline has no supported current scoring boundary: {rationale}"
+                    )
+                current = build_current_week_input(
+                    snapshot,
+                    tuple(item.response for item in loaded.raw_sources),
+                    projected_final=True,
+                )
         partial = None
         observations = []
         observed_week = current.evidence.scoring_period if current else None

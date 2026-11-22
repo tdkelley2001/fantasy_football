@@ -30,6 +30,7 @@ from fantasy_football.weekly_transactions import (
 )
 from tests.test_app_service import FixtureStore
 from tests.test_scenario_evaluator import _scenario_snapshot
+from tests.test_trade_quick_analysis import unplayed_live_snapshot
 
 ROUTE = "/api/v1/analyses/projected-baseline"
 
@@ -190,3 +191,37 @@ def test_projected_baseline_http_matches_direct_and_identical_monte_carlo_scores
         retain_result=True,
     )
     assert path == direct
+
+
+@pytest.mark.parametrize("with_membership", [True, False])
+def test_live_unplayed_baseline_requires_authoritative_period_membership(
+    with_membership,
+):
+    snapshot = unplayed_live_snapshot()
+    live = snapshot.live_scoring
+    assert live is not None and not live.partial_week_simulation_required
+    if not with_membership:
+        snapshot = replace(
+            snapshot,
+            live_scoring=replace(live, current_matchup_period_scoring_weeks=()),
+        )
+    store = FixtureStore(snapshot)
+    with TestClient(
+        create_app(ApplicationService(ApplicationDependencies(store)))
+    ) as client:
+        response = client.post(
+            ROUTE,
+            json={
+                "snapshot": {"snapshot_id": snapshot.snapshot_id},
+                "canonical_sha256": store.loaded.metadata.canonical_sha256,
+            },
+        )
+    if with_membership:
+        assert response.status_code == 200, response.json()
+        assert (
+            response.json()["weeks"][0]["scoring_week"] == live.current_scoring_period
+        )
+        assert response.json()["observed_scores"] == []
+    else:
+        assert response.status_code == 422, response.json()
+        assert "authoritative current matchup-period membership" in response.text
