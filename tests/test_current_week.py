@@ -391,7 +391,7 @@ def test_trade_timing_checks_every_participant(tmp_path, players, earliest):
     from fantasy_football.effective_trades import (
         EffectiveTradeError,
         TradeTransfer,
-        current_trade_eligibility,
+        inspect_trade_timing,
         resolve_effective_trades,
     )
 
@@ -403,8 +403,7 @@ def test_trade_timing_checks_every_participant(tmp_path, players, earliest):
             trades=replace(snapshot.rules.trades, deadline_utc=None),
         ),
     )
-    partial = build_current_week_input(snapshot, sources)
-    weeks, eligibility = current_trade_eligibility(snapshot, partial, sources)
+    weeks, eligibility = inspect_trade_timing(snapshot, sources)
     owners = {item.player_id: item.team_id for item in snapshot.roster_entries}
     transfers = tuple(
         TradeTransfer(pid, owners[pid], owners[players[(i + 1) % len(players)]])
@@ -439,7 +438,7 @@ def test_trade_timing_checks_every_participant(tmp_path, players, earliest):
 
 
 def test_source_trade_restriction_does_not_clear_at_next_boundary(tmp_path):
-    from fantasy_football.effective_trades import current_trade_eligibility
+    from fantasy_football.effective_trades import inspect_trade_timing
 
     bundle = _bundle()
     for page in bundle.current_player_pages:
@@ -451,8 +450,7 @@ def test_source_trade_restriction_does_not_clear_at_next_boundary(tmp_path):
             if entry["playerId"] == 2:
                 entry["playerPoolEntry"]["tradeLocked"] = True
     snapshot, sources = _publish(tmp_path, bundle)
-    partial = build_current_week_input(snapshot, sources)
-    _, eligibility = current_trade_eligibility(snapshot, partial, sources)
+    _, eligibility = inspect_trade_timing(snapshot, sources)
     assert 2 not in eligibility
 
 
