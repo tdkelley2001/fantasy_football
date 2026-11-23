@@ -22,7 +22,7 @@ Use the guide in order for a first session, or jump to the task you need:
 
 | Your question | Where to work |
 |---|---|
-| What might happen if current rosters evolve under the configured policies? | Submit a baseline in **Simulation Center**, then open **League Overview**. |
+| What might happen if current rosters evolve under the configured policies? | Submit a baseline in **Simulation Center**, then open **Playoff Race**. |
 | How does a particular exchange affect the league? | Build and intentionally evaluate a draft in **Trade Lab**. |
 | Which actions in a selected finite universe look promising? | Submit an **Action search** in Simulation Center; inspect retained results in **Opportunity Explorer**. |
 | Has work finished, can I cancel it, or can I inspect an earlier result? | Use Simulation Center's **Monitor** and **History**. |
@@ -140,13 +140,15 @@ League Overview shows **Recent results** for the latest completed regular-season
 
 Configure `WAR_ROOM_HISTORY_ARCHIVE` with the local schema-2 archive path, `WAR_ROOM_HISTORY_SOURCE` with its JSON source record containing `revision` and `sha256`, and `WAR_ROOM_HISTORY_LEAGUE_ID` with the matching ESPN league ID. Set all three process environment variables in the terminal before starting War Room. Absolute paths let the launcher resolve the files consistently. Keep both files outside Git.
 
+Use the header's **Manager perspective** and the archive's **Season** selector to see a mapped manager's archived finish above the league standings.
+
 The server validates the pair on startup and serves the completed-season projection to **Season Archive**. A bad or incomplete configuration fails startup with a diagnostic. An app started without any of these variables remains usable and reports that history is unconfigured. To adopt a newer valid archive, restart with its matching source record. The app keeps serving its validated in-memory history while running.
 
 ## Choose a manager perspective
 
-For local CGL use, set `WAR_ROOM_MANAGER_CROSSWALK` to the absolute path of a private JSON file with `league_id` and `owners`. Each owner entry maps an ESPN member ID to a CGL `manager_id` and `display_name`. Keep this file outside Git. The server validates it at startup. The manager endpoint compares the initial and reconciliation ownership sources of the selected saved snapshot and returns only matched CGL labels, keys and teams. ESPN member IDs stay on the server.
+For local CGL use, set `WAR_ROOM_MANAGER_CROSSWALK` to the absolute path of a private JSON file with `league_id` and `owners`. Each owner entry maps an ESPN member ID to a CGL `manager_id` and `display_name`. Keep this file outside Git. The server validates it at startup. Optionally set `default_manager_id` to a CGL manager key from the same file. It applies when that manager resolves to one primary team on the active snapshot and there is no valid remembered choice. The manager endpoint compares the initial and reconciliation ownership sources of the selected saved snapshot and returns only matched CGL labels, keys and teams. ESPN member IDs stay on the server.
 
-Choose a manager in **Home** or open **My Team → Team Overview** to choose a manager. The browser remembers the selection for the league and season. If a new snapshot lacks a matching membership, choose again. An unmapped owner remains unavailable as a selectable manager. The selector does not change the analysis snapshot or grant privileges.
+Choose a manager in the header, then open **My Team → Team Overview** to choose a manager. The browser remembers the selection for the league and season. If a new snapshot lacks a matching membership, choose again. An unmapped owner remains unavailable as a selectable manager. The selector does not change the analysis snapshot or grant privileges.
 
 ## Run a baseline and evaluate hypothetical changes
 
@@ -180,7 +182,7 @@ reason and refresh or select a different saved snapshot. **League Overview**
 uses the same session result and shows weekly results, the postseason bracket
 and transactions. A projected champion is the winner of this single scenario.
 Choose **Open Monte Carlo** for probability estimates. Monte Carlo is optional
-and its results remain available in run history.
+and compatible retained results are displayed in Playoff Race.
 
 ### Evaluate a specific exchange
 
@@ -253,7 +255,7 @@ Observed records/standings/points are snapshot facts, not forecasts. Missing pat
 1. Use **Simulation Center → Monitor** to inspect the selected run's lifecycle and actual progress. **Queued**, **Running** and cancellation-pending states are not terminal. Baseline/manual progress can be coarse; there is no guaranteed countdown or percentage for an unknown universe.
 2. To stop work, request cooperative cancellation and wait for acknowledgement/status. An active analytical batch can finish first; already committed completion can win the race. Closing a tab, panel or workspace does not cancel accepted server work. Do not automatically resubmit an ambiguous submission error: the backend may have accepted it.
 3. In **History**, use the current snapshot's type/status/text filters and select a retained run. The browser starts from the newest 50 returned records and filters locally, so an absent row is not proof it never existed. Expired/deleted/unavailable results cannot be reopened.
-4. Use **Open results** for a completed available run: baseline opens Overview, action search opens Explorer, and manual opens Trade Lab's retained result. Opening history does not resimulate it or restore a historical editable draft. Recheck identity and age before using older output.
+4. Use **Open results** for a completed available run: baseline opens Playoff Race, action search opens Explorer, and manual opens Trade Lab's retained result. Opening history does not resimulate it or restore a historical editable draft. Recheck identity and age before using older output.
 
 History is bounded, not indefinite. A confirmed terminal-run deletion removes that run's retained analytical data, not immutable source snapshots. Restart classifies unfinished application work as interrupted; there is **no automatic HTTP analysis resume**. Numerical checkpoints are a separate engine facility.
 

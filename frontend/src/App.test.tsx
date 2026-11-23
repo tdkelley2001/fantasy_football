@@ -27,7 +27,81 @@ function outlook(value: typeof snapshot, champion = value.teams[0].team_id) {
 }
 async function openSnapshots(user:ReturnType<typeof userEvent.setup>){await user.click(screen.getByRole("button",{name:"Open league context"}));await user.click(screen.getByText("Saved snapshots"));}
 
-afterEach(()=>vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  window.history.replaceState(null, "", "/");
+});
+
+test("opens a bookmarked archive year and restores it with browser Back", async () => {
+  const team = { team_id: 1, team_name: "Archived Harbor", final_rank: 1,
+    regular_season: { wins: 1, losses: 0, ties: 0, points_for: 12, points_against: 0 } };
+  mockApi({ snapshots: [], runs: [], history: {
+    league_id: 42, source: { revision: "a".repeat(40), sha256: "b".repeat(64) },
+    seasons: [2024, 2025].map(season => ({ season, champion_team_id: 1, teams: [team], matchups: [] })),
+  } });
+  window.history.replaceState(null, "", "/history/seasons/2024");
+  const user = userEvent.setup();
+  const app = render(<App />);
+  expect(await screen.findByRole("heading", { name: "2024 final standings" })).toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "Season" }), "2025");
+  expect(window.location.pathname).toBe("/history/seasons/2025");
+  window.history.back();
+  expect(await screen.findByRole("heading", { name: "2024 final standings" })).toBeInTheDocument();
+  window.history.forward();
+  expect(await screen.findByRole("heading", { name: "2025 final standings" })).toBeInTheDocument();
+  app.unmount();
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "2025 final standings" })).toBeInTheDocument();
+});
+
+test("moves keyboard focus to the destination after mobile navigation", async () => {
+  mockApi();
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("heading", { name: "Home" });
+  await user.click(screen.getByRole("button", { name: "Open navigation" }));
+  const navigation = screen.getByLabelText("Mobile primary navigation");
+  await user.click(within(navigation).getByRole("button", { name: "League Matchups" }));
+  expect(await screen.findByRole("heading", { name: "League Matchups" })).toBeInTheDocument();
+  expect(screen.getByRole("main")).toHaveFocus();
+});
+
+test("resolves archive seasons by the selected manager identity, including co-owners", async () => {
+  const team = { team_id: 14, team_name: "Archived Harbor", final_rank: 1,
+    regular_season: { wins: 3, losses: 0, ties: 0, points_for: 12, points_against: 0 } };
+  const key = `war-room-manager:${snapshot.league_id}:${snapshot.season}`;
+  localStorage.removeItem(key);
+  mockApi({
+    managers: { snapshot_id: snapshot.snapshot_id, default_team_id: 1, unresolved_owner_count: 0,
+      choices: [
+        { manager_id: "manager-a", display_name: "Avery", team_id: 1, is_primary: true },
+        { manager_id: "manager-b", display_name: "Blair", team_id: 1, is_primary: false },
+      ] },
+    history: { league_id: snapshot.league_id, source: { revision: "a".repeat(40) },
+      seasons: [
+        { season: 2024, champion_team_id: 14, teams: [{ ...team, manager_ids: ["manager-a"] }], matchups: [] },
+        { season: 2025, champion_team_id: 14, teams: [{ ...team, manager_ids: ["manager-a", "manager-b"] }], matchups: [] },
+        { season: 2026, champion_team_id: 14, teams: [
+          { ...team, manager_ids: ["manager-a", "manager-b"] },
+          { ...team, team_id: 15, team_name: "Archived Union", final_rank: 2, manager_ids: ["manager-b"] },
+        ], matchups: [] },
+      ] },
+  });
+  window.history.replaceState(null, "", "/history/seasons/2025");
+  const user = userEvent.setup();
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Avery in 2025" })).toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "Manager perspective" }), JSON.stringify(["manager-b", 1]));
+  expect(screen.getByRole("heading", { name: "Blair in 2025" })).toBeInTheDocument();
+  expect(screen.getByText(/Final rank 1/)).toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "Season" }), "2024");
+  expect(screen.getByText(/no team mapping/)).toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "Season" }), "2026");
+  expect(screen.getByText(/lists this manager on multiple teams/)).toBeInTheDocument();
+  expect(within(screen.getByRole("table", { name: "Final standings" })).getByText("Archived Union")).toBeInTheDocument();
+  expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id);
+  localStorage.removeItem(key);
+});
 
 test("browses verified results and scheduled pairings without mixing their scores", async () => {
   mockApi({
@@ -54,14 +128,18 @@ test("remembers a manager perspective without changing the active snapshot", asy
   const key = `war-room-manager:${snapshot.league_id}:${snapshot.season}`;
   localStorage.removeItem(key);
   mockApi({ detail: { ...snapshot, live_scoring: { current_scoring_period: 8 } },
-    managers: { snapshot_id: snapshot.snapshot_id, unresolved_owner_count: 1,
-    choices: [{ manager_id: "manager-a", display_name: "Avery", team_id: 1, is_primary: true }] } });
+    managers: { snapshot_id: snapshot.snapshot_id, unresolved_owner_count: 1, default_team_id: 2,
+    choices: [
+      { manager_id: "manager-a", display_name: "Avery", team_id: 1, is_primary: true },
+      { manager_id: "manager-b", display_name: "Blair", team_id: 2, is_primary: true },
+    ] } });
   const user = userEvent.setup();
-  render(<App />);
+  const app = render(<App />);
   await screen.findByRole("heading", { name: "Home" });
   const selector = await screen.findByRole("combobox", { name: "Manager perspective" });
   const value = JSON.stringify(["manager-a", 1]);
-  expect(selector).toHaveValue("");
+  expect(within(screen.getByRole("banner")).getByRole("combobox",{ name: "Manager perspective" })).toBe(selector);
+  expect(selector).toHaveValue(JSON.stringify(["manager-b", 2]));
   await user.selectOptions(selector, value);
   expect(screen.getByRole("heading", { name: "North Harbor" })).toBeInTheDocument();
   expect(screen.getByText("Home vs. Red Zone Club")).toBeInTheDocument();
@@ -73,6 +151,9 @@ test("remembers a manager perspective without changing the active snapshot", asy
   await user.click(screen.getByRole("button", { name: "View league matchups" }));
   expect(screen.getByRole("heading", { name: "League Matchups" })).toBeInTheDocument();
   expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id);
+  app.unmount();
+  render(<App />);
+  expect(await screen.findByRole("combobox", { name: "Manager perspective" })).toHaveValue(value);
   localStorage.removeItem(key);
 });
 
@@ -133,7 +214,7 @@ test("groups existing workspaces and keeps the archive reachable without snapsho
   expect(archive).toHaveAttribute("aria-current", "page");
 });
 
-test("loads the source-backed overview without fabricating analytics", async()=>{ mockApi(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await userEvent.setup().click(screen.getByRole("button",{name:"League Overview"})); expect(await screen.findByRole("heading",{name:"Sanitized Gridiron League"})).toBeInTheDocument(); expect(screen.getByRole("heading",{name:"No completed baseline analysis"})).toBeInTheDocument(); expect(screen.getByRole("heading",{name:"Current league standings"})).toBeInTheDocument(); expect(screen.queryByText("Championship probability")).not.toBeInTheDocument(); expect(screen.getByText("1 active")).toBeInTheDocument(); });
+test("loads the source-backed overview without fabricating analytics", async()=>{ mockApi(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await userEvent.setup().click(screen.getByRole("button",{name:"League Overview"})); expect(await screen.findByRole("heading",{name:"Sanitized Gridiron League"})).toBeInTheDocument(); expect(screen.getByRole("button",{name:"Open Playoff Race"})).toBeInTheDocument(); expect(screen.getByRole("heading",{name:"Current league standings"})).toBeInTheDocument(); expect(screen.queryByText("Championship probability")).not.toBeInTheDocument(); expect(screen.getByText("1 active")).toBeInTheDocument(); });
 test("selects and persists another snapshot detail", async()=>{ const user=userEvent.setup(); const second={...snapshot,snapshot_id:"snapshot-beta",league_name:"Second Sanitized League",teams:[]}; vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,second]); if(url.includes("snapshot-beta"))return response(second); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await openSnapshots(user);await user.selectOptions(screen.getByRole("combobox",{name:"Active snapshot"}),"snapshot-beta");await user.keyboard("{Escape}"); expect(await screen.findByText("Second Sanitized League", {selector: "header strong"})).toBeInTheDocument(); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-beta"); });
 test("latest snapshot response wins a rapid selection race", async()=>{ const beta={...snapshot,snapshot_id:"snapshot-beta",league_name:"Slow Beta"}; const gamma={...snapshot,snapshot_id:"snapshot-gamma",league_name:"Fast Gamma"}; let resolveBeta:(value:Response)=>void=()=>{}; const betaResponse=new Promise<Response>(resolve=>{resolveBeta=resolve;}); vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,beta,gamma]); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("snapshot-beta"))return betaResponse; if(url.includes("snapshot-gamma"))return response(gamma); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await openSnapshots(userEvent.setup());const selector=screen.getByRole("combobox",{name:"Active snapshot"}); fireEvent.change(selector,{target:{value:"snapshot-beta"}}); fireEvent.change(selector,{target:{value:"snapshot-gamma"}}); expect(await screen.findByText("Fast Gamma", {selector: "header strong"})).toBeInTheDocument(); resolveBeta(new Response(JSON.stringify(beta),{headers:{"Content-Type":"application/json"}})); await waitFor(()=>expect(screen.queryByRole("heading",{name:"Slow Beta"})).not.toBeInTheDocument()); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-gamma"); });
 test("unmount aborts effect-owned requests", ()=>{ const signals:AbortSignal[]=[]; vi.spyOn(globalThis,"fetch").mockImplementation((_input,init)=>{ if(init?.signal)signals.push(init.signal); return new Promise(()=>{}); }); const {unmount}=render(<App/>); unmount(); expect(signals.length).toBeGreaterThan(0); expect(signals.every(signal=>signal.aborted)).toBe(true); });
@@ -326,6 +407,10 @@ test("run list failure and retry are independent of the saved snapshot and proje
   expect(screen.getByText("Retained Monte Carlo results are unavailable.")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", {name:"View projected season details"}));
+  expect(screen.getByText(/Champion in this projected season/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", {name:"Open Playoff Race"}));
+  expect(window.location.pathname).toBe("/league/playoff-race");
+  expect(screen.getByRole("heading", {name:"Playoff Race"})).toBeInTheDocument();
   expect(screen.getByText("Retained baseline results unavailable")).toBeInTheDocument();
   expect(screen.queryByText("No completed baseline analysis")).not.toBeInTheDocument();
   let complete!: (value:Response)=>void;
@@ -335,7 +420,6 @@ test("run list failure and retry are independent of the saved snapshot and proje
   complete(await response([]));
   expect(await screen.findByText("No completed baseline analysis")).toBeInTheDocument();
   expect(screen.getByText("No active runs")).toBeInTheDocument();
-  expect(screen.getByText(/Champion in this projected season/)).toBeInTheDocument();
   expect(fetch.mock.calls.filter(([url])=>String(url).endsWith("/analyses/projected-baseline"))).toHaveLength(1);
 });
 

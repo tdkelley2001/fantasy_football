@@ -6,7 +6,7 @@ For operating steps use [USER_GUIDE](USER_GUIDE.md); [HTTP API, DTOs and evoluti
 
 - [Visual standards](#visual-first-design-standard), [journey](#user-journey-and-navigation)
 - [Identity and requests](#identity-and-request-isolation), [interpretation and units](#analytical-presentation-and-units)
-- [League Overview](#league-overview), [Opportunity Explorer](#opportunity-explorer)
+- [League Overview](#league-overview), [Playoff Race](#playoff-race), [Opportunity Explorer](#opportunity-explorer)
 - [Trade Lab](#trade-lab), [Simulation Center](#simulation-center)
 - [Accessibility](#accessibility-and-responsive-behavior), [limitations](#limitations-and-future-work)
 - [Source/tests and visual evidence](#source-tests-and-visual-evidence)
@@ -29,11 +29,11 @@ Mandatory tactical fields, constellations, spatial maps and the immersive room m
 
 ## User journey and navigation
 
-Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then deliberately select the intended canonical snapshot. The shell unifies snapshot selection, connection, observed active-run count, refresh, theme and source/build context. Desktop uses a static sidebar. The narrow-screen menu uses the same group order and destinations. Players & Moves contains Opportunity Explorer and Trade Lab, League contains League Overview and the deferred League Insights, History contains Season Archive, and Tools contains Simulation Center. Home contains Dashboard, and My Team contains Team Overview.
+Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then deliberately select the intended canonical snapshot. The shell unifies snapshot selection, connection, observed active-run count, refresh, theme and source/build context. Desktop uses a static sidebar. The narrow-screen menu uses the same group order and destinations. Players & Moves contains Opportunity Explorer and Trade Lab, League contains League Overview, League Matchups, Playoff Race and the deferred League Insights, History contains Season Archive, and Tools contains Simulation Center. Home contains Dashboard, and My Team contains Team Overview. Choosing a destination from the narrow-screen menu closes it and moves keyboard focus to the main content. On narrow screens, wide tables in Team Overview, League Matchups, League Overview results and Season Archive scroll within a labeled, keyboard-focusable region.
 
 | Task | Workspace |
 |---|---|
-| Understand league outlook | Submit a baseline in Simulation Center; inspect its retained result in League Overview. Without a usable result, observed standings remain explicitly factual. |
+| Understand league outlook | Submit a baseline in Simulation Center; inspect its retained result in Playoff Race. Without a usable result, observed standings remain explicitly factual. |
 | Explore hypothetical actions | Configure a finite universe in Simulation Center; inspect retained paths/effects in Opportunity Explorer. |
 | Test a specific exchange | Commit a Trade Lab draft, review pins/settings and intentionally evaluate aggregate final ownership. |
 | Follow or reopen work | Monitor/cancel/select retained runs in Simulation Center and navigate to their matching result workspace. |
@@ -70,13 +70,15 @@ Confidence intervals measure Monte Carlo sampling uncertainty, not model error. 
 
 ## Dashboard
 
-**Home → Dashboard** uses the same remembered manager perspective as Team Overview. It shows the selected team's observed record, standing, points for and known matchup in the snapshot's current scoring period. The snapshot timestamp identifies the evidence. The roster and league matchup shortcuts open the full views. League Overview and Simulation Center remain reachable before a manager is selected. Home is the default destination. Startup shows local service, saved data and ESPN refresh status. An authorized refresh is observed in the background, and existing saved data remains usable while it runs or if it fails. A validated publication activates the new snapshot. Home and League Overview share the automatically prepared projected baseline for the selected snapshot and policy during the session. The outlook distinguishes preparation, unsupported evidence and retryable failures. Home summarizes the single projected season and links to League Overview for details. Monte Carlo and opportunity searches require explicit user actions.
+The header manager selector supplies Home and Team Overview. It restores a valid remembered choice first, then uses the configured local default if that manager resolves to one primary team. The browser stores the preference per league and season. It shows the selected team's observed record, standing, points for and known matchup in the snapshot's current scoring period. The snapshot timestamp identifies the evidence. The roster and league matchup shortcuts open the full views. League Overview and Simulation Center remain reachable before a manager is selected. Home is the default destination. Startup shows local service, saved data and ESPN refresh status. An authorized refresh is observed in the background, and existing saved data remains usable while it runs or if it fails. A validated publication activates the new snapshot. Home and League Overview share the automatically prepared projected baseline for the selected snapshot and policy during the session. The outlook distinguishes preparation, unsupported evidence and retryable failures. Home summarizes the single projected season and links to League Overview for details. Monte Carlo and opportunity searches require explicit user actions.
 
 ## League Overview
 
-The overview leads with observed standings and the known team pairings for the snapshot's current scoring period. Recent results shows the latest prior regular-season period only when the captured ESPN schedule reconciles to that snapshot's standings. Results are as of the snapshot and can change with later stat corrections. Incomplete or conflicting evidence has an explicit unavailable state. A configured archive for the same league supplies the latest completed championship before the active snapshot's season. The bracket shortcut opens that year in Season Archive and leaves the active snapshot unchanged. The projected baseline and retained War Room forecast remain separately labeled below the observed and historical sections.
+The overview leads with observed standings and the known team pairings for the snapshot's current scoring period. Recent results shows the latest prior regular-season period only when the captured ESPN schedule reconciles to that snapshot's standings. Results are as of the snapshot and can change with later stat corrections. Incomplete or conflicting evidence has an explicit unavailable state. A configured archive for the same league supplies the latest completed championship before the active snapshot's season. The bracket shortcut opens that year in Season Archive and leaves the active snapshot unchanged. The projected baseline remains separately labeled below the observed and historical sections. Open Playoff Race for retained Monte Carlo results.
 
-Select a retained completed baseline with available result for the active snapshot. The newest usable matching run is the deterministic default (finish/creation time, then run ID); explicit selection or a preferred run from Simulation Center changes the complete evidence context. The viewer never submits work.
+## Playoff Race
+
+Open Playoff Race from Home, League Overview, or an applicable retained baseline in Simulation Center. Select a retained completed baseline with available result for the active snapshot. The newest usable matching run is the deterministic default (finish/creation time, then run ID); explicit selection or a preferred run from Simulation Center changes the complete evidence context. The viewer never submits work.
 
 | Implemented form | Meaning |
 |---|---|
@@ -156,7 +158,9 @@ Completed runs navigate by explicit preferred run ID and matching snapshot: base
 
 ## Season Archive
 
-The local Season Archive reads completed CGL history from the backend independently of analytical snapshot selection. It shows final standings, champion, championship series and byes, regular-season results, and archive revision. The selected year defaults to the latest completed entry. Missing configuration, empty history and a request failure have distinct messages. Archive deep links remain part of WR-027's later navigation work.
+When the header has a manager selected for the archive's league, the selected season shows that manager's archived team, final rank and regular-season record for a unique mapping. Missing or ambiguous team mappings are shown above the full standings.
+
+The local Season Archive reads completed CGL history from the backend independently of analytical snapshot selection. It shows final standings, champion, championship series and byes, regular-season results, and archive revision. The selected year defaults to the latest completed entry. Missing configuration, empty history and a request failure have distinct messages. The season picker updates the URL. A direct link such as `/history/seasons/2025` opens that year, and an unavailable year shows an explicit message. Browser Back and Forward restore the workspace and archive year independently of the analytical snapshot.
 
 ## Accessibility and responsive behavior
 

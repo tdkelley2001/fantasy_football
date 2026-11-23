@@ -49,6 +49,7 @@ export interface ManagerPerspectives {
   readonly snapshot_id: string;
   readonly choices: readonly ManagerPerspective[];
   readonly unresolved_owner_count: number;
+  readonly default_team_id?: number | null;
 }
 
 export interface PlayerSummary {
@@ -306,6 +307,7 @@ export interface CglHistory {
     teams: {
       team_id: number;
       team_name: string;
+      manager_ids: string[];
       final_rank: number;
       regular_season: { wins: number; losses: number; ties: number; points_for: number; points_against: number };
     }[];
