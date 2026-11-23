@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { App } from "./App";
@@ -308,4 +308,76 @@ test("unsupported projected scoring leaves saved Home information available", as
   expect(screen.getByRole("heading", {name:"Home"})).toBeInTheDocument();
   expect(screen.getByText(snapshot.league_name!, {selector:"header strong"})).toBeInTheDocument();
   expect(screen.getByRole("button", {name:"Refresh ESPN league"})).toBeEnabled();
+});
+
+test("run list failure and retry are independent of the saved snapshot and projected season", async () => {
+  const user = userEvent.setup();
+  mockApi();
+  const fetch = vi.mocked(globalThis.fetch);
+  const fallback = fetch.getMockImplementation()!;
+  let nextList = () => response({error:{message:"Run store unavailable."}}, 503);
+  fetch.mockImplementation((input, init) =>
+    String(input).includes("/runs?") ? nextList() : fallback(input, init));
+
+  render(<App/>);
+  await screen.findByText("Run list unavailable");
+  expect(screen.queryByText("No active runs")).not.toBeInTheDocument();
+  expect(await screen.findByText("Projected champion")).toBeInTheDocument();
+  expect(screen.getByText("Retained Monte Carlo results are unavailable.")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", {name:"View projected season details"}));
+  expect(screen.getByText("Retained baseline results unavailable")).toBeInTheDocument();
+  expect(screen.queryByText("No completed baseline analysis")).not.toBeInTheDocument();
+  let complete!: (value:Response)=>void;
+  nextList = () => new Promise(resolve=>{complete=resolve;});
+  await user.click(screen.getByRole("button", {name:"Retry run list"}));
+  expect(screen.getByText("Loading run list")).toBeInTheDocument();
+  complete(await response([]));
+  expect(await screen.findByText("No completed baseline analysis")).toBeInTheDocument();
+  expect(screen.getByText("No active runs")).toBeInTheDocument();
+  expect(screen.getByText(/Champion in this projected season/)).toBeInTheDocument();
+  expect(fetch.mock.calls.filter(([url])=>String(url).endsWith("/analyses/projected-baseline"))).toHaveLength(1);
+});
+
+test("a failed run-history reload withdraws previously loaded run information", async () => {
+  const user = userEvent.setup();
+  mockApi({runs:[]});
+  const fetch = vi.mocked(globalThis.fetch);
+  const fallback = fetch.getMockImplementation()!;
+  let fail = false;
+  const completed = {...activeRun,run_type:"baseline",status:"completed",result_available:true};
+  fetch.mockImplementation((input,init) =>
+    String(input).includes("/runs?") ? (fail ? response({error:{message:"Run store unavailable."}},503) :
+      response([completed])) : fallback(input,init));
+  render(<App/>);
+  expect(await screen.findByText(/A retained run is listed/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button",{name:"Open Simulation Center"}));
+  fail=true;
+  await user.click(screen.getByRole("button",{name:"Refresh"}));
+  await screen.findByText("Run list unavailable");
+  await user.click(screen.getByRole("button",{name:"Dashboard"}));
+  expect(screen.queryByText(/A retained run is listed/)).not.toBeInTheDocument();
+  expect(screen.getByText("Retained Monte Carlo results are unavailable.")).toBeInTheDocument();
+  expect(screen.getByText("Projected champion")).toBeInTheDocument();
+});
+
+test("a late startup run list cannot replace a newer run-history response", async () => {
+  const user = userEvent.setup();
+  mockApi();
+  const fetch = vi.mocked(globalThis.fetch);
+  const fallback = fetch.getMockImplementation()!;
+  let finishStartup!: (value:Response)=>void;
+  const startup = new Promise<Response>(resolve=>{finishStartup=resolve;});
+  let requests = 0;
+  fetch.mockImplementation((input,init) =>
+    String(input).includes("/runs?") ? (++requests === 1 ? startup : response([])) :
+      fallback(input,init));
+
+  render(<App/>);
+  await screen.findByText("Projected champion");
+  await user.click(screen.getByRole("button",{name:"Open Simulation Center"}));
+  await user.click(screen.getByRole("button",{name:"Refresh"}));
+  await screen.findByText("No active runs");
+  await act(async()=>finishStartup(await response([activeRun])));
+  expect(screen.getByText("No active runs")).toBeInTheDocument();
 });

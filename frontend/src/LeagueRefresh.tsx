@@ -18,8 +18,17 @@ export function LeagueRefresh({open,onClose,onPublished,automaticStart=false,lea
   const [discovering,setDiscovering]=useState(false);
   const [retryDiscovery,setRetryDiscovery]=useState(0);
   const discover=open||automaticStart;
+  const wasOpen=useRef(open);
+  useEffect(()=>{
+    if(open&&!wasOpen.current&&automaticStart)setRetryDiscovery(value=>value+1);
+    wasOpen.current=open;
+  },[open,automaticStart]);
   const pendingSubmit=useRef<AbortController|null>(null);
-  useEffect(()=>()=>pendingSubmit.current?.abort(),[]);
+  const startupSubmit=useRef<AbortController|null>(null);
+  useEffect(()=>()=>{
+    pendingSubmit.current?.abort();
+    startupSubmit.current?.abort();
+  },[]);
   const automaticAttempted=useRef(false);
   const discoveryVersion=useRef(0),pollVersion=useRef(0),resultVersion=useRef(0),submitVersion=useRef(0);
 
@@ -32,13 +41,27 @@ export function LeagueRefresh({open,onClose,onPublished,automaticStart=false,lea
       setProfile(nextProfile);
       const matching = current?.league_id === nextProfile.league_id && current.season === nextProfile.season
         ? current : null;
-      setRecord(previous=>matching&&(!terminal.has(matching.status)||previous?.refresh_id===matching.refresh_id)?matching:previous);
+      setRecord(previous=>matching&&(!terminal.has(matching.status)||previous?.refresh_id===matching.refresh_id||
+        (previous&&matching.created_at_utc>previous.created_at_utc))?matching:previous);
       if(automaticStart&&nextProfile.automatic_refresh_enabled&&!automaticAttempted.current){
         automaticAttempted.current=true;
         if(matching&&!terminal.has(matching.status))return;
-        const submitted=await api.submitRefresh({api_schema_version:"1.0",profile_id:nextProfile.profile_id,league_id:nextProfile.league_id,season:nextProfile.season,first_simulation_week:null,startup_refresh:true},controller.signal);
-        const next=terminal.has(submitted.status)&&submitted.status!=="completed"?await api.refresh(submitted.refresh_id,controller.signal):queued(submitted,nextProfile);
-        if(!controller.signal.aborted&&version===discoveryVersion.current)setRecord(next);
+        const submission=new AbortController();
+        startupSubmit.current=submission;
+        setSubmitting(true);
+        try {
+          const submitted=await api.submitRefresh({api_schema_version:"1.0",profile_id:nextProfile.profile_id,league_id:nextProfile.league_id,season:nextProfile.season,first_simulation_week:null,startup_refresh:true},submission.signal);
+          const next=terminal.has(submitted.status)&&submitted.status!=="completed"?await api.refresh(submitted.refresh_id,submission.signal):queued(submitted,nextProfile);
+          if(!submission.signal.aborted){
+            if(version===discoveryVersion.current)setRecord(next);
+            else setRetryDiscovery(value=>value+1);
+          }
+        } catch(cause) {
+          if(!submission.signal.aborted)setError(message(cause,"Startup refresh could not be started."));
+        } finally {
+          if(startupSubmit.current===submission)startupSubmit.current=null;
+          if(!submission.signal.aborted)setSubmitting(false);
+        }
       }
     }).catch(cause=>{if(!aborted(cause)&&version===discoveryVersion.current)setError(message(cause,"Configured league could not be loaded."));})
       .finally(()=>{if(!controller.signal.aborted&&version===discoveryVersion.current)setDiscovering(false);});
@@ -53,7 +76,7 @@ export function LeagueRefresh({open,onClose,onPublished,automaticStart=false,lea
       try{
         const next=await api.refresh(refreshId,controller.signal);
         if(controller.signal.aborted||version!==pollVersion.current||next.refresh_id!==refreshId)return;
-        setRecord(next);
+        setRecord(previous=>previous?.refresh_id===refreshId?next:previous);
         if(!terminal.has(next.status))timer=window.setTimeout(()=>void poll(),600);
       }catch(cause){if(!aborted(cause)&&version===pollVersion.current)setError(message(cause,"Refresh status could not be loaded."));}
     };
@@ -78,7 +101,7 @@ export function LeagueRefresh({open,onClose,onPublished,automaticStart=false,lea
   },[record?.refresh_id,record?.status,record?.league_id,record?.season,result?.refresh.refresh_id,onPublished,retryDiscovery]);
 
   const submit=async()=>{
-    if(!profile||discovering||pendingSubmit.current)return;
+    if(!profile||discovering||pendingSubmit.current||startupSubmit.current)return;
     const controller=new AbortController(),version=++submitVersion.current;
     pendingSubmit.current=controller;setSubmitting(true);setError(undefined);setResult(undefined);
     try{
@@ -102,7 +125,7 @@ export function LeagueRefresh({open,onClose,onPublished,automaticStart=false,lea
   if(!open)return readiness?<aside className="runtime-caveat" role="status">
     {readiness} {onOpen&&<button onClick={onOpen}>Refresh details</button>}
   </aside>:null;
-  const snapshot=result?.snapshot;
+  const snapshot=result?.refresh.refresh_id===record?.refresh_id?result?.snapshot:undefined;
   const name=snapshot?.league_name||leagueName||"Configured ESPN league";
   return <div className="refresh-scrim" role="presentation"><section className="refresh-panel" role="dialog" aria-modal="true" aria-label="Refresh ESPN league"><header><div><span className="eyebrow">ESPN league</span><h2>Refresh league</h2></div><button className="icon-button" aria-label="Close refresh" onClick={onClose}><X/></button></header>
     <strong>{name}</strong><p>War Room retrieves your latest ESPN league information and automatically determines the current simulation period.</p>
