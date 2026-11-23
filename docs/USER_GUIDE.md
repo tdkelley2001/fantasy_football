@@ -180,7 +180,8 @@ Review [interpretation](#interpret-and-compare-results) before acting outside Wa
 In **Opportunity Explorer**, choose a requesting team and counterparty, then
 select **Find projected trades** for a bounded one-for-one preview. Expand
 a candidate to inspect both projected seasons using the same lineup,
-standings and postseason display as Trade Lab. In a verified observed week,
+standings and postseason display as Trade Lab. On live snapshots, including
+fully unplayed weeks, trade timing requires verified platform evidence, and
 an eligible trade may start in a later week. Unsupported timing is shown
 on its candidate. Generation and evaluation coverage are reported separately.
 The Monte Carlo search below is available for larger scopes and

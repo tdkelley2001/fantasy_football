@@ -1027,9 +1027,9 @@ returns one baseline and an indexed array of distinct evaluated seasons.
 Candidate rows preserve action provenance and reference an evaluation index
 or report why the candidate could not be evaluated. The preview is temporary.
 
-At verified full-week boundaries, the core uses existing structural
+For canonical snapshots without live context, the core uses existing structural
 completions, including their acquisition and conditional waiver assumptions.
-During observed-week evaluation, the core uses explicit standalone ownership
+For live snapshots, including fully unplayed weeks, the core uses explicit standalone ownership
 transitions before structural completion. The shared effective-trade resolver
 checks timing and actions against the same state as manual Trade Lab. Live
 chains, acquisitions, and waivers require separate execution semantics.

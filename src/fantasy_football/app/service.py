@@ -937,7 +937,9 @@ class ApplicationService:
         deadline = monotonic() + 10
         try:
             with validated_snapshot(snapshot):
-                inputs = prepare_projection_request(loaded, request)
+                inputs = prepare_projection_request(
+                    loaded, request, observed_lineup=snapshot.live_scoring is not None,
+                )
                 search = evaluate_projected_opportunities(
                     inputs, responses, config, should_stop=lambda: monotonic() >= deadline,
                 )

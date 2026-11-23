@@ -884,7 +884,8 @@ M8 connects their hypothetical starting states to M3–M7 without creating anoth
 Projected opportunity evaluation uses the same season execution as projected
 manual comparison. A bounded evaluation shares the unchanged season and
 reuses an equivalent structural state or identical verified timeline.
-An observed-week search resolves standalone trades before execution so that a
+Live searches, including those for fully unplayed weeks, resolve standalone trades
+before execution so that a
 locked player's contribution remains with the original lineup. Each result
 is one projected trajectory, without a probability estimate or confidence
 ranking. Fixed and progressive Monte Carlo keep their existing estimators

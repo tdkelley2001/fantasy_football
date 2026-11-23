@@ -1,9 +1,13 @@
+from copy import deepcopy
+
+import pytest
 from fastapi.testclient import TestClient
 
 from fantasy_football.app.contracts import ProjectedBaselineRequest, SnapshotSelector
 from fantasy_football.app.http import create_app
 from fantasy_football.app.projected_baseline import prepare_projection_request
 from fantasy_football.app.service import ApplicationDependencies, ApplicationService
+from fantasy_football.current_week import CurrentWeekEvidenceError
 from fantasy_football.effective_trades import (
     TradeTransfer,
     inspect_trade_timing,
@@ -239,3 +243,109 @@ def test_structural_chains_share_evaluations_without_losing_their_ordered_paths(
     assert len({row.candidate.actions for row in duplicated}) > 1
     assert len({row.candidate.completed_state_sha256 for row in duplicated}) == 1
     assert len(result.evaluations) == len(groups) < len(result.candidates)
+
+
+@pytest.mark.parametrize("trade_locked", [False, True])
+def test_unplayed_live_search_requires_verified_timing_and_matches_manual(
+    tmp_path, trade_locked
+):
+    bundle = _bundle()
+    root = bundle.league_initial.payload
+    root["settings"]["tradeSettings"]["deadlineDate"] = 1798000000000
+    root["settings"]["scheduleSettings"]["consolationLadderDisabled"] = True
+    for team in bundle.pro_schedule.payload["settings"]["proTeams"]:
+        for game in team.get("proGamesByScoringPeriod", {}).get("2", []):
+            game["status"] = "STATUS_SCHEDULED"
+    for page in bundle.current_player_pages + bundle.future_player_pages:
+        for row in page.response.payload["players"]:
+            row.update(
+                lineupLocked=False,
+                rosterLocked=False,
+                tradeLocked=trade_locked and row["id"] == 4,
+            )
+            row["player"]["stats"] = [
+                stat for stat in row["player"]["stats"] if stat["statSourceId"] != 0
+            ]
+    for team in root["teams"]:
+        for row in team["roster"]["entries"]:
+            row["playerPoolEntry"].update(
+                lineupLocked=False,
+                rosterLocked=False,
+                tradeLocked=trade_locked and row["playerId"] == 4,
+            )
+    for match in root["schedule"][2:]:
+        for side in ("home", "away"):
+            data = match[side]
+            team = next(item for item in root["teams"] if item["id"] == data["teamId"])
+            data["pointsByScoringPeriod"] = {"2": 0.0}
+            data["rosterForCurrentScoringPeriod"] = {
+                "entries": deepcopy(team["roster"]["entries"]),
+                "appliedStatTotal": 0.0,
+            }
+    bundle.league_reconciliation.payload.update(deepcopy(root))
+    snapshot, responses = _publish(tmp_path, bundle)
+    assert snapshot.live_scoring.supported_simulation_week == 2
+    store = SnapshotStore(tmp_path / "snapshots.sqlite3")
+    loaded = store.load(snapshot.snapshot_id)
+    request = _request(loaded)
+    config = _config(2, 4, (2, 4))
+    ordinary = prepare_projection_request(loaded, request)
+    assert ordinary.current is None
+    with pytest.raises(
+        CurrentWeekEvidenceError, match="Live projected discovery requires"
+    ):
+        evaluate_projected_opportunities(
+            ordinary, responses, config, should_stop=lambda: False
+        )
+
+    with TestClient(
+        create_app(ApplicationService(ApplicationDependencies(store)))
+    ) as client:
+        response = client.post(
+            ROUTE,
+            json={
+                **request.model_dump(mode="json"),
+                "requesting_team_id": 2,
+                "counterparty_team_id": 4,
+            },
+        )
+        assert response.status_code == 200, response.json()
+        (candidate,) = response.json()["candidates"]
+        assert candidate["completed_state_sha256"] is None
+        if trade_locked:
+            assert candidate["evaluation_index"] is None
+            assert "unresolved trade eligibility" in candidate["limitation"]
+            assert response.json()["evaluations"] == []
+            return
+        assert candidate["timeline"][0]["scoring_week"] == 2
+
+        def manual(selected_week):
+            result = client.post(
+                "/api/v1/analyses/projected-scenario",
+                json={
+                    **request.model_dump(mode="json"),
+                    "scenario": {
+                        "scenario_id": "two-team-exchange",
+                        "changes": candidate["explicit_changes"],
+                        "effective_trades": [
+                            {
+                                "selected_week": selected_week,
+                                "transfers": candidate["explicit_changes"],
+                            }
+                        ],
+                    },
+                },
+            )
+            assert result.status_code == 200, result.json()
+            return result.json()
+
+        immediate, delayed = manual(None), manual(3)
+
+    evaluated = response.json()["evaluations"][candidate["evaluation_index"]]
+    assert immediate["timeline"] == candidate["timeline"]
+    assert immediate["baseline"] == response.json()["baseline"]["season"]
+    assert immediate["hypothetical"] == evaluated["season"]
+    assert immediate["hypothetical_final_roster"] == evaluated["final_roster"]
+    assert delayed["timeline"][0]["scoring_week"] == 3
+    assert delayed["hypothetical"]["weeks"][0] == delayed["baseline"]["weeks"][0]
+    assert immediate["hypothetical"]["weeks"][0] != delayed["hypothetical"]["weeks"][0]

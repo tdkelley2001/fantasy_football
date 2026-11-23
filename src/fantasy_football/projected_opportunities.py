@@ -88,7 +88,11 @@ def prepare_discovered_trade(
 
 def discover_projected_intents(inputs, state, configuration, *, should_stop):
     snapshot = inputs.snapshot
-    if inputs.current is None:
+    if snapshot.live_scoring is not None and inputs.current is None:
+        raise CurrentWeekEvidenceError(
+            "Live projected discovery requires verified current-week lineup evidence and trade timing."
+        )
+    if snapshot.live_scoring is None:
         enumeration = enumerate_unified_action_candidates(
             snapshot, state, configuration, should_stop=should_stop
         )
