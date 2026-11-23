@@ -39,6 +39,10 @@ def test_projection_comparison_matches_baseline_and_direct_structural_execution(
             "/api/v1/analyses/projected-baseline", json=request.model_dump(mode="json")
         )
         assert baseline_response.status_code == 200
+        assert (
+            "/api/v1/analyses/trade-quick"
+            not in client.get("/openapi.json").json()["paths"]
+        )
         identical = client.post(
             ROUTE,
             json={

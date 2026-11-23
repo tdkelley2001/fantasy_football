@@ -47,11 +47,8 @@ from fantasy_football.app.contracts import (
     TeamProbabilityResult,
     TeamScenarioResult,
     TeamSummary,
-    TradeQuickAnalysisRequest,
-    TradeQuickAnalysisResult,
     WeeklyLineupResult,
 )
-from fantasy_football.app.quick_analysis import project_trade
 from fantasy_football.canonical.model import SlotKind
 from fantasy_football.canonical.validation import (
     authoritative_current_matchup_period_scoring_weeks,
@@ -739,40 +736,6 @@ class ApplicationService:
             unchanged_paths=item.unchanged_paths,
             interval_lower_probability_points=item.interval.lower,
             interval_upper_probability_points=item.interval.upper,
-        )
-
-    def run_trade_quick_analysis(
-        self, request: TradeQuickAnalysisRequest,
-    ) -> TradeQuickAnalysisResult:
-        loaded = self._load(request.snapshot)
-        snapshot = loaded.snapshot
-        if request.canonical_sha256 != loaded.metadata.canonical_sha256:
-            raise ApplicationServiceError(
-                "snapshot_identity_mismatch", "invalid_request",
-                "The snapshot content differs from the trade draft.",
-            )
-        live = snapshot.live_scoring
-        if request.scenario.effective_trades or (
-            live is not None and (
-                live.partial_week_simulation_required or not has_safe_v1_boundary(
-                    live,
-                    authoritative_current_matchup_period_scoring_weeks=(
-                        authoritative_current_matchup_period_scoring_weeks(snapshot)
-                    ),
-                )
-            )
-        ):
-            raise ApplicationServiceError(
-                "quick_trade_full_week_required", "unsupported_configuration",
-                "Quick Analysis requires a supported full-week snapshot and an untimed exchange.",
-            )
-        state = initialize_evolving_state(
-            snapshot, scoring_week=snapshot.first_simulation_week,
-            ir_policy=IRPolicy(request.ir_policy),
-        )
-        return project_trade(
-            snapshot, loaded.metadata.canonical_sha256, state,
-            _manual_scenario(request.scenario),
         )
 
     def run_manual_scenario(

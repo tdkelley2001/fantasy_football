@@ -106,6 +106,12 @@ def projected_season_result(canonical_sha256, inputs, result, observations):
         missing_projection_count=sum(
             row.raw_projection is None for row in projected_rows
         ),
-        assumptions=("canonical-projections-v1", *result.configuration_provenance),
+        assumptions=(
+            "canonical-projections-v1",
+            f"ir_policy:{inputs.ir_policy.value}",
+            f"waiver_boundary:{inputs.transaction_policy.waiver_boundary.value}",
+            f"reject_incomplete_valuations:{inputs.transaction_policy.reject_incomplete_valuations}",
+            *result.configuration_provenance,
+        ),
         unresolved_capabilities=result.unresolved_capabilities,
     )

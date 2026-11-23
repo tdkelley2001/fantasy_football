@@ -10,7 +10,7 @@ import type {
   SnapshotRefreshRecord, SnapshotRefreshResult,
   BackgroundProgress, BaselineAnalysisRequest, ActionSearchRequest,
   ProjectedScenarioResult,
-  TradeQuickAnalysisRequest, TradeQuickAnalysisResult, ProjectedBaselineResult,
+  ProjectedBaselineResult,
 } from "../types/api";
 
 export class ApiError extends Error {
@@ -85,8 +85,6 @@ export const api = {
   candidates: (runId:string,query:string,signal?:AbortSignal)=>getJson<CandidateQueryPage>(`/api/v1/runs/${encodeURIComponent(runId)}/candidates?${query}`,signal),
   candidate: (runId:string,candidateId:string,signal?:AbortSignal)=>getJson<CandidateDetail>(`/api/v1/runs/${encodeURIComponent(runId)}/candidates/${encodeURIComponent(candidateId)}`,signal),
   completedState: (runId:string,stateId:string,signal?:AbortSignal)=>getJson<CompletedStateDetail>(`/api/v1/runs/${encodeURIComponent(runId)}/states/${encodeURIComponent(stateId)}`,signal),
-  tradeQuickAnalysis:(request:TradeQuickAnalysisRequest,signal?:AbortSignal)=>
-    postJson<TradeQuickAnalysisResult>("/api/v1/analyses/trade-quick",request,signal),
   submitManualScenario:(request:ManualScenarioRequest,signal?:AbortSignal)=>postJson<BackgroundRunSubmission>("/api/v1/runs/manual-scenario",request,signal),
   run:(runId:string,signal?:AbortSignal)=>getJson<BackgroundRunRecord>(`/api/v1/runs/${encodeURIComponent(runId)}`,signal),
   manualScenarioResult:(runId:string,signal?:AbortSignal)=>getJson<BackgroundManualScenarioResultSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/result`,signal),

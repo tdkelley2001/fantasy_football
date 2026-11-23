@@ -12,16 +12,13 @@ export function ProjectedTradeResult({snapshot, result}: {
   const hypotheticalRoster = new Map(result.hypothetical_final_roster.map(row => [row.player_id,row.team_id]));
   const moved = [...new Set([...roster.keys(),...hypotheticalRoster.keys()])]
     .filter(id => roster.get(id) !== hypotheticalRoster.get(id));
+  const parties = new Set([...result.explicit_changes, ...result.timeline.flatMap(trade => trade.transfers)]
+    .flatMap(move => [move.from_team_id, move.to_team_id]));
   const limits = [...new Set([...result.baseline.unresolved_capabilities,...result.hypothetical.unresolved_capabilities])];
-  return <>
-    <p>Champion in each projection · {team(result.baseline.champion_team_id)} → {team(result.hypothetical.champion_team_id)}</p>
-    {limits.length > 0 && <p>Incomplete capabilities · {limits.join(", ")}</p>}
-    {result.timeline.length > 0 && <ul>{result.timeline.map((trade,i)=>
-      <li key={i}>Week {trade.scoring_week} · {trade.transfers.map(move => player(move.player_id)).join(", ")}</li>
-    )}</ul>}
-    <table><caption>Projected league outcomes, baseline → hypothetical</caption>
+  const table = (caption: string, rows: ProjectedScenarioResult["hypothetical"]["teams"]) =>
+    <table><caption>{caption}, baseline → hypothetical</caption>
       <thead><tr><th>Team</th><th>Record</th><th>Points for</th><th>Rank</th><th>Playoff seed</th><th>Final place</th></tr></thead>
-      <tbody>{result.hypothetical.teams.map(after => {
+      <tbody>{rows.map(after => {
         const before = result.baseline.teams.find(row=>row.team_id===after.team_id);
         if (!before) return null;
         const record = ({wins,losses,ties}:typeof before.final_regular_standing) => `${wins}–${losses}–${ties}`;
@@ -32,7 +29,18 @@ export function ProjectedTradeResult({snapshot, result}: {
           <td>{label(before.postseason_seed)} → {label(after.postseason_seed)}</td>
           <td>{label(before.final_placement)} → {label(after.final_placement)}</td></tr>;
       })}</tbody>
-    </table>
+    </table>;
+  return <>
+    <p>Champion in each projection · {team(result.baseline.champion_team_id)} → {team(result.hypothetical.champion_team_id)}</p>
+    {limits.length > 0 && <p>Incomplete capabilities · {limits.join(", ")}</p>}
+    {result.timeline.length === 0 && <p>Timing · Starting-roster edit</p>}
+    {result.timeline.length > 0 && <ul>{result.timeline.map((trade,i)=>
+      <li key={i}>Week {trade.scoring_week} · {trade.transfers.map(move => player(move.player_id)).join(", ")}</li>
+    )}</ul>}
+    {table("Trade participants", result.hypothetical.teams.filter(row => parties.has(row.team_id)))}
+    <details><summary>League-wide standings and placements</summary>
+      {table("League", result.hypothetical.teams)}
+    </details>
     {result.hypothetical.weeks.map(week => {
       const before = result.baseline.weeks.find(item=>item.scoring_week===week.scoring_week);
       const prior = new Map(before?.lineups.map(row=>[row.team_id,row]));
@@ -40,9 +48,9 @@ export function ProjectedTradeResult({snapshot, result}: {
         <ul>{week.matchups.map(match => {
           const previous = before?.matchups.find(item => item.matchup_id === match.matchup_id);
           const score = (row: typeof match) =>
-            `${row.home_score.toFixed(2)}?${row.away_score.toFixed(2)} (${row.outcome.replaceAll("_", " ")})`;
+            `${row.home_score.toFixed(2)}–${row.away_score.toFixed(2)} (${row.outcome.replaceAll("_", " ")})`;
           return <li key={match.matchup_id}>{team(match.home_team_id)} vs {team(match.away_team_id)}
-            {" ? "}{previous ? score(previous) : "Unavailable"} ? {score(match)}</li>;
+            {" · "}{previous ? score(previous) : "Unavailable"} → {score(match)}</li>;
         })}</ul>
         <ul>{week.lineups.map(row=>{
           const previous = prior.get(row.team_id);
@@ -62,9 +70,9 @@ export function ProjectedTradeResult({snapshot, result}: {
         </li>)}</ul>
       </section>)}
       {result.forced_drops?.length > 0 && <ul>{result.forced_drops.map(row =>
-        <li key={row.player_id}>{team(row.team_id)} ? Completion drop ? {player(row.player_id)}</li>)}</ul>}
+        <li key={row.player_id}>{team(row.team_id)} · Completion drop · {player(row.player_id)}</li>)}</ul>}
       {result.automatic_additions?.length > 0 && <ul>{result.automatic_additions.map(row =>
-        <li key={row.player_id}>{team(row.team_id)} ? Completion addition ? {player(row.player_id)}</li>)}</ul>}
+        <li key={row.player_id}>{team(row.team_id)} · Completion addition · {player(row.player_id)}</li>)}</ul>}
       <ul>{moved.map(id=><li key={id}>{player(id)} · {team(roster.get(id)??null)} → {team(hypotheticalRoster.get(id)??null)}</li>)}</ul>
     </details>
   </>;

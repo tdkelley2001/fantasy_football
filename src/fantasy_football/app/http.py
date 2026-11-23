@@ -49,8 +49,6 @@ from fantasy_football.app.contracts import (
     SnapshotRefreshSubmission,
     SnapshotSelector,
     SnapshotSummary,
-    TradeQuickAnalysisRequest,
-    TradeQuickAnalysisResult,
 )
 from fantasy_football.app.refresh import SnapshotRefreshCoordinator
 from fantasy_football.app.service import (
@@ -347,13 +345,6 @@ def create_app(
         current: ApplicationService = Depends(dependency),
     ) -> BaselineAnalysisResult:
         return current.run_baseline(body)
-
-    @app.post("/api/v1/analyses/trade-quick", response_model=TradeQuickAnalysisResult)
-    def trade_quick(
-        body: TradeQuickAnalysisRequest,
-        current: ApplicationService = Depends(dependency),
-    ) -> TradeQuickAnalysisResult:
-        return current.run_trade_quick_analysis(body)
 
     @app.post("/api/v1/analyses/manual-scenario", response_model=ManualScenarioResult)
     def manual_scenario(
