@@ -40,6 +40,8 @@ from fantasy_football.app.contracts import (
     ManualScenarioResult,
     ProjectedBaselineRequest,
     ProjectedBaselineResult,
+    ProjectedScenarioRequest,
+    ProjectedScenarioResult,
     SnapshotListQuery,
     SnapshotRefreshRecord,
     SnapshotRefreshRequest,
@@ -331,6 +333,13 @@ def create_app(
         current: ApplicationService = Depends(dependency),
     ) -> ProjectedBaselineResult:
         return current.run_projected_baseline(body)
+
+    @app.post("/api/v1/analyses/projected-scenario", response_model=ProjectedScenarioResult)
+    def projected_scenario(
+        body: ProjectedScenarioRequest,
+        current: ApplicationService = Depends(dependency),
+    ) -> ProjectedScenarioResult:
+        return current.run_projected_scenario(body)
 
     @app.post("/api/v1/analyses/baseline", response_model=BaselineAnalysisResult)
     def baseline(

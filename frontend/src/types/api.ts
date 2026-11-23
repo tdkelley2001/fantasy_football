@@ -322,7 +322,7 @@ export interface ProjectedBaselineResult {
   weeks: readonly {
     scoring_week: number;
     lineups: readonly {team_id: number; realized_points: number; lineup: {assignments: readonly {player_id: number}[]}}[];
-    matchups: readonly {matchup_id: number; home_team_id: number; away_team_id: number; home_score: number; away_score: number}[];
+    matchups: readonly {matchup_id: number; home_team_id: number; away_team_id: number; home_score: number; away_score: number; outcome: string}[];
   }[];
   postseason: readonly {
     matchup_id: string; round_number: number; bracket_type: string;
@@ -340,4 +340,17 @@ export interface ProjectedBaselineResult {
   assumptions: readonly string[];
   unresolved_capabilities: readonly string[];
   missing_projection_count: number;
+}
+
+
+export interface ProjectedScenarioResult {
+  scenario_id: string;
+  timeline: readonly {scoring_week: number; transfers: readonly RosterChangeInput[]}[];
+  baseline: ProjectedBaselineResult;
+  hypothetical: ProjectedBaselineResult;
+  baseline_final_roster: readonly {player_id: number; team_id: number}[];
+  hypothetical_final_roster: readonly {player_id: number; team_id: number}[];
+  explicit_changes: readonly RosterChangeInput[];
+  forced_drops: readonly {team_id: number; player_id: number}[];
+  automatic_additions: readonly {team_id: number; player_id: number}[];
 }

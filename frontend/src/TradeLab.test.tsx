@@ -70,7 +70,7 @@ test.each([true, false])("shows timing independently of simulation availability 
   await user.click(screen.getByRole("button", {name: "Selected week"}));
   expect(screen.getByRole("combobox", {name: "Scoring week"})).toHaveValue("10");
   if (!canScore) {
-    expect(screen.getByRole("status")).toHaveTextContent("Season simulation unavailable");
+    expect(screen.getByRole("status")).toHaveTextContent("Monte Carlo unavailable");
     expect(screen.getByRole("button", {name: "Evaluate scenario"})).toBeDisabled();
     expect(fetch).not.toHaveBeenCalled();
     return;
@@ -148,4 +148,41 @@ test("ignores a late Quick Analysis response after a snapshot change",async()=>{
   expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
   await act(async()=>resolve(await json({snapshot_id:snapshot.snapshot_id,canonical_sha256:snapshot.canonical_sha256})));
   expect(screen.queryByRole("heading",{name:"Projected starter points"})).not.toBeInTheDocument();
+});
+
+test("compares projected seasons and submits the same draft for optional Monte Carlo", async () => {
+  const user = userEvent.setup();
+  const fetch = mockEvaluation();
+  const simulation = fetch.getMockImplementation()!;
+  fetch.mockImplementation((input, init) => {
+    if (!String(input).endsWith("/analyses/projected-scenario")) return simulation(input, init);
+    const request = JSON.parse(String(init?.body));
+    const season = {
+      snapshot_id: snapshot.snapshot_id, canonical_sha256: snapshot.canonical_sha256,
+      teams: [], weeks: [], postseason: [], transactions: [], unresolved_capabilities: [],
+      champion_team_id: 1,
+    };
+    return json({
+      scenario_id: request.scenario.scenario_id, timeline: [],
+      baseline: season, hypothetical: {...season, champion_team_id: 2},
+      baseline_final_roster: [], hypothetical_final_roster: [],
+    });
+  });
+  render(<TradeLab snapshot={snapshot}/>);
+  await user.click(screen.getByRole("button",{name:/Avery Runner.*Select/}));
+  await user.click(screen.getByRole("button",{name:/Casey Quarterback.*Select/}));
+  await user.click(screen.getByRole("button",{name:"Add transaction step"}));
+  await user.click(screen.getByRole("button",{name:"Compare projected seasons"}));
+  expect(await screen.findByText(/Champion in each projection/)).toBeInTheDocument();
+  const projected = JSON.parse(String(fetch.mock.calls[0][1]?.body));
+  expect(projected).not.toHaveProperty("outcome_model");
+  expect(projected).not.toHaveProperty("simulation");
+  await user.click(screen.getByRole("button",{name:"Evaluate final state"}));
+  expect(await screen.findByRole("heading",{name:"League-wide paired impact"})).toBeInTheDocument();
+  const sampled = JSON.parse(String(fetch.mock.calls[1][1]?.body));
+  expect(sampled.snapshot).toEqual(projected.snapshot);
+  expect(sampled.scenario.changes).toEqual(projected.scenario.changes);
+  expect(sampled.simulation.ir_policy).toBe(projected.ir_policy);
+  await user.click(screen.getByRole("button",{name:"Protect Bailey Receiver"}));
+  expect(screen.queryByText(/Champion in each projection/)).not.toBeInTheDocument();
 });

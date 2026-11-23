@@ -145,6 +145,13 @@ When the snapshot verifies timing but season scoring is unavailable, Trade Lab
 still shows the effective week and the scoring limitation. Evaluation remains
 unavailable until the needed scoring evidence and mode are supported.
 
+Use **Compare projected seasons** to see the unchanged roster and the committed
+transaction play through the same season. Choose **Use effective timing** on a
+supported snapshot to schedule the trade. The result shows one projection per
+side, including the league standings, weekly lineups and postseason. Quick
+Analysis remains a fixed-roster lineup preview. Run the optional Monte Carlo
+analysis from the same draft when the snapshot supports sampling.
+
 ### Compare projected lineups before simulation
 
 On a supported full-week snapshot, commit one untimed exchange with players going

@@ -7,8 +7,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from fantasy_football.canonical.model import RosterEntry
+from fantasy_football.effective_trades import EffectiveTrade
 from fantasy_football.evolving_state import TransactionRecord
 from fantasy_football.postseason import PostseasonMatchup
+from fantasy_football.scenario_evaluator import ScenarioRosterAction
 from fantasy_football.season_simulator import FinalTeamSeasonRecord, FrozenTeamWeek
 from fantasy_football.weekly_engine import MatchupResult
 
@@ -341,6 +344,23 @@ class ManualScenarioInput(ContractModel):
     effective_trades: tuple[EffectiveTradeInput, ...] = Field(
         default=(), exclude_if=lambda value: not value
     )
+
+
+class ProjectedScenarioRequest(ProjectedBaselineRequest):
+    scenario: ManualScenarioInput
+
+
+class ProjectedScenarioResult(ContractModel):
+    api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
+    scenario_id: str
+    timeline: tuple[EffectiveTrade, ...]
+    explicit_changes: tuple[RosterChangeInput, ...]
+    forced_drops: tuple[ScenarioRosterAction, ...]
+    automatic_additions: tuple[ScenarioRosterAction, ...]
+    baseline: ProjectedBaselineResult
+    hypothetical: ProjectedBaselineResult
+    baseline_final_roster: tuple[RosterEntry, ...]
+    hypothetical_final_roster: tuple[RosterEntry, ...]
 
 
 class ManualScenarioRequest(ContractModel):

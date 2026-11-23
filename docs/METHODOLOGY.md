@@ -426,6 +426,14 @@ and league deadlines still apply. Immediate hypothetical approval does not
 change either restriction. Earlier observed points and lineup assignments stay
 with their original team.
 
+A manual projected comparison evaluates the same prepared season twice. The
+baseline retains the roster as published and uses the configured automatic
+transactions. The hypothetical adds the validated structural edit or dated
+timeline. Any current-week adjustment changes which eligible unstarted players
+contribute their resolved score. The current locked lineup and historical
+standings cutoff remain fixed. Placement, playoff entry, and the champion in
+each run are outcomes of those runs, with no associated probability estimate.
+
 The opt-in deterministic path uses M3's **same season coordinator**, in this logical dependency sequence (the implementation performs composition during preparation and checks further season gates before returning a result):
 
 1. Validate snapshot/companion linkage, timing, sources and preservation invariants; require the season path's verified companion-level authority and no unresolved dependent capabilities.
