@@ -465,3 +465,30 @@ test("a late startup run list cannot replace a newer run-history response", asyn
   await act(async()=>finishStartup(await response([activeRun])));
   expect(screen.getByText("No active runs")).toBeInTheDocument();
 });
+
+test("League opens existing baseline setup with matching policies and waits for explicit submission",async()=>{
+  const user=userEvent.setup();
+  mockApi({runs:[]});
+  const fetch=vi.mocked(globalThis.fetch);
+  const fallback=fetch.getMockImplementation()!;
+  let submitted: unknown;
+  fetch.mockImplementation((input,init)=>{
+    if(String(input).endsWith("/runs/baseline")){
+      submitted=JSON.parse(String(init?.body));
+      return response({api_schema_version:"1.0",run_id:"matching",run_type:"baseline",status:"queued"},202);
+    }
+    return fallback(input,init);
+  });
+  render(<App/>);
+  await screen.findByRole("heading",{name:"Home"});
+  await user.click(screen.getByRole("button",{name:"League Overview"}));
+  await user.click(screen.getByRole("button",{name:"Configure matching Monte Carlo"}));
+  expect(screen.getByRole("checkbox",{name:"Match projected season policies"})).toBeChecked();
+  expect(screen.getByLabelText("Waiver boundary")).toHaveValue("modeled_weekly_v1");
+  expect(submitted).toBeUndefined();
+  await user.click(screen.getByRole("button",{name:"Submit baseline"}));
+  await waitFor(()=>expect(submitted).toMatchObject({snapshot:{snapshot_id:snapshot.snapshot_id},simulation:{
+    ir_policy:"projection_based",waiver_boundary:"modeled_weekly_v1",reject_incomplete_valuations:true,
+    require_complete:true,standings_fallback_seed:null,use_observed_current_week_lineup:false,
+  }}));
+});
