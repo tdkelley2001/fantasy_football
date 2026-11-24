@@ -2,11 +2,12 @@ import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } from "lucide-react";
 import { ProjectedBaseline, ProjectionReadiness } from "./ProjectedBaseline";
-import { api, ApiError } from "./lib/api";
-import type { BackgroundBaselineResultSummary, BackgroundRunRecord, ProbabilityValue, SnapshotSummary, TeamProbabilityResult, TeamSummary } from "./types/api";
+import { api, ApiError, projectedBaselinePolicy } from "./lib/api";
+import type { BackgroundBaselineResultSummary, BackgroundRunRecord, BaselineAnalysisRequest, ProbabilityValue, SnapshotSummary, TeamProbabilityResult, TeamSummary } from "./types/api";
 
 import { CurrentMatchups, PreviousChampionship, RecentResults } from "./LeagueOverviewContext";
 
+export type ForecastRequest = { canonical: string; request: BaselineAnalysisRequest };
 export type ForecastMode = "projected" | "monte_carlo";
 
 type OverviewProps = {
@@ -15,13 +16,14 @@ type OverviewProps = {
   runs?: readonly BackgroundRunRecord[];
   runListStatus?: "loading" | "loaded" | "unavailable";
   loadRuns?: typeof api.runs;
+  forecastRequests?: ReadonlyMap<string,ForecastRequest>;
   modePreference?: { choice: ForecastMode | undefined; select: (mode: ForecastMode) => void };
 };
-export function LeagueOverview({snapshot, projection, openSimulation, openArchive, openPlayoffRace, runs, runListStatus, loadRuns, modePreference}: OverviewProps) {
+export function LeagueOverview({snapshot, projection, openSimulation, openArchive, openPlayoffRace, runs, runListStatus, loadRuns, modePreference, forecastRequests}: OverviewProps) {
   return <div className="overview analytics-overview"><header className="overview-masthead"><div><span className="overline">League overview</span><h1>{snapshot.league_name??`League ${snapshot.league_id}`}</h1><p>{snapshot.season} season · {snapshot.teams.length} teams · weeks {snapshot.first_simulation_week}–{snapshot.final_simulation_week}</p></div><div className="snapshot-stamp"><Database/><span><strong>Canonical snapshot</strong>{formatDate(snapshot.published_at_utc)}</span></div></header>
     <CommandCenter key={JSON.stringify([snapshot.snapshot_id,snapshot.canonical_sha256])}
       snapshot={snapshot} projection={projection} runs={runs} runListStatus={runListStatus}
-      loadRuns={loadRuns} modePreference={modePreference} openSimulation={openSimulation}/>
+      loadRuns={loadRuns} forecastRequests={forecastRequests} modePreference={modePreference} openSimulation={openSimulation}/>
     <div className="overview-source-grid"><div className="overview-source-stack"><ObservedSnapshot snapshot={snapshot}/><RecentResults key={snapshot.snapshot_id} snapshot={snapshot}/></div><div className="overview-source-stack"><CurrentMatchups snapshot={snapshot}/>{openArchive&&<PreviousChampionship leagueId={snapshot.league_id} season={snapshot.season} openArchive={openArchive}/>}</div></div>{projection&&<details className="run-disclosure" open={!runs?.some(run=>run.run_type==="baseline"&&run.status==="completed"&&run.snapshot_id===snapshot.snapshot_id)}><summary>Projected season details</summary><ProjectedBaseline snapshot={snapshot} projection={projection} openSimulation={openSimulation}/></details>}{openPlayoffRace && <section className="analytics-panel workspace-panel">
     <h2>Playoff outlook</h2>
     <p>See retained War Room probabilities, placement distributions and run details.</p>
@@ -49,27 +51,108 @@ export function PlayoffRace({snapshot, runs, runListStatus="loaded", preferredRu
 
 const noRuns: readonly BackgroundRunRecord[] = [];
 
+function compatibleRequest(snapshot: SnapshotSummary, evidence: ForecastRequest | undefined) {
+  if (!evidence || evidence.canonical!==snapshot.canonical_sha256) return false;
+  const {snapshot: selector, simulation} = evidence.request;
+  return selector.snapshot_id===snapshot.snapshot_id && selector.league_id===snapshot.league_id &&
+    selector.season===snapshot.season && simulation.ir_policy===projectedBaselinePolicy.ir_policy &&
+    simulation.waiver_boundary===projectedBaselinePolicy.waiver_boundary &&
+    simulation.reject_incomplete_valuations===projectedBaselinePolicy.reject_incomplete_valuations &&
+    simulation.require_complete &&
+    (simulation.automatic_roster_policy ?? "mandatory_marginal_lineup_v1")==="mandatory_marginal_lineup_v1" &&
+    (simulation.standings_fallback_seed ?? null)===projectedBaselinePolicy.standings_fallback_seed &&
+    (!snapshot.live_scoring || snapshot.live_scoring.partial_week_simulation_required ||
+      !simulation.use_observed_current_week_lineup);
+}
+
+function compatibleModel(summary: BackgroundBaselineResultSummary, {request}: ForecastRequest) {
+  const {model_id,model_parameters,master_seed,first_path_index,requested_path_count} = summary.result.provenance;
+  const parameters = new Map(model_parameters);
+  return model_id==="provisional-independent-normal-v1:missing-projection-zero-v1" &&
+    parameters.size===4 && model_parameters.length===4 &&
+    parameters.get("missing_projection_outcome")==="deterministic-zero-v1" &&
+    parameters.get("conditional_independence")===true &&
+    parameters.get("base_stddev")===request.outcome_model.base_stddev_points &&
+    parameters.get("projection_scale")===request.outcome_model.projection_scale &&
+    master_seed===request.simulation.master_seed && first_path_index===request.simulation.first_path_index &&
+    requested_path_count===request.simulation.path_count;
+}
+
 function useBaselineForecast(snapshot: SnapshotSummary, runs: readonly BackgroundRunRecord[],
-  runListStatus: NonNullable<PlayoffRaceProps["runListStatus"]>, preferredRunId?: string | null) {
+  runListStatus: NonNullable<PlayoffRaceProps["runListStatus"]>, preferredRunId?: string | null,
+  forecastRequests?: ReadonlyMap<string,ForecastRequest>) {
   const completed=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline"&&run.status==="completed"&&run.result_available).sort((a,b)=>dateKey(b).localeCompare(dateKey(a))||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
   const [pickedRun,setSelectedRun]=useState<string|null>(null);
-  const selectedRecord = completed.find(run=>run.run_id===(pickedRun ?? preferredRunId)) ?? completed[0];
+  const eligible = forecastRequests
+    ? completed.filter(run=>compatibleRequest(snapshot,forecastRequests.get(run.run_id))) : completed;
+  const sharedForecast = forecastRequests!==undefined;
+  const [rejected,setRejected] = useState<ReadonlyMap<string,string>>(()=>new Map());
+  const recordKey = (record: BackgroundRunRecord) => JSON.stringify([record.run_id,record.request_sha256]);
+  const chosen = eligible.find(run=>run.run_id===(pickedRun ?? preferredRunId));
+  const selectedRecord = chosen ?? eligible.find(run=>!rejected.has(recordKey(run)));
+  const rejectedRecord = eligible.find(run=>rejected.has(recordKey(run)));
+  const rejection = rejectedRecord && rejected.get(recordKey(rejectedRecord));
   const selectedRun = selectedRecord?.run_id ?? null;
   const requestIdentity = selectedRecord?.request_sha256;
-  const [summary,setSummary]=useState<BackgroundBaselineResultSummary|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
-  const version=useRef(0);
+  const evidence = selectedRecord && forecastRequests?.get(selectedRecord.run_id);
+  const [summary,setSummary]=useState<BackgroundBaselineResultSummary|null>(null);
+  const [error,setError]=useState<string|null>(null);
+  const [loading,setLoading]=useState(false);
+  const checked = useRef<BackgroundBaselineResultSummary|null>(null);
+
   useEffect(()=>setSelectedRun(null),[preferredRunId]);
-  useEffect(()=>{setSummary(null);setError(null);if(runListStatus!=="loaded"||!selectedRun){setLoading(false);return;}const request=++version.current,controller=new AbortController();setLoading(true);api.runResult(selectedRun,controller.signal).then(value=>{if(controller.signal.aborted||request!==version.current)return;const problem=validateResult(value,snapshot,selectedRun,requestIdentity);if(problem)setError(problem);else setSummary(value)}).catch(reason=>{if(!controller.signal.aborted&&request===version.current&&!(reason instanceof DOMException&&reason.name==="AbortError"))setError(reason instanceof ApiError?reason.message:"The retained result could not be read.")}).finally(()=>{if(!controller.signal.aborted&&request===version.current)setLoading(false)});return()=>controller.abort()},[selectedRun,snapshot,runListStatus,requestIdentity]);
+  useEffect(()=>{
+    if(!sharedForecast)setSummary(null);
+    setError(null);
+    if(runListStatus!=="loaded" || !selectedRun) {
+      setLoading(false);
+      return;
+    }
+    const previous=checked.current;
+    if(evidence && previous && !validateResult(previous,snapshot,selectedRun,requestIdentity) &&
+        compatibleModel(previous,evidence)) {
+      setSummary(previous);
+      setLoading(false);
+      return;
+    }
+    const controller=new AbortController();
+    setLoading(true);
+    void api.runResult(selectedRun,controller.signal).then(value=>{
+      if(controller.signal.aborted)return;
+      const problem=validateResult(value,snapshot,selectedRun,requestIdentity) ??
+        (evidence && !compatibleModel(value,evidence)
+          ? "The retained model or sampling configuration does not match the requested baseline." : null);
+      if(problem) {
+        if(sharedForecast && !pickedRun) {
+          const key=JSON.stringify([selectedRun,requestIdentity]);
+          setRejected(current=>new Map(current).set(key,problem));
+        } else setError(problem);
+        return;
+      }
+      checked.current=value;
+      setSummary(value);
+    }).catch(reason=>{
+      if(!controller.signal.aborted)setError(reason instanceof ApiError?reason.message:"The retained result could not be read.");
+    }).finally(()=>{
+      if(!controller.signal.aborted)setLoading(false);
+    });
+    return()=>controller.abort();
+  },[selectedRun,snapshot,runListStatus,requestIdentity,evidence,sharedForecast,pickedRun]);
   const matching=runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline");
-  const activeSummary = runListStatus==="loaded" && summary && selectedRun &&
-    !validateResult(summary, snapshot, selectedRun, requestIdentity) ? summary : null;
-  return {completed, selectedRun, setSelectedRun, loading, error, activeSummary, matching};
+  const visibleRecord = (forecastRequests && !pickedRun)
+    ? eligible.find(run=>run.run_id===summary?.run.run_id) : selectedRecord;
+  const activeSummary = runListStatus==="loaded" && summary && visibleRecord &&
+    !validateResult(summary, snapshot, visibleRecord.run_id, visibleRecord.request_sha256) &&
+    (!forecastRequests || compatibleModel(summary,forecastRequests.get(visibleRecord.run_id)!)) ? summary : null;
+  return {completed:eligible, selectedRun, setSelectedRun, loading, error:error??rejection, activeSummary, matching, unverified:completed.length>eligible.length};
 }
 
 type Focus = { selected: number | undefined; onSelect: (id: number) => void };
 
-function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded", loadRuns, openSimulation, modePreference}: OverviewProps) {
-  const forecast = useBaselineForecast(snapshot, runs, runListStatus);
+const noRequests: ReadonlyMap<string,ForecastRequest> = new Map();
+
+function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded", loadRuns, openSimulation, modePreference, forecastRequests=noRequests}: OverviewProps) {
+  const forecast = useBaselineForecast(snapshot, runs, runListStatus, undefined, forecastRequests);
   const projected = projection?.state.status==="available" &&
     projection.state.result.snapshot_id===snapshot.snapshot_id &&
     projection.state.result.canonical_sha256===snapshot.canonical_sha256 ? projection.state.result : null;
@@ -102,7 +185,7 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
     return ()=>{ controller.abort(); window.clearTimeout(timer); };
   },[running,loadRuns]);
 
-  const summary = choice==="monte_carlo" || (!choice && !running) ? forecast.activeSummary : null;
+  const summary = choice!=="projected" ? forecast.activeSummary : null;
   const mode = summary ? "monte_carlo" : "projected";
   const probabilities = new Map(summary?.result.teams.map(row=>[row.team_id,row]));
   const ranks = new Map(projected?.teams.map(row=>[row.team_id,row]));
@@ -122,14 +205,16 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
     <header className="command-heading">
       <h2 id="league-command-title">League Command Center</h2>
       <div className="command-modes" role="group" aria-label="Forecast mode">
-        <button ref={modeControl} type="button" aria-pressed={mode==="projected"} onClick={()=>setChoice("projected")}>Projected season</button>
-        <button type="button" aria-pressed={mode==="monte_carlo"} onClick={()=>setChoice("monte_carlo")}>Monte Carlo</button>
+        <button ref={modeControl} type="button" aria-pressed={(choice??mode)==="projected"} onClick={()=>setChoice("projected")}>Projected season</button>
+        <button type="button" aria-pressed={(choice??mode)==="monte_carlo"} onClick={()=>setChoice("monte_carlo")}>Monte Carlo</button>
       </div>
     </header>
+    <p role="status">Showing {summary ? "Monte Carlo" : projected ? "the projected season" : "no forecast"}.</p>
     {running && <p role="status">A baseline simulation is active. The available season outlook remains visible.</p>}
+    {forecast.unverified && <p>Some retained runs have different or unverified forecast policies. Inspect them in Playoff Race.</p>}
     {forecast.loading && choice!=="projected" && <p role="status">Checking retained Monte Carlo evidence.</p>}
     {(forecast.error || (choice==="monte_carlo" && !summary && !forecast.loading)) &&
-      <p role="status">Monte Carlo forecast unavailable. {forecast.error??"Select or request a compatible baseline."}</p>}
+      <p role="status">{summary ? "Retained run issue." : "Monte Carlo forecast unavailable."} {forecast.error??"Select or request a compatible baseline."}</p>}
     <div className="command-canvas" role="group" aria-label="League forecast canvas">
       <section aria-labelledby="command-race">
         <h3 id="command-race">Playoff Race</h3>

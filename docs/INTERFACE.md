@@ -79,12 +79,23 @@ Journey share a canvas that stacks on narrow screens. Postseason Outlook sits
 below. Observed standings, matchups, archive links, and detailed projected results
 remain available. The separate Playoff Race entry continues to inspect retained runs.
 
-The Command Center starts with the automatically prepared projected season. In
-automatic mode, a completed retained baseline can take over after validation of
-the run, request, snapshot, and canonical digest. An explicit mode choice is tied
-to the snapshot during the session. The chosen run's configuration is identified
-separately from the deterministic projection. Background monitoring observes
-known active runs without submitting work or hiding the deterministic result.
+The Command Center starts with the automatically prepared projected season.
+Automatic promotion uses the newest compatible completed baseline requested in
+the current browser session. The submitted request must match the projection's
+snapshot, IR, waiver, incomplete-valuation, roster and standings policies,
+including whether current-week observed lineups are used. The result must
+match the retained run and request identity, canonical digest, supported Normal
+model and its parameters, seed, and requested path range. Monte Carlo budgets
+and confidence settings can vary by run and remain part of its provenance.
+
+Retained results without verifiable request policies remain inspectable in
+Playoff Race. The public retained result exposes configuration hashes without
+the underlying roster and scoring policies. When compatible Monte Carlo
+evidence is unavailable, the mode control preserves the requested mode and the
+canvas identifies the displayed evidence separately. A compatible completed
+forecast stays visible while newer work runs or is checked. The projection
+remains independently available and an explicit mode choice is tied to the
+snapshot during the session.
 
 Team selections use canonical IDs across the race and postseason views. Team
 Focus highlights the same team across regions and opens a nonmodal overlay.

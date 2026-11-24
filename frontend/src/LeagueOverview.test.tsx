@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
-import { LeagueOverview, PlayoffRace } from "./LeagueOverview";
+import { LeagueOverview, PlayoffRace, type ForecastRequest } from "./LeagueOverview";
 import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { api } from "./lib/api";
 import { snapshot } from "./test/fixtures";
@@ -57,12 +57,32 @@ const projected: ProjectedSeasonState = {state:{status:"available",result:{
   }],transactions:[],observed_scores:[],assumptions:[],unresolved_capabilities:[],missing_projection_count:0,
 }},retry:vi.fn()};
 
+const forecastRequest: ForecastRequest = {
+  canonical:snapshot.canonical_sha256,
+  request:{
+    api_schema_version:"1.0", snapshot:{snapshot_id:snapshot.snapshot_id,league_id:snapshot.league_id,season:snapshot.season},
+    simulation:{master_seed:8128,path_count:1000,first_path_index:0,ir_policy:"projection_based",
+      waiver_boundary:"modeled_weekly_v1",reject_incomplete_valuations:true,require_complete:true},
+    precision:{family_confidence_level:.95,target_half_width_probability:.05,minimum_paths:1000,maximum_paths:1000,evaluation_interval_paths:100},
+    outcome_model:{model_type:"provisional_normal",base_stddev_points:4,projection_scale:.2},
+  },
+};
+function commandResult(record: BackgroundRunRecord) {
+  const payload=result(record);
+  return {...payload,result:{...payload.result,provenance:{...payload.result.provenance,
+    model_id:"provisional-independent-normal-v1:missing-projection-zero-v1",
+    model_parameters:[["base_stddev",4],["projection_scale",.2],["conditional_independence",true],
+      ["missing_projection_outcome","deterministic-zero-v1"]],
+  }}};
+}
+
 test("one League canvas promotes a completed baseline and retains focus across mode switches",async()=>{
   const user=userEvent.setup();
   const finished=run("finished","2026-10-24T12:00:00Z");
   const active={...finished,status:"running",result_available:false} as const;
-  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(result(finished)));
-  const view=render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[active]}/>);
+  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(commandResult(finished)));
+  const forecastRequests=new Map([[finished.run_id,forecastRequest]]);
+  const view=render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[active]} forecastRequests={forecastRequests}/>);
   const command=within(screen.getByRole("region",{name:"League Command Center"}));
   expect(command.getByRole("button",{name:"Projected season"})).toHaveAttribute("aria-pressed","true");
   expect(command.getByText(/baseline simulation is active/)).toBeInTheDocument();
@@ -76,7 +96,7 @@ test("one League canvas promotes a completed baseline and retains focus across m
   expect(command.getByRole("complementary",{name:"Team Focus"})).toBeInTheDocument();
   expect(fetch).not.toHaveBeenCalled();
 
-  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[finished]}/>);
+  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[finished]} forecastRequests={forecastRequests}/>);
   await waitFor(()=>expect(command.getByRole("button",{name:"Monte Carlo"})).toHaveAttribute("aria-pressed","true"));
   expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
   expect(postseason.getByRole("button",{name:/North Harbor: championship/})).toHaveAttribute("aria-pressed","true");
@@ -94,17 +114,50 @@ test("one League canvas promotes a completed baseline and retains focus across m
 test("automatic promotion honors an explicit projected choice and rejects a changed request identity",async()=>{
   const user=userEvent.setup();
   const record=run("selected","2026-10-24T12:00:00Z");
-  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(result(record)));
-  const view=render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[]}/>);
+  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(commandResult(record)));
+  const forecastRequests=new Map([[record.run_id,forecastRequest]]);
+  const view=render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[]} forecastRequests={forecastRequests}/>);
   const mode=screen.getByRole("button",{name:"Projected season"});
   await user.click(mode);
-  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[record]}/>);
+  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[record]} forecastRequests={forecastRequests}/>);
   await waitFor(()=>expect(fetch).toHaveBeenCalledOnce());
   expect(mode).toHaveAttribute("aria-pressed","true");
   await user.click(screen.getByRole("button",{name:"Monte Carlo"}));
   expect(await screen.findByRole("heading",{name:"Championship probability"})).toBeInTheDocument();
-  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[{...record,request_sha256:"0".repeat(64)}]}/>);
+  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[{...record,request_sha256:"0".repeat(64)}]} forecastRequests={forecastRequests}/>);
   expect(screen.queryByRole("heading",{name:"Championship probability"})).not.toBeInTheDocument();
   expect(await screen.findByText(/Monte Carlo forecast unavailable.*identity does not match/)).toBeInTheDocument();
-  expect(mode).toHaveAttribute("aria-pressed","true");
+  expect(mode).toHaveAttribute("aria-pressed","false");
+  expect(screen.getByRole("button",{name:"Monte Carlo"})).toHaveAttribute("aria-pressed","true");
+  expect(screen.getByText("Showing the projected season.")).toBeInTheDocument();
+});
+
+test("an active or incompatible baseline cannot displace a compatible completed forecast", async()=>{
+  const older=run("older","2026-10-20T12:00:00Z");
+  const newer=run("newer","2026-10-21T12:00:00Z");
+  const wrongPolicy=run("wrong-policy","2026-10-22T12:00:00Z");
+  const wrongModel=run("wrong-model","2026-10-23T12:00:00Z");
+  const unknown=run("unknown","2026-10-24T12:00:00Z");
+  const forecastRequests=new Map([[older.run_id,forecastRequest],[newer.run_id,forecastRequest],
+    [wrongModel.run_id,forecastRequest],[wrongPolicy.run_id,{...forecastRequest,request:{...forecastRequest.request,
+      simulation:{...forecastRequest.request.simulation,ir_policy:"strict" as const}}}]]);
+  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async input=>{
+    const url=String(input);
+    return Response.json(url.includes("wrong-model")?result(wrongModel):
+      commandResult(url.includes("newer")?newer:older));
+  });
+  const renderRuns=(runs:BackgroundRunRecord[])=> <LeagueOverview snapshot={snapshot}
+    projection={projected} runs={runs} forecastRequests={forecastRequests}/>;
+  const view=render(renderRuns([older]));
+  await screen.findByText(/Run older .* Configuration/);
+  view.rerender(renderRuns([older,{...newer,status:"running",result_available:false},wrongPolicy,unknown]));
+  expect(screen.getByText(/baseline simulation is active/)).toBeInTheDocument();
+  expect(screen.getByText(/Run older .* Configuration/)).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledOnce();
+  view.rerender(renderRuns([older,newer,wrongPolicy,unknown]));
+  await screen.findByText(/Run newer .* Configuration/);
+  view.rerender(renderRuns([older,newer,wrongPolicy,wrongModel,unknown]));
+  await screen.findByText(/retained model or sampling configuration does not match/);
+  expect(screen.getByText(/Run newer .* Configuration/)).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(3);
 });
