@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { LeagueOverview, PlayoffRace } from "./LeagueOverview";
+import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { api } from "./lib/api";
 import { snapshot } from "./test/fixtures";
 import type { BackgroundBaselineResultSummary, BackgroundRunRecord, ProbabilityValue } from "./types/api";
@@ -43,4 +44,67 @@ test("renders the shared projected season and offers optional Monte Carlo", asyn
   await user.click(screen.getByRole("button", {name: "Open Monte Carlo"}));
   expect(openSimulation).toHaveBeenCalledOnce();
   expect(fetch.mock.calls.some(([url]) => String(url).endsWith("/analyses/projected-baseline"))).toBe(false);
+});
+
+const projected: ProjectedSeasonState = {state:{status:"available",result:{
+  snapshot_id:snapshot.snapshot_id,canonical_sha256:snapshot.canonical_sha256,status:"complete",
+  champion_team_id:snapshot.teams[0].team_id,teams:snapshot.teams.map((team,index)=>({
+    team_id:team.team_id,final_regular_rank:index+1,postseason_seed:index+1,final_placement:index+1,
+    final_regular_standing:{wins:team.wins,losses:team.losses,ties:team.ties,points_for:team.points_for},
+  })),weeks:[],postseason:[{
+    matchup_id:"title",round_number:1,bracket_type:"championship",home_team_id:snapshot.teams[0].team_id,
+    away_team_id:snapshot.teams[1].team_id,home_total:110,away_total:100,winner_team_id:snapshot.teams[0].team_id,
+  }],transactions:[],observed_scores:[],assumptions:[],unresolved_capabilities:[],missing_projection_count:0,
+}},retry:vi.fn()};
+
+test("one League canvas promotes a completed baseline and retains focus across mode switches",async()=>{
+  const user=userEvent.setup();
+  const finished=run("finished","2026-10-24T12:00:00Z");
+  const active={...finished,status:"running",result_available:false} as const;
+  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(result(finished)));
+  const view=render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[active]}/>);
+  const command=within(screen.getByRole("region",{name:"League Command Center"}));
+  expect(command.getByRole("button",{name:"Projected season"})).toHaveAttribute("aria-pressed","true");
+  expect(command.getByText(/baseline simulation is active/)).toBeInTheDocument();
+  const race=within(command.getByRole("region",{name:"Playoff Race"}));
+  const journey=within(command.getByRole("region",{name:"Season Journey"}));
+  const postseason=within(command.getByRole("region",{name:"Postseason Outlook"}));
+  expect(race.getAllByRole("button")).toHaveLength(snapshot.teams.length);
+  await user.click(postseason.getByRole("button",{name:/North Harbor/}));
+  expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  expect(journey.getByText(/North Harbor.*Observed rank/)).toBeInTheDocument();
+  expect(command.getByRole("complementary",{name:"Team Focus"})).toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
+
+  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[finished]}/>);
+  await waitFor(()=>expect(command.getByRole("button",{name:"Monte Carlo"})).toHaveAttribute("aria-pressed","true"));
+  expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  expect(postseason.getByRole("button",{name:/North Harbor: championship/})).toHaveAttribute("aria-pressed","true");
+  await user.click(race.getByRole("button",{name:/North Harbor/}));
+  expect(command.queryByRole("complementary",{name:"Team Focus"})).not.toBeInTheDocument();
+  await user.click(postseason.getByRole("button",{name:/North Harbor: championship/}));
+  await user.click(command.getByRole("button",{name:"Projected season"}));
+  expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  expect(postseason.getByRole("button",{name:/North Harbor.*Winner/})).toBeInTheDocument();
+  await user.click(command.getByRole("button",{name:"Dismiss Team Focus"}));
+  expect(command.queryByRole("complementary",{name:"Team Focus"})).not.toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledOnce();
+});
+
+test("automatic promotion honors an explicit projected choice and rejects a changed request identity",async()=>{
+  const user=userEvent.setup();
+  const record=run("selected","2026-10-24T12:00:00Z");
+  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(result(record)));
+  const view=render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[]}/>);
+  const mode=screen.getByRole("button",{name:"Projected season"});
+  await user.click(mode);
+  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[record]}/>);
+  await waitFor(()=>expect(fetch).toHaveBeenCalledOnce());
+  expect(mode).toHaveAttribute("aria-pressed","true");
+  await user.click(screen.getByRole("button",{name:"Monte Carlo"}));
+  expect(await screen.findByRole("heading",{name:"Championship probability"})).toBeInTheDocument();
+  view.rerender(<LeagueOverview snapshot={snapshot} projection={projected} runs={[{...record,request_sha256:"0".repeat(64)}]}/>);
+  expect(screen.queryByRole("heading",{name:"Championship probability"})).not.toBeInTheDocument();
+  expect(await screen.findByText(/Monte Carlo forecast unavailable.*identity does not match/)).toBeInTheDocument();
+  expect(mode).toHaveAttribute("aria-pressed","true");
 });

@@ -33,7 +33,7 @@ Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then del
 
 | Task | Workspace |
 |---|---|
-| Understand league outlook | Submit a baseline in Simulation Center; inspect its retained result in Playoff Race. Without a usable result, observed standings remain explicitly factual. |
+| Understand league outlook | Open League Overview for the projected season. Request a baseline in Simulation Center for Monte Carlo forecasts. Playoff Race remains available for retained run inspection. |
 | Explore hypothetical actions | Configure a finite universe in Simulation Center; inspect retained paths/effects in Opportunity Explorer. |
 | Test a specific exchange | Commit a Trade Lab draft, review pins/settings and intentionally evaluate aggregate final ownership. |
 | Follow or reopen work | Monitor/cancel/select retained runs in Simulation Center and navigate to their matching result workspace. |
@@ -74,7 +74,26 @@ The header manager selector supplies Home and Team Overview. It restores a valid
 
 ## League Overview
 
-The overview leads with observed standings and the known team pairings for the snapshot's current scoring period. Recent results shows the latest prior regular-season period only when the captured ESPN schedule reconciles to that snapshot's standings. Results are as of the snapshot and can change with later stat corrections. Incomplete or conflicting evidence has an explicit unavailable state. A configured archive for the same league supplies the latest completed championship before the active snapshot's season. The bracket shortcut opens that year in Season Archive and leaves the active snapshot unchanged. The projected baseline remains separately labeled below the observed and historical sections. Open Playoff Race for retained Monte Carlo results.
+League Overview opens with the **League Command Center**. Playoff Race and Season
+Journey share a canvas that stacks on narrow screens. Postseason Outlook sits
+below. Observed standings, matchups, archive links, and detailed projected results
+remain available. The separate Playoff Race entry continues to inspect retained runs.
+
+The Command Center starts with the automatically prepared projected season. In
+automatic mode, a completed retained baseline can take over after validation of
+the run, request, snapshot, and canonical digest. An explicit mode choice is tied
+to the snapshot during the session. The chosen run's configuration is identified
+separately from the deterministic projection. Background monitoring observes
+known active runs without submitting work or hiding the deterministic result.
+
+Team selections use canonical IDs across the race and postseason views. Team
+Focus highlights the same team across regions and opens a nonmodal overlay.
+Select the team again, dismiss the overlay, or press Escape to clear focus.
+Selection does not change the analysis. Season Journey currently states that
+weekly trajectories are unavailable. The focused team's observed rank and
+deterministic finish can be shown as individually labeled values.
+
+The observed section shows standings and the known team pairings for the snapshot's current scoring period. Recent results shows the latest prior regular-season period only when the captured ESPN schedule reconciles to that snapshot's standings. Results are as of the snapshot and can change with later stat corrections. Incomplete or conflicting evidence has an explicit unavailable state. A configured archive for the same league supplies the latest completed championship before the active snapshot's season. The bracket shortcut opens that year in Season Archive and leaves the active snapshot unchanged. Detailed projected results remain separately labeled below the observed and historical sections.
 
 ## Playoff Race
 

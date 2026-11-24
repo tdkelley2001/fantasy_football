@@ -1,18 +1,28 @@
 import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } from "lucide-react";
-import { ProjectedBaseline } from "./ProjectedBaseline";
+import { ProjectedBaseline, ProjectionReadiness } from "./ProjectedBaseline";
 import { api, ApiError } from "./lib/api";
 import type { BackgroundBaselineResultSummary, BackgroundRunRecord, ProbabilityValue, SnapshotSummary, TeamProbabilityResult, TeamSummary } from "./types/api";
 
 import { CurrentMatchups, PreviousChampionship, RecentResults } from "./LeagueOverviewContext";
 
+export type ForecastMode = "projected" | "monte_carlo";
+
 type OverviewProps = {
   snapshot: SnapshotSummary; projection?: ProjectedSeasonState; openSimulation?: () => void;
   openArchive?: (year: number) => void; openPlayoffRace?: () => void;
+  runs?: readonly BackgroundRunRecord[];
+  runListStatus?: "loading" | "loaded" | "unavailable";
+  loadRuns?: typeof api.runs;
+  modePreference?: { choice: ForecastMode | undefined; select: (mode: ForecastMode) => void };
 };
-export function LeagueOverview({snapshot, projection, openSimulation, openArchive, openPlayoffRace}: OverviewProps) {
-  return <div className="overview analytics-overview"><header className="overview-masthead"><div><span className="overline">League overview</span><h1>{snapshot.league_name??`League ${snapshot.league_id}`}</h1><p>{snapshot.season} season · {snapshot.teams.length} teams · weeks {snapshot.first_simulation_week}–{snapshot.final_simulation_week}</p></div><div className="snapshot-stamp"><Database/><span><strong>Canonical snapshot</strong>{formatDate(snapshot.published_at_utc)}</span></div></header><div className="overview-source-grid"><div className="overview-source-stack"><ObservedSnapshot snapshot={snapshot}/><RecentResults key={snapshot.snapshot_id} snapshot={snapshot}/></div><div className="overview-source-stack"><CurrentMatchups snapshot={snapshot}/>{openArchive&&<PreviousChampionship leagueId={snapshot.league_id} season={snapshot.season} openArchive={openArchive}/>}</div></div>{projection&&<ProjectedBaseline snapshot={snapshot} projection={projection} openSimulation={openSimulation}/>}{openPlayoffRace && <section className="analytics-panel workspace-panel">
+export function LeagueOverview({snapshot, projection, openSimulation, openArchive, openPlayoffRace, runs, runListStatus, loadRuns, modePreference}: OverviewProps) {
+  return <div className="overview analytics-overview"><header className="overview-masthead"><div><span className="overline">League overview</span><h1>{snapshot.league_name??`League ${snapshot.league_id}`}</h1><p>{snapshot.season} season · {snapshot.teams.length} teams · weeks {snapshot.first_simulation_week}–{snapshot.final_simulation_week}</p></div><div className="snapshot-stamp"><Database/><span><strong>Canonical snapshot</strong>{formatDate(snapshot.published_at_utc)}</span></div></header>
+    <CommandCenter key={JSON.stringify([snapshot.snapshot_id,snapshot.canonical_sha256])}
+      snapshot={snapshot} projection={projection} runs={runs} runListStatus={runListStatus}
+      loadRuns={loadRuns} modePreference={modePreference} openSimulation={openSimulation}/>
+    <div className="overview-source-grid"><div className="overview-source-stack"><ObservedSnapshot snapshot={snapshot}/><RecentResults key={snapshot.snapshot_id} snapshot={snapshot}/></div><div className="overview-source-stack"><CurrentMatchups snapshot={snapshot}/>{openArchive&&<PreviousChampionship leagueId={snapshot.league_id} season={snapshot.season} openArchive={openArchive}/>}</div></div>{projection&&<details className="run-disclosure" open={!runs?.some(run=>run.run_type==="baseline"&&run.status==="completed"&&run.snapshot_id===snapshot.snapshot_id)}><summary>Projected season details</summary><ProjectedBaseline snapshot={snapshot} projection={projection} openSimulation={openSimulation}/></details>}{openPlayoffRace && <section className="analytics-panel workspace-panel">
     <h2>Playoff outlook</h2>
     <p>See retained War Room probabilities, placement distributions and run details.</p>
     <button className="workspace-action" type="button" onClick={openPlayoffRace}>Open Playoff Race</button>
@@ -25,17 +35,8 @@ type PlayoffRaceProps = {
   openSimulation?: () => void;
 };
 export function PlayoffRace({snapshot, runs, runListStatus="loaded", preferredRunId, openSimulation}: PlayoffRaceProps) {
-  const completed=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline"&&run.status==="completed"&&run.result_available).sort((a,b)=>dateKey(b).localeCompare(dateKey(a))||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
-  const [selectedRun,setSelectedRun]=useState<string|null>(completed[0]?.run_id??null);
-  const [summary,setSummary]=useState<BackgroundBaselineResultSummary|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
-  const version=useRef(0);
-  useEffect(()=>setSelectedRun(current=>completed.some(run=>run.run_id===current)?current:completed[0]?.run_id??null),[completed]);
-  useEffect(()=>{if(preferredRunId&&completed.some(run=>run.run_id===preferredRunId))setSelectedRun(preferredRunId)},[preferredRunId,completed]);
-  useEffect(()=>{setSummary(null);setError(null);if(runListStatus!=="loaded"||!selectedRun){setLoading(false);return;}const request=++version.current,controller=new AbortController();setLoading(true);api.runResult(selectedRun,controller.signal).then(value=>{if(controller.signal.aborted||request!==version.current)return;const problem=validateResult(value,snapshot,selectedRun);if(problem)setError(problem);else setSummary(value)}).catch(reason=>{if(!controller.signal.aborted&&request===version.current&&!(reason instanceof DOMException&&reason.name==="AbortError"))setError(reason instanceof ApiError?reason.message:"The retained result could not be read.")}).finally(()=>{if(!controller.signal.aborted&&request===version.current)setLoading(false)});return()=>controller.abort()},[selectedRun,snapshot,runListStatus]);
-  const matching=runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline");
-  const visible = summary?.run.run_id === selectedRun &&
-    completed.some(run => run.run_id === selectedRun) ? summary : null;
-  const activeSummary = visible && !validateResult(visible, snapshot, visible.run.run_id) ? visible : null;
+  const {completed, selectedRun, setSelectedRun, loading, error, activeSummary, matching} =
+    useBaselineForecast(snapshot, runs, runListStatus, preferredRunId);
   return <div className="overview analytics-overview playoff-race-page"><header className="overview-masthead">
     <div><h1>Playoff Race</h1><p>{snapshot.league_name ?? `League ${snapshot.league_id}`} / {snapshot.season}</p></div>
     <div className="snapshot-stamp"><Database/><span><strong>Canonical snapshot</strong>{formatDate(snapshot.published_at_utc)}</span></div>
@@ -45,20 +46,161 @@ export function PlayoffRace({snapshot, runs, runListStatus="loaded", preferredRu
   </div>}
   {runListStatus!=="loaded"?<AnalyticsState icon={<Activity/>} title={runListStatus==="loading"?"Checking retained runs":"Retained baseline results unavailable"} body={runListStatus==="loading"?"Loading the run list.":"Use Retry run list to check for retained Monte Carlo analysis."}/>:<><RunContext completed={completed} selected={selectedRun} onChange={setSelectedRun}/>{loading?<AnalyticsState icon={<Activity/>} title="Loading retained analysis" body="Reading the selected completed run without starting new simulation work."/>:error?<AnalyticsState icon={<AlertTriangle/>} title="Result unavailable" body={error}/>:activeSummary?<AnalyticsDashboard snapshot={snapshot} summary={activeSummary}/>:<NoAnalysis runs={matching}/>}</>}</div>;
 }
+
+const noRuns: readonly BackgroundRunRecord[] = [];
+
+function useBaselineForecast(snapshot: SnapshotSummary, runs: readonly BackgroundRunRecord[],
+  runListStatus: NonNullable<PlayoffRaceProps["runListStatus"]>, preferredRunId?: string | null) {
+  const completed=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline"&&run.status==="completed"&&run.result_available).sort((a,b)=>dateKey(b).localeCompare(dateKey(a))||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
+  const [pickedRun,setSelectedRun]=useState<string|null>(null);
+  const selectedRecord = completed.find(run=>run.run_id===(pickedRun ?? preferredRunId)) ?? completed[0];
+  const selectedRun = selectedRecord?.run_id ?? null;
+  const requestIdentity = selectedRecord?.request_sha256;
+  const [summary,setSummary]=useState<BackgroundBaselineResultSummary|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
+  const version=useRef(0);
+  useEffect(()=>setSelectedRun(null),[preferredRunId]);
+  useEffect(()=>{setSummary(null);setError(null);if(runListStatus!=="loaded"||!selectedRun){setLoading(false);return;}const request=++version.current,controller=new AbortController();setLoading(true);api.runResult(selectedRun,controller.signal).then(value=>{if(controller.signal.aborted||request!==version.current)return;const problem=validateResult(value,snapshot,selectedRun,requestIdentity);if(problem)setError(problem);else setSummary(value)}).catch(reason=>{if(!controller.signal.aborted&&request===version.current&&!(reason instanceof DOMException&&reason.name==="AbortError"))setError(reason instanceof ApiError?reason.message:"The retained result could not be read.")}).finally(()=>{if(!controller.signal.aborted&&request===version.current)setLoading(false)});return()=>controller.abort()},[selectedRun,snapshot,runListStatus,requestIdentity]);
+  const matching=runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="baseline");
+  const activeSummary = runListStatus==="loaded" && summary && selectedRun &&
+    !validateResult(summary, snapshot, selectedRun, requestIdentity) ? summary : null;
+  return {completed, selectedRun, setSelectedRun, loading, error, activeSummary, matching};
+}
+
+type Focus = { selected: number | undefined; onSelect: (id: number) => void };
+
+function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded", loadRuns, openSimulation, modePreference}: OverviewProps) {
+  const forecast = useBaselineForecast(snapshot, runs, runListStatus);
+  const projected = projection?.state.status==="available" &&
+    projection.state.result.snapshot_id===snapshot.snapshot_id &&
+    projection.state.result.canonical_sha256===snapshot.canonical_sha256 ? projection.state.result : null;
+  const [localChoice, setLocalChoice] = useState<ForecastMode>();
+  const choice = modePreference ? modePreference.choice : localChoice;
+  const setChoice = modePreference?.select ?? setLocalChoice;
+  const [focusedId, setFocusedId] = useState<number>();
+  const modeControl = useRef<HTMLButtonElement>(null);
+  const focusTrigger = useRef<HTMLElement|null>(null);
+  const team = snapshot.teams.find(item=>item.team_id===focusedId);
+  const focus: Focus = {
+    selected: team?.team_id,
+    onSelect: id=> {
+      focusTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setFocusedId(current=>current===id?undefined:id);
+    },
+  };
+  const running = runListStatus==="loaded" && forecast.matching.some(run=>
+    run.status==="queued" || run.status==="running" || run.status==="cancel_requested");
+  useEffect(()=>{
+    if(!running || !loadRuns)return;
+    const controller = new AbortController();
+    let timer: number;
+    const poll = async()=>{
+      try { await loadRuns(controller.signal); }
+      catch { /* App reports the run-list failure. */ }
+      if(!controller.signal.aborted)timer=window.setTimeout(()=>void poll(),1500);
+    };
+    timer=window.setTimeout(()=>void poll(),1500);
+    return ()=>{ controller.abort(); window.clearTimeout(timer); };
+  },[running,loadRuns]);
+
+  const summary = choice==="monte_carlo" || (!choice && !running) ? forecast.activeSummary : null;
+  const mode = summary ? "monte_carlo" : "projected";
+  const probabilities = new Map(summary?.result.teams.map(row=>[row.team_id,row]));
+  const ranks = new Map(projected?.teams.map(row=>[row.team_id,row]));
+  const ordered = [...snapshot.teams].sort((a,b)=>
+    (ranks.get(a.team_id)?.final_regular_rank??Infinity)-(ranks.get(b.team_id)?.final_regular_rank??Infinity) ||
+    (a.standing??Infinity)-(b.standing??Infinity) || a.team_id-b.team_id);
+  const teamForecast = team && probabilities.get(team.team_id);
+  const teamProjection = team && ranks.get(team.team_id);
+  const dismiss = ()=>{
+    setFocusedId(undefined);
+    if(focusTrigger.current?.isConnected)focusTrigger.current.focus();
+    else modeControl.current?.focus();
+  };
+
+  return <section className="league-command" aria-labelledby="league-command-title"
+    onKeyDown={event=>{if(event.key==="Escape" && team){event.stopPropagation();dismiss();}}}>
+    <header className="command-heading">
+      <h2 id="league-command-title">League Command Center</h2>
+      <div className="command-modes" role="group" aria-label="Forecast mode">
+        <button ref={modeControl} type="button" aria-pressed={mode==="projected"} onClick={()=>setChoice("projected")}>Projected season</button>
+        <button type="button" aria-pressed={mode==="monte_carlo"} onClick={()=>setChoice("monte_carlo")}>Monte Carlo</button>
+      </div>
+    </header>
+    {running && <p role="status">A baseline simulation is active. The available season outlook remains visible.</p>}
+    {forecast.loading && choice!=="projected" && <p role="status">Checking retained Monte Carlo evidence.</p>}
+    {(forecast.error || (choice==="monte_carlo" && !summary && !forecast.loading)) &&
+      <p role="status">Monte Carlo forecast unavailable. {forecast.error??"Select or request a compatible baseline."}</p>}
+    <div className="command-canvas" role="group" aria-label="League forecast canvas">
+      <section aria-labelledby="command-race">
+        <h3 id="command-race">Playoff Race</h3>
+        {summary ? <PlayoffBands teams={ordered} results={probabilities} {...focus}/> : <>
+          {projection && !projected && <ProjectionReadiness projection={projection}/>}
+          <ul className="command-ranks">{ordered.map(row=><li key={row.team_id}>
+            <button type="button" aria-pressed={focus.selected===row.team_id} onClick={()=>focus.onSelect(row.team_id)}>
+              <TeamMark team={row}/><span>{row.display_name}</span>
+              <span>Projected rank {ranks.get(row.team_id)?.final_regular_rank??"unavailable"}</span>
+            </button>
+          </li>)}</ul>
+        </>}
+      </section>
+      <section className="command-journey" aria-labelledby="command-journey">
+        <h3 id="command-journey">Season Journey</h3>
+        <p>Weekly standings trajectories are unavailable.</p>
+        {team && <p className="command-journey-focus">
+          {team.display_name} / Observed rank {team.standing??"unavailable"}
+          {teamProjection?.final_regular_rank != null && ` / Projected finish ${teamProjection.final_regular_rank} (deterministic)`}
+        </p>}
+        {team && <aside className="command-team-focus" aria-label="Team Focus">
+          <div className="command-focus-heading"><h3>{team.display_name}</h3>
+            <button type="button" onClick={dismiss} aria-label="Dismiss Team Focus">Close</button>
+          </div>
+          <p role="status">Observed record {team.wins}-{team.losses}-{team.ties} / Rank {team.standing??"unavailable"}</p>
+          {teamForecast ? <Metric label="Playoff qualification" estimate={teamForecast.playoff_qualification}/>:
+            <p>Projected finish {teamProjection?.final_regular_rank??"unavailable"}</p>}
+        </aside>}
+      </section>
+    </div>
+    <section className="command-postseason" aria-labelledby="command-postseason">
+      <h3 id="command-postseason">Postseason Outlook</h3>
+      {summary ? <>
+        <PrecisionNotice summary={summary}/>
+        <h4>Championship probability</h4>
+        <ProbabilityPlot teams={ordered} results={probabilities} {...focus}/>
+        <h4>Final placement matrix</h4>
+        <PlacementHeatmap teams={ordered} results={probabilities} {...focus}/>
+        <RunDisclosure summary={summary}/>
+      </> : projected?.postseason.length ? <ul className="command-rounds">{projected.postseason.map(match=><li key={match.matchup_id}>
+        <span>{human(match.bracket_type)} / Round {match.round_number}</span>
+        {[match.home_team_id,match.away_team_id].map((id,index)=>{
+          const participant = snapshot.teams.find(row=>row.team_id===id);
+          return participant ? <button type="button" key={participant.team_id} aria-pressed={focus.selected===id}
+            onClick={()=>focus.onSelect(participant.team_id)}>{participant.display_name}{match.winner_team_id===id?" (Winner)":""}</button>
+            : <span key={index}>Opponent unavailable</span>;
+        })}
+      </li>)}</ul> : <p>Projected postseason matchups are unavailable.</p>}
+    </section>
+    {summary && <p>Run {short(summary.run.run_id)} / Configuration {short(summary.result.provenance.simulation_config_sha256)}</p>}
+    {runListStatus==="loaded" && forecast.completed.length>0 && <RunContext completed={forecast.completed}
+      selected={forecast.selectedRun} onChange={id=>{forecast.setSelectedRun(id);setChoice("monte_carlo");}}/>}
+    {runListStatus==="unavailable" && <p>Retained Monte Carlo results are unavailable. Use Retry run list to check again.</p>}
+    {openSimulation && <button type="button" onClick={openSimulation}>Open Simulation Center</button>}
+  </section>;
+}
 function RunContext({completed,selected,onChange}:{completed:readonly BackgroundRunRecord[];selected:string|null;onChange:(id:string)=>void}){return <section className="analysis-context" aria-label="Analysis context"><div><span className="overline">Analysis source</span><strong>{completed.length?`${completed.length} completed baseline run${completed.length===1?"":"s"}`:"No usable completed baseline"}</strong><small>Newest retained result is selected by default. Selection never launches a run.</small></div>{completed.length>0&&<label><span>Completed run</span><select value={selected??""} onChange={event=>onChange(event.target.value)}>{completed.map(run=><option key={run.run_id} value={run.run_id}>{formatDate(run.finished_at_utc??run.created_at_utc)} · {short(run.run_id)}</option>)}</select></label>}</section>}
-function AnalyticsDashboard({snapshot,summary}:{snapshot:SnapshotSummary;summary:BackgroundBaselineResultSummary}){const teams=useMemo(()=>[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id),[snapshot]);const results=useMemo(()=>new Map(summary.result.teams.map(team=>[team.team_id,team])),[summary]);const [teamId,setTeamId]=useState(teams[0]?.team_id);useEffect(()=>setTeamId(current=>teams.some(team=>team.team_id===current)?current:teams[0]?.team_id),[snapshot.snapshot_id,teams]);const selected=teams.find(team=>team.team_id===teamId),selectedResult=teamId===undefined?undefined:results.get(teamId);const r=summary.result,metricPrecisionMissing=r.teams.some(team=>![team.championship,team.playoff_qualification,...team.final_placements.map(item=>item.estimate)].every(metric=>metric.precision_reached));const notices=[r.incomplete_paths>0&&`${r.incomplete_paths.toLocaleString()} simulation paths were incomplete`,r.incomplete_capabilities.length>0&&`${r.incomplete_capabilities.length} analytical capabilities were incomplete`,!r.league_wide_precision_reached&&"the league-wide precision target was not reached",metricPrecisionMissing&&"one or more metric-level precision targets were not reached"].filter(Boolean) as string[];return <>{notices.length>0&&<div className="analysis-warning precision-warning" role="status"><AlertTriangle/><div><strong>Precision or coverage qualification</strong><span>Execution completed, but {notices.join("; ")}. Review technical details below.</span><small>Confidence intervals describe Monte Carlo sampling uncertainty, not outcome-model uncertainty.</small></div></div>}<div className="analytics-grid"><section className="analytics-panel championship-panel" aria-labelledby="championship-title"><PanelTitle eyebrow="Title race" title="Championship probability" id="championship-title" note="Engine-supplied interval whiskers"/><ProbabilityPlot teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><aside className="analytics-panel selected-team" aria-live="polite"><span className="overline">Selected team</span><div className="team-identity"><TeamMark team={selected}/><div><h2>{selected?.display_name??"Unavailable"}</h2><p>{selected?`${selected.wins}–${selected.losses}${selected.ties?`–${selected.ties}`:""} · ${selected.points_for.toFixed(1)} PF`:"No matching team"}</p></div></div><Metric label="Championship" estimate={selectedResult?.championship}/><Metric label="Playoff qualification" estimate={selectedResult?.playoff_qualification}/><div className="selected-observed"><span>Observed standing <b>{selected?.standing??"—"}</b></span><span>Playoff seed <b>{selected?.playoff_seed??"—"}</b></span></div><p className="integrity-note"><ShieldCheck/> Forecast probabilities and observed snapshot facts remain explicitly separate.</p></aside></div><section className="analytics-panel playoff-panel" aria-labelledby="playoff-title"><PanelTitle eyebrow="Qualification field" title="Playoff probability bands" id="playoff-title" note="Bands include supplied interval markers"/><PlayoffBands teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><section className="analytics-panel heatmap-panel" aria-labelledby="placement-title"><PanelTitle eyebrow="Outcome distribution" title="Final placement matrix" id="placement-title" note="Exact values remain visible"/><PlacementHeatmap teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><RunDisclosure summary={summary}/></>}
-function ProbabilityPlot({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const ordered=[...teams].sort((a,b)=>(results.get(b.team_id)?.championship.probability??-1)-(results.get(a.team_id)?.championship.probability??-1)||a.team_id-b.team_id);return <div className="probability-plot">{ordered.map(team=>{const estimate=results.get(team.team_id)?.championship,p=estimate?.probability,interval=estimate?.interval;return <button key={team.team_id} className={selected===team.team_id?"selected":""} onClick={()=>onSelect(team.team_id)} aria-label={`${team.display_name}: championship ${metricDescription(estimate)}`}><TeamMark team={team}/><strong>{team.display_name}</strong><span className="probability-track">{p!==null&&p!==undefined&&<><i className="dot" style={{left:pct(p)}}/>{interval&&<i className="interval" style={{left:pct(interval.lower_probability),width:pct(interval.upper_probability-interval.lower_probability)}}/>}</>}</span><b>{percent(p)}{estimate&&!estimate.precision_reached&&<small>Precision pending</small>}</b></button>})}<div className="probability-axis"><span>0%</span><span>50%</span><span>100%</span></div></div>}
-function PlayoffBands({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const ordered=[...teams].sort((a,b)=>(results.get(b.team_id)?.playoff_qualification.probability??-1)-(results.get(a.team_id)?.playoff_qualification.probability??-1)||a.team_id-b.team_id);return <div className="playoff-bands">{ordered.map(team=>{const estimate=results.get(team.team_id)?.playoff_qualification,p=estimate?.probability,interval=estimate?.interval;return <button key={team.team_id} onClick={()=>onSelect(team.team_id)} className={selected===team.team_id?"selected":""} aria-label={`${team.display_name}: playoff qualification ${metricDescription(estimate)}`}><span><TeamMark team={team}/><strong>{team.display_name}</strong></span><span className="band">{p!==null&&p!==undefined&&<i className="band-fill" style={{width:pct(p)}}/>}{interval&&<i className="band-interval" style={{left:pct(interval.lower_probability),width:pct(interval.upper_probability-interval.lower_probability)}}/>}{p===null||p===undefined?<em>Unavailable</em>:<b>{percent(p)}{!estimate?.precision_reached&&<small>Precision pending</small>}</b>}{p!==null&&p!==undefined&&!interval&&<span className="interval-missing">Interval unavailable</span>}</span></button>})}</div>}
+function AnalyticsDashboard({snapshot,summary}:{snapshot:SnapshotSummary;summary:BackgroundBaselineResultSummary}){const teams=useMemo(()=>[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id),[snapshot]);const results=useMemo(()=>new Map(summary.result.teams.map(team=>[team.team_id,team])),[summary]);const [teamId,setTeamId]=useState(teams[0]?.team_id);useEffect(()=>setTeamId(current=>teams.some(team=>team.team_id===current)?current:teams[0]?.team_id),[snapshot.snapshot_id,teams]);const selected=teams.find(team=>team.team_id===teamId),selectedResult=teamId===undefined?undefined:results.get(teamId);return <><PrecisionNotice summary={summary}/><div className="analytics-grid"><section className="analytics-panel championship-panel" aria-labelledby="championship-title"><PanelTitle eyebrow="Title race" title="Championship probability" id="championship-title" note="Engine-supplied interval whiskers"/><ProbabilityPlot teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><aside className="analytics-panel selected-team" aria-live="polite"><span className="overline">Selected team</span><div className="team-identity"><TeamMark team={selected}/><div><h2>{selected?.display_name??"Unavailable"}</h2><p>{selected?`${selected.wins}–${selected.losses}${selected.ties?`–${selected.ties}`:""} · ${selected.points_for.toFixed(1)} PF`:"No matching team"}</p></div></div><Metric label="Championship" estimate={selectedResult?.championship}/><Metric label="Playoff qualification" estimate={selectedResult?.playoff_qualification}/><div className="selected-observed"><span>Observed standing <b>{selected?.standing??"—"}</b></span><span>Playoff seed <b>{selected?.playoff_seed??"—"}</b></span></div><p className="integrity-note"><ShieldCheck/> Forecast probabilities and observed snapshot facts remain explicitly separate.</p></aside></div><section className="analytics-panel playoff-panel" aria-labelledby="playoff-title"><PanelTitle eyebrow="Qualification field" title="Playoff probability bands" id="playoff-title" note="Bands include supplied interval markers"/><PlayoffBands teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><section className="analytics-panel heatmap-panel" aria-labelledby="placement-title"><PanelTitle eyebrow="Outcome distribution" title="Final placement matrix" id="placement-title" note="Exact values remain visible"/><PlacementHeatmap teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><RunDisclosure summary={summary}/></>}
+function PrecisionNotice({summary}:{summary:BackgroundBaselineResultSummary}){const r=summary.result,metricPrecisionMissing=r.teams.some(team=>![team.championship,team.playoff_qualification,...team.final_placements.map(item=>item.estimate)].every(metric=>metric.precision_reached));const notices=[r.incomplete_paths>0&&`${r.incomplete_paths.toLocaleString()} simulation paths were incomplete`,r.incomplete_capabilities.length>0&&`${r.incomplete_capabilities.length} analytical capabilities were incomplete`,!r.league_wide_precision_reached&&"the league-wide precision target was not reached",metricPrecisionMissing&&"one or more metric-level precision targets were not reached"].filter(Boolean) as string[];return <>{notices.length>0&&<div className="analysis-warning precision-warning" role="status"><AlertTriangle/><div><strong>Precision or coverage qualification</strong><span>Execution completed, but {notices.join("; ")}. Review technical details below.</span><small>Confidence intervals describe Monte Carlo sampling uncertainty, not outcome-model uncertainty.</small></div></div>}</>;}
+function ProbabilityPlot({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const ordered=[...teams].sort((a,b)=>(results.get(b.team_id)?.championship.probability??-1)-(results.get(a.team_id)?.championship.probability??-1)||a.team_id-b.team_id);return <div className="probability-plot">{ordered.map(team=>{const estimate=results.get(team.team_id)?.championship,p=estimate?.probability,interval=estimate?.interval;return <button key={team.team_id} className={selected===team.team_id?"selected":""} onClick={()=>onSelect(team.team_id)} aria-pressed={selected===team.team_id} aria-label={`${team.display_name}: championship ${metricDescription(estimate)}`}><TeamMark team={team}/><strong>{team.display_name}</strong><span className="probability-track">{p!==null&&p!==undefined&&<><i className="dot" style={{left:pct(p)}}/>{interval&&<i className="interval" style={{left:pct(interval.lower_probability),width:pct(interval.upper_probability-interval.lower_probability)}}/>}</>}</span><b>{percent(p)}{estimate&&!estimate.precision_reached&&<small>Precision pending</small>}</b></button>})}<div className="probability-axis"><span>0%</span><span>50%</span><span>100%</span></div></div>}
+function PlayoffBands({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const ordered=[...teams].sort((a,b)=>(results.get(b.team_id)?.playoff_qualification.probability??-1)-(results.get(a.team_id)?.playoff_qualification.probability??-1)||a.team_id-b.team_id);return <div className="playoff-bands">{ordered.map(team=>{const estimate=results.get(team.team_id)?.playoff_qualification,p=estimate?.probability,interval=estimate?.interval;return <button key={team.team_id} onClick={()=>onSelect(team.team_id)} className={selected===team.team_id?"selected":""} aria-pressed={selected===team.team_id} aria-label={`${team.display_name}: playoff qualification ${metricDescription(estimate)}`}><span><TeamMark team={team}/><strong>{team.display_name}</strong></span><span className="band">{p!==null&&p!==undefined&&<i className="band-fill" style={{width:pct(p)}}/>}{interval&&<i className="band-interval" style={{left:pct(interval.lower_probability),width:pct(interval.upper_probability-interval.lower_probability)}}/>}{p===null||p===undefined?<em>Unavailable</em>:<b>{percent(p)}{!estimate?.precision_reached&&<small>Precision pending</small>}</b>}{p!==null&&p!==undefined&&!interval&&<span className="interval-missing">Interval unavailable</span>}</span></button>})}</div>}
 function PlacementHeatmap({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const places=[...new Set([...results.values()].flatMap(team=>team.final_placements.map(item=>item.placement)))].sort((a,b)=>a-b);return <><div className="placement-scroll"><div className="placement-matrix" style={{gridTemplateColumns:`minmax(130px,1.4fr) repeat(${places.length},minmax(48px,1fr))`}}><span className="matrix-corner">Team / finish</span>{places.map(place=><strong key={place}>{ordinal(place)}</strong>)}{teams.map(team=><PlacementRow key={team.team_id} team={team} result={results.get(team.team_id)} places={places} selected={selected===team.team_id} onSelect={onSelect}/>)}</div></div><details className="exact-table"><summary>Accessible exact placement table</summary><table><thead><tr><th>Team</th>{places.map(place=><th key={place}>{ordinal(place)}</th>)}</tr></thead><tbody>{teams.map(team=><tr key={team.team_id}><th>{team.display_name}</th>{places.map(place=><td key={place}>{percent(results.get(team.team_id)?.final_placements.find(item=>item.placement===place)?.estimate.probability)}</td>)}</tr>)}</tbody></table></details></>}
-function PlacementRow({team,result,places,selected,onSelect}:{team:TeamSummary;result:TeamProbabilityResult|undefined;places:readonly number[];selected:boolean;onSelect:(id:number)=>void}){return <><button className={`matrix-team ${selected?"selected":""}`} onClick={()=>onSelect(team.team_id)}><TeamMark team={team}/>{team.display_name}</button>{places.map(place=>{const p=result?.final_placements.find(item=>item.placement===place)?.estimate.probability;return <span key={place} className={`heat-cell ${p===null||p===undefined?"unavailable":""}`} style={p===null||p===undefined?undefined:{"--heat":String(.08+p*.82)} as React.CSSProperties} aria-label={`${team.display_name}, ${ordinal(place)}: ${percent(p)}`} title={`${team.display_name} · ${ordinal(place)} · ${percent(p)}`}>{percent(p)}</span>})}</>}
+function PlacementRow({team,result,places,selected,onSelect}:{team:TeamSummary;result:TeamProbabilityResult|undefined;places:readonly number[];selected:boolean;onSelect:(id:number)=>void}){return <><button className={`matrix-team ${selected?"selected":""}`} onClick={()=>onSelect(team.team_id)} aria-pressed={selected}><TeamMark team={team}/>{team.display_name}</button>{places.map(place=>{const p=result?.final_placements.find(item=>item.placement===place)?.estimate.probability;return <span key={place} className={`heat-cell ${p===null||p===undefined?"unavailable":""}`} style={p===null||p===undefined?undefined:{"--heat":String(.08+p*.82)} as React.CSSProperties} aria-label={`${team.display_name}, ${ordinal(place)}: ${percent(p)}`} title={`${team.display_name} · ${ordinal(place)} · ${percent(p)}`}>{percent(p)}</span>})}</>}
 function RunDisclosure({summary}:{summary:BackgroundBaselineResultSummary}){const r=summary.result;return <details className="run-disclosure"><summary><BarChart3/> Analysis precision, provenance, and limitations</summary><p>Execution status, capability completeness, and Monte Carlo precision are independent. Confidence intervals quantify sampling uncertainty only; model evidence and calibration limitations remain separate.</p><div className="run-facts"><span><b>Completed</b> execution</span><span><b>{r.completed_paths.toLocaleString()} / {r.requested_paths.toLocaleString()}</b> completed paths</span><span><b>{r.incomplete_paths.toLocaleString()}</b> incomplete paths</span><span><b>{r.league_wide_precision_reached?"Reached":"Not reached"}</b> league-wide precision</span><span><b>{r.teams.filter(team=>[team.championship,team.playoff_qualification,...team.final_placements.map(item=>item.estimate)].some(metric=>!metric.precision_reached)).length}</b> teams with pending metric precision</span><span><b>{human(r.stopping_reason)}</b> stop reason</span></div><dl><div><dt>Outcome model</dt><dd>{r.provenance.model_id}</dd></div><div><dt>Master seed</dt><dd>{r.provenance.master_seed}</dd></div><div><dt>Simulation identity</dt><dd>{short(r.provenance.engine_run_identity_sha256)}</dd></div><div><dt>Configuration</dt><dd>{short(r.provenance.simulation_config_sha256)}</dd></div></dl>{r.incomplete_capabilities.length>0&&<div><strong>Incomplete capabilities</strong><ul>{r.incomplete_capabilities.map(([capability,week])=><li key={`${capability}-${week}`}>{human(capability)} at scoring week {week}</li>)}</ul></div>}{r.limitations.length>0&&<div><strong>Outcome-model and evidence limitations</strong><ul>{r.limitations.map(item=><li key={item}>{item}</li>)}</ul></div>}</details>}
 function NoAnalysis({runs}:{runs:readonly BackgroundRunRecord[]}){const active=runs.filter(run=>["queued","running","cancel_requested"].includes(run.status)),terminal=runs.filter(run=>["failed","cancelled","interrupted"].includes(run.status));return <><AnalyticsState icon={<Trophy/>} title={active.length?"Baseline analysis in progress":"No completed baseline analysis"} body={active.length?`${active.length} matching run${active.length===1?" is":"s are"} active. This page will not start or substitute analysis.`:"No retained completed baseline result matches this canonical snapshot."}/>{terminal.length>0&&<p className="run-history-note">{terminal.length} matching run{terminal.length===1?"":"s"} ended without a usable result: {[...new Set(terminal.map(run=>run.status))].join(", ")}.</p>}</>}
-function ObservedSnapshot({snapshot}:{snapshot:SnapshotSummary}){const teams=[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id);return <section className="analytics-panel observed-fallback"><PanelTitle eyebrow="Observed snapshot" title="Current league standings" id="observed-title" note="No forecast values are implied"/><div className="observed-list">{teams.map(team=><div key={team.team_id}><span>{team.standing??"—"}</span><TeamMark team={team}/><strong>{team.display_name}</strong><span>{team.wins}–{team.losses}</span><b>{team.points_for.toFixed(1)} PF</b></div>)}</div></section>}
+function ObservedSnapshot({snapshot}:{snapshot:SnapshotSummary}){const teams=[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id);return <section className="analytics-panel observed-fallback" aria-labelledby="observed-title"><PanelTitle eyebrow="Observed snapshot" title="Current league standings" id="observed-title" note="No forecast values are implied"/><div className="observed-list">{teams.map(team=><div key={team.team_id}><span>{team.standing??"—"}</span><TeamMark team={team}/><strong>{team.display_name}</strong><span>{team.wins}–{team.losses}</span><b>{team.points_for.toFixed(1)} PF</b></div>)}</div></section>}
 function AnalyticsState({icon,title,body}:{icon:React.ReactNode;title:string;body:string}){return <section className="analytics-state">{icon}<div><span className="overline">Analytics status</span><h2>{title}</h2><p>{body}</p></div></section>}
 function PanelTitle({eyebrow,title,id,note}:{eyebrow:string;title:string;id:string;note:string}){return <header className="section-heading"><div><span className="overline">{eyebrow}</span><h2 id={id}>{title}</h2></div><small>{note}</small></header>}
 function TeamMark({team}:{team:TeamSummary|undefined}){const name=team?.display_name??"TBD";return <span className={`team-mark accent-${team?team.team_id%4:0}`} aria-hidden="true"><i/>{name.split(/\s+/).map(part=>part[0]).join("").slice(0,3).toUpperCase()}</span>}
 function Metric({label,estimate}:{label:string;estimate:ProbabilityValue|undefined}){return <div className="forecast-metric"><span>{label}</span><strong>{percent(estimate?.probability)}</strong><small>{estimate?.interval?`${percent(estimate.interval.lower_probability)}–${percent(estimate.interval.upper_probability)} simultaneous interval`:"Interval unavailable"}{estimate&&!estimate.precision_reached?" · Precision target not reached":""}</small></div>}
-function validateResult(value:BackgroundBaselineResultSummary,snapshot:SnapshotSummary,runId:string){if(value.api_schema_version!=="1.0"||value.result.api_schema_version!=="1.0")return "This retained result uses an unsupported schema version.";if(value.run.run_id!==runId||value.run.run_type!=="baseline")return "The retained result identity does not match the selected baseline run.";if(value.run.snapshot_id!==snapshot.snapshot_id||value.result.provenance.snapshot_id!==snapshot.snapshot_id)return "The retained result belongs to a different snapshot.";if(value.result.provenance.canonical_sha256!==snapshot.canonical_sha256)return "The retained result canonical identity does not match the active snapshot.";if(value.result.teams.some(team=>!snapshot.teams.some(item=>item.team_id===team.team_id)))return "The retained result contains a team outside the active snapshot.";return null}
+function validateResult(value:BackgroundBaselineResultSummary,snapshot:SnapshotSummary,runId:string,requestIdentity:string|undefined){if(value.api_schema_version!=="1.0"||value.result.api_schema_version!=="1.0")return "This retained result uses an unsupported schema version.";if(value.run.run_id!==runId||value.run.run_type!=="baseline"||value.run.status!=="completed"||!value.run.result_available||value.run.request_sha256!==requestIdentity)return "The retained result identity does not match the selected baseline run.";if(value.run.snapshot_id!==snapshot.snapshot_id||value.result.provenance.snapshot_id!==snapshot.snapshot_id)return "The retained result belongs to a different snapshot.";if(value.result.provenance.canonical_sha256!==snapshot.canonical_sha256)return "The retained result canonical identity does not match the active snapshot.";if(value.result.teams.some(team=>!snapshot.teams.some(item=>item.team_id===team.team_id)))return "The retained result contains a team outside the active snapshot.";return null}
 function dateKey(run:BackgroundRunRecord){return run.finished_at_utc??run.created_at_utc}
 function percent(value:number|null|undefined){return value===null||value===undefined?"Unavailable":new Intl.NumberFormat(undefined,{style:"percent",maximumFractionDigits:1}).format(value)}
 function metricDescription(estimate:ProbabilityValue|undefined){if(!estimate||estimate.probability===null)return "estimate unavailable";const interval=estimate.interval?`, interval ${percent(estimate.interval.lower_probability)} to ${percent(estimate.interval.upper_probability)}`:", interval unavailable";return `${percent(estimate.probability)}${interval}, precision target ${estimate.precision_reached?"reached":"not reached"}`}
