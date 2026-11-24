@@ -496,6 +496,19 @@ Path braces identify required URL strings; body `none` means no JSON body parame
 
 Projected baseline is a synchronous, snapshot-digest-bound execution of one season. The request accepts IR and waiver policies, incomplete-valuation handling, and an optional standings tiebreak seed. No outcome-model seed, path count, or precision settings are used. The response returns weekly matchups and lineups, rankings and postseason placements, the transaction ledger, scoring policy and source identifiers, and unresolved capabilities. The operation creates no retained run. Invalid or unsupported execution evidence returns 422.
 
+The projected-baseline response includes the additive `standings_series`
+array. Each point identifies its scoring week, canonical matchup period,
+evidence basis, completeness, and per-team ranks. `snapshot_start` records
+the preserved team ranks entering the modeled regular-season horizon.
+`projected` points use the deterministic simulator's weekly ranking tables
+and the existing ranking authority for any explicitly configured standings
+fallback seed. Shared ranks carry the unresolved-tie marker. Unexecuted weeks
+or unsupported ranking results retain null ranks, and postseason weeks are
+excluded. The series includes neither reconstructed historical standings
+nor Monte Carlo weekly distributions. Older responses can omit the field.
+Other projected response paths continue to omit it.
+
+
 Projected scenario comparison adds the existing manual scenario intent to the
 projection request. The response contains both season results, their final
 rosters, the resolved effective timeline, explicit edits and structural roster

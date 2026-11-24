@@ -1,14 +1,19 @@
 """Application serialization for projection-fed season analysis."""
 
 from fantasy_football.app.contracts import (
+    JourneyStandingsPoint,
+    JourneyTeamRank,
     ProjectedBaselineResult,
     ProjectedObservedScore,
     ProjectedSeasonWeek,
 )
 from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snapshot
+from fantasy_football.canonical.model import LeagueSnapshot, MatchupPhase
 from fantasy_football.canonical.validation import validated_snapshot
 from fantasy_football.evolving_state import IRPolicy
 from fantasy_football.projected_season import prepare_projected_season
+from fantasy_football.season_simulator import DeterministicSeasonResult
+from fantasy_football.weekly_engine import WeeklyEngineError, rank_standings
 from fantasy_football.weekly_transactions import (
     WaiverBoundaryPolicy,
     WeeklyTransactionPolicy,
@@ -35,12 +40,100 @@ def project_baseline(loaded, request) -> ProjectedBaselineResult:
     with validated_snapshot(loaded.snapshot):
         inputs = prepare_projection_request(loaded, request)
         result, observations = inputs.execute()
+        standings_series = _standings_series(
+            inputs.snapshot, result, request.standings_fallback_seed
+        )
     return projected_season_result(
-        loaded.metadata.canonical_sha256, inputs, result, observations
+        loaded.metadata.canonical_sha256,
+        inputs,
+        result,
+        observations,
+        standings_series=standings_series,
     )
 
 
-def projected_season_result(canonical_sha256, inputs, result, observations):
+def _standings_series(
+    snapshot: LeagueSnapshot,
+    result: DeterministicSeasonResult,
+    fallback_seed: int | None,
+) -> tuple[JourneyStandingsPoint, ...]:
+    periods = {
+        week: period.matchup_period_id
+        for period in snapshot.matchup_periods
+        if period.phase is MatchupPhase.REGULAR
+        for week in period.scoring_weeks
+        if snapshot.first_simulation_week <= week <= snapshot.final_simulation_week
+    }
+    teams = sorted(snapshot.teams, key=lambda team: team.team_id)
+    points = []
+    first = snapshot.first_simulation_week
+    if first in periods:
+        observed = tuple(
+            JourneyTeamRank(
+                team_id=team.team_id,
+                rank=team.standing
+                if team.standing is not None and 1 <= team.standing <= len(teams)
+                else None,
+            )
+            for team in teams
+        )
+        known = sum(row.rank is not None for row in observed)
+        points.append(
+            JourneyStandingsPoint(
+                scoring_week=first,
+                matchup_period_id=periods[first],
+                basis="snapshot_start",
+                status="complete"
+                if known == len(teams)
+                else "unresolved"
+                if known
+                else "unavailable",
+                teams=observed,
+            )
+        )
+    trace = {week.scoring_week: week.regular_transition for week in result.weeks}
+    for scoring_week, period in sorted(periods.items()):
+        transition = trace.get(scoring_week)
+        ranking = transition.ranking if transition else None
+        if transition and fallback_seed is not None:
+            try:
+                ranking = rank_standings(
+                    snapshot, transition.standings, fallback_seed=fallback_seed
+                )
+            except WeeklyEngineError:
+                # The configured fallback can be unsupported for this weekly table.
+                ranking = None
+        rows = (
+            tuple(
+                JourneyTeamRank(
+                    team_id=row.team_id,
+                    rank=row.rank,
+                    unresolved_tie=not row.uniquely_ranked,
+                )
+                for row in ranking.rows
+            )
+            if ranking
+            else tuple(
+                JourneyTeamRank(team_id=team.team_id, rank=None) for team in teams
+            )
+        )
+        points.append(
+            JourneyStandingsPoint(
+                scoring_week=scoring_week,
+                matchup_period_id=period,
+                basis="projected",
+                status=("complete" if ranking.has_unique_order else "unresolved")
+                if ranking
+                else "unavailable",
+                teams=rows,
+            )
+        )
+    return tuple(points)
+
+
+def projected_season_result(
+    canonical_sha256, inputs, result, observations, *, standings_series=None
+):
     snapshot = inputs.snapshot
     current = inputs.current
     observed_week = current.evidence.scoring_period if current else None
@@ -80,6 +173,7 @@ def projected_season_result(canonical_sha256, inputs, result, observations):
         and row.scoring_week != observed_week
     )
     return ProjectedBaselineResult(
+        standings_series=standings_series,
         snapshot_id=result.source_snapshot_id,
         canonical_sha256=canonical_sha256,
         status=result.status.value,

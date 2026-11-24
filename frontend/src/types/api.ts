@@ -326,7 +326,16 @@ export interface CglHistory {
 }
 
 
+export interface JourneyStandingsPoint {
+  readonly scoring_week: number;
+  readonly matchup_period_id: number;
+  readonly basis: "snapshot_start" | "projected";
+  readonly status: "complete" | "unresolved" | "unavailable";
+  readonly teams: readonly {team_id: number; rank: number | null; unresolved_tie: boolean}[];
+}
+
 export interface ProjectedBaselineResult {
+  standings_series?: readonly JourneyStandingsPoint[] | null;
   snapshot_id: string;
   canonical_sha256: string;
   status: string;

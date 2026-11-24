@@ -51,11 +51,9 @@ def test_projection_comparison_matches_baseline_and_direct_structural_execution(
             },
         )
     assert identical.status_code == 200, identical.json()
-    assert (
-        identical.json()["baseline"]
-        == identical.json()["hypothetical"]
-        == baseline_response.json()
-    )
+    baseline = baseline_response.json()
+    assert baseline.pop("standings_series")
+    assert identical.json()["baseline"] == identical.json()["hypothetical"] == baseline
 
     inputs = prepare_projection_request(store.loaded, request)
     request_trade = ManualScenario(

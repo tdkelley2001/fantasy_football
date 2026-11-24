@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
 from fantasy_football.app.http import create_app
+from fantasy_football.app.projected_baseline import _standings_series
 from fantasy_football.app.service import ApplicationDependencies, ApplicationService
 from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snapshot
 from fantasy_football.espn_adapter import translate_bundle
@@ -25,6 +26,7 @@ from fantasy_football.season_simulator import (
     DeterministicScoreScenario,
     simulate_deterministic_season,
 )
+from fantasy_football.weekly_engine import ModeledStanding, rank_standings
 from fantasy_football.weekly_transactions import (
     WaiverBoundaryPolicy,
     WeeklyTransactionPolicy,
@@ -32,6 +34,7 @@ from fantasy_football.weekly_transactions import (
 from tests.adapter_fixtures import source_bundle
 from tests.test_app_service import FixtureStore
 from tests.test_scenario_evaluator import _scenario_snapshot
+from tests.test_weekly_engine import _supported_snapshot
 
 ROUTE = "/api/v1/analyses/projected-baseline"
 
@@ -177,6 +180,36 @@ def test_projected_baseline_http_matches_direct_and_identical_monte_carlo_scores
         )
         assert row["matchups"] == TypeAdapter(tuple).dump_python(matchups, mode="json")
 
+    series = payload["standings_series"]
+    start = series[0]
+    assert (start["basis"], start["scoring_week"]) == (
+        "snapshot_start",
+        snapshot.first_simulation_week,
+    )
+    assert {row["team_id"]: row["rank"] for row in start["teams"]} == {
+        team.team_id: team.standing for team in snapshot.teams
+    }
+    periods = {
+        week: period.matchup_period_id
+        for period in snapshot.matchup_periods
+        for week in period.scoring_weeks
+    }
+    regular = [
+        week.regular_transition for week in direct.weeks if week.regular_transition
+    ]
+    for point, transition in zip(series[1:], regular, strict=True):
+        assert point["basis"] == "projected"
+        assert point["scoring_week"] == transition.scoring_week
+        assert point["matchup_period_id"] == periods[transition.scoring_week]
+        assert point["teams"] == [
+            {
+                "team_id": row.team_id,
+                "rank": row.rank,
+                "unresolved_tie": not row.uniquely_ranked,
+            }
+            for row in transition.ranking.rows
+        ]
+
     class PrescribedModel:
         model_id = "prescribed-projector"
         parameters = ()
@@ -262,3 +295,55 @@ def unplayed_live_snapshot():
             for entry in snapshot.roster_entries
         ),
     )
+
+
+def test_standings_series_preserves_shared_ranks_and_marks_unexecuted_weeks():
+    snapshot = _supported_snapshot(two_regular_weeks=True)
+    direct = simulate_deterministic_season(
+        snapshot,
+        DeterministicScoreScenario(
+            "journey", projected_scores(snapshot, observed_week=None)
+        ),
+        ir_policy=IRPolicy.PROJECTION_BASED,
+        transaction_policy=WeeklyTransactionPolicy(
+            WaiverBoundaryPolicy.MODELED_WEEKLY_V1, True
+        ),
+    )
+    first = direct.weeks[0]
+    assert first.regular_transition is not None
+    standings = (
+        ModeledStanding(1, 6, 4, 0, 110, 100),
+        ModeledStanding(2, 6, 4, 0, 110, 99),
+        ModeledStanding(3, 6, 4, 0, 100, 99),
+        ModeledStanding(4, 5, 5, 0, 120, 99),
+    )
+    transition = replace(
+        first.regular_transition,
+        standings=standings,
+        ranking=rank_standings(snapshot, standings),
+    )
+    incomplete = replace(direct, weeks=(replace(first, regular_transition=transition),))
+    missing_start = replace(
+        snapshot, teams=tuple(replace(team, standing=None) for team in snapshot.teams)
+    )
+    start, ranked, missing = _standings_series(missing_start, incomplete, None)
+    assert start.status == "unavailable"
+    assert ranked.status == "unresolved"
+    assert {row.team_id: (row.rank, row.unresolved_tie) for row in ranked.teams} == {
+        1: (1, True),
+        2: (1, True),
+        3: (3, False),
+        4: (4, False),
+    }
+    assert (missing.scoring_week, missing.matchup_period_id, missing.status) == (
+        16,
+        3,
+        "unavailable",
+    )
+    assert all(row.rank is None for row in missing.teams)
+    _, resolved, _ = _standings_series(snapshot, incomplete, 17)
+    assert [(row.team_id, row.rank) for row in resolved.teams] == [
+        (row.team_id, row.rank)
+        for row in rank_standings(snapshot, standings, fallback_seed=17).rows
+    ]
+    assert resolved.status == "complete"
