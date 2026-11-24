@@ -254,3 +254,28 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
   .home-outlooks { grid-template-columns: 1fr; }
   .workspace-table th, .workspace-table td { padding: 9px 10px; }
 }
+
+/* League Command Center */
+.league-command { display: grid; gap: 1rem; min-width: 0; }
+.command-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .75rem; }
+.command-modes { display: flex; flex-wrap: wrap; gap: .4rem; }
+.command-modes button, .command-ranks button, .command-rounds button, .command-team-focus button { font: inherit; color: inherit; }
+.command-modes button[aria-pressed=true], .command-ranks button[aria-pressed=true], .command-rounds button[aria-pressed=true] {
+  outline: 2px solid currentColor; outline-offset: -2px; font-weight: 700;
+}
+.league-command button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.command-canvas { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); background: var(--panel); border: 1px solid var(--line); border-radius: .75rem; }
+.command-canvas > section, .command-postseason { min-width: 0; padding: clamp(.75rem, 2vw, 1.5rem); }
+.command-journey { border-inline-start: 1px solid var(--line); position: relative; min-height: 16rem; }
+.command-journey-focus { overflow-wrap: anywhere; }
+.command-ranks, .command-rounds { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .3rem; }
+.command-ranks button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .4rem; padding: .35rem; text-align: start; overflow-wrap: anywhere; }
+.command-rounds li { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem; padding-block: .35rem; }
+.command-postseason { border-block-start: 1px solid var(--line); }
+.command-team-focus { position: absolute; inset-inline: auto .75rem; inset-block-end: .75rem; width: min(18rem, calc(100% - 1.5rem)); padding: .75rem; background: var(--panel); border: 1px solid currentColor; border-radius: .6rem; box-shadow: 0 .25rem 1rem #0003; overflow-wrap: anywhere; }
+.command-focus-heading { display: flex; align-items: start; justify-content: space-between; gap: .5rem; }
+.command-focus-heading h3 { margin: 0; }
+@media (max-width: 840px) {
+  .command-canvas { grid-template-columns: minmax(0, 1fr); }
+  .command-journey { border-inline-start: 0; border-block-start: 1px solid var(--line); }
+}
