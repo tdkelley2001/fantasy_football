@@ -97,6 +97,20 @@ forecast stays visible while newer work runs or is checked. The projection
 remains independently available and an explicit mode choice is tied to the
 snapshot during the session.
 
+Playoff Race orders the projected view by regular-season finish and labels the
+supplied championship qualification and postseason seed separately. Monte Carlo
+orders teams by supplied qualification probability on a shared 0?100% scale.
+Team Focus exposes the supplied sampling interval, qualifying path counts, and
+precision status. Missing probabilities and intervals remain unavailable. The
+configured championship field size is shown as a reference. League seeding
+rules may place qualifiers outside the first rows of the projected ranking,
+and a probability rank never assigns a seed.
+
+**Configure matching Monte Carlo** opens the existing Simulation Center
+with **Match projected season policies** selected. The setting uses the
+projection's execution policies and scoring boundary, while normal run budgets
+and sampling controls remain available. Submission is explicit.
+
 Team selections use canonical IDs across the race and postseason views. Team
 Focus highlights the same team across regions and opens a nonmodal overlay.
 Select the team again, dismiss the overlay, or press Escape to clear focus.

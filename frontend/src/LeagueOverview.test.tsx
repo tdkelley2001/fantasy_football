@@ -161,3 +161,48 @@ test("an active or incompatible baseline cannot displace a compatible completed 
   expect(screen.getByText(/Run newer .* Configuration/)).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledTimes(3);
 });
+
+test("projected Playoff Race orders all teams and distinguishes the field reference from actual seed assignments",()=>{
+  if(projected.state.status!=="available") throw Error("Projection fixture unavailable");
+  const teams=projected.state.result.teams.map((team,index)=>({...team,
+    final_regular_rank:[4,1,2,3][index],
+    postseason_seed:[2,1,null,null][index],
+    championship_qualifier:[true,true,false,null][index],
+  }));
+  render(<LeagueOverview snapshot={snapshot} projection={{...projected,state:{status:"available",
+    result:{...projected.state.result,teams}}}}/>);
+  const race=within(screen.getByRole("region",{name:"Playoff Race"}));
+  const rows=race.getAllByRole("button");
+  expect(rows).toHaveLength(4);
+  expect(rows.map(row=>row.textContent)).toEqual([
+    expect.stringContaining(snapshot.teams[1].display_name),
+    expect.stringContaining("Outside championship field"),
+    expect.stringContaining("Qualification unavailable"),
+    expect.stringContaining("Seed 2 / Qualified"),
+  ]);
+  expect(race.getByText("2 of 4 teams qualify for the championship bracket")).toBeInTheDocument();
+  expect(within(rows[1].closest("li")!).getByText(/2 championship slots/)).toBeInTheDocument();
+  expect(race.queryByText("100%")).not.toBeInTheDocument();
+});
+
+test("probability race uses 0?100% fills, keeps unavailable teams, and adds precision on focus",async()=>{
+  const user=userEvent.setup(), record=run("qualification","2026-10-23T12:00:00Z");
+  const payload=commandResult(record);
+  const teams=payload.result.teams.map((team,index)=>({...team,
+    playoff_qualification: estimate([0,.123456,null,1][index]),
+  }));
+  vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json({...payload,result:{...payload.result,teams}}));
+  render(<LeagueOverview snapshot={snapshot} projection={projected} runs={[record]}
+    forecastRequests={new Map([[record.run_id,forecastRequest]])}/>);
+  const race=within(screen.getByRole("region",{name:"Playoff Race"}));
+  await race.findByText("Ranked by qualification probability. Field size is a reference.");
+  const rows=race.getAllByRole("button");
+  expect(rows.map(row=>row.querySelector(".race-value")?.textContent)).toEqual(["100%","12.3456%","0%","Unavailable"]);
+  expect(rows.map(row=>row.querySelector<HTMLElement>(".race-fill")?.style.width)).toEqual(["100%","12.3456%","0%",undefined]);
+  expect(race.queryByText(/qualifying paths/)).not.toBeInTheDocument();
+  await user.click(rows[1]);
+  expect(within(rows[1]).getByText(/9.3456% to 15.3456% sampling interval/)).toBeInTheDocument();
+  expect(rows[1].querySelector(".race-interval")).toBeInTheDocument();
+  expect(race.getAllByRole("button")).toHaveLength(4);
+  expect(screen.getByRole("complementary",{name:"Team Focus"})).toHaveTextContent(snapshot.teams[1].display_name);
+});

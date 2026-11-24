@@ -334,6 +334,7 @@ export interface ProjectedBaselineResult {
   teams: readonly {
     team_id: number;
     final_regular_rank: number | null;
+    championship_qualifier?: boolean | null;
     postseason_seed: number | null;
     final_placement: number | null;
     final_regular_standing: {wins: number; losses: number; ties: number; points_for: number};
