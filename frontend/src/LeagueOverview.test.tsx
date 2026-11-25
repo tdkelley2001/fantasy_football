@@ -257,6 +257,36 @@ test("Journey plots real weekly positions, leaves gaps, and shares keyboard and 
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
+test.each(["reconciled","ranks_unverified"] as const)("full Journey leaves gaps and honors a %s snapshot boundary",async boundary=>{
+  const projection=withJourney();
+  if(projection.state.status!=="available")throw Error("Projection fixture unavailable");
+  const result=projection.state.result;
+  const history: JourneyStandingsPoint[]=[4,5,6,7].map(week=>({
+    ...journeySeries[0],scoring_week:week,matchup_period_id:week,
+    basis:"historical_replay",status:week===6?"unavailable":"complete",
+    period_end_scoring_week:week===6?7:week,
+  }));
+  const full: ProjectedSeasonState={...projection,state:{status:"available",result:{...result,
+    standings_series:[...history,{...journeySeries[0],historical_boundary:boundary},...journeySeries.slice(1)]}}};
+  const user=userEvent.setup();
+  const {container,rerender}=render(<LeagueOverview snapshot={{...snapshot,
+    retrieval_finished_at_utc:"2020-11-03T12:00:00Z"}} projection={full}/>);
+  expect(screen.getByText("Nov 3, 2020",{exact:false})).toBeVisible();
+  expect(screen.queryByText("Today")).not.toBeInTheDocument();
+  const trajectory=container.querySelector(".journey-team")!;
+  expect(trajectory.querySelectorAll(".journey-line.historical")).toHaveLength(boundary==="reconciled"?2:1);
+  expect(trajectory.querySelectorAll(".journey-point")).toHaveLength(6);
+  const journey=within(screen.getByRole("region",{name:"Season Journey"}));
+  await user.click(journey.getByRole("button",{name:snapshot.teams[0].display_name}));
+  const focus=within(journey.getByRole("complementary",{name:"Team Focus"}));
+  await user.click(focus.getByText("Weekly standings"));
+  expect(focus.getByText(/Week 4 \/ Historical replay/)).toBeVisible();
+  expect(focus.getByText(/Week 6 \/ Period ends Week 7/)).toHaveTextContent("Unavailable");
+  expect(focus.getByText(/Week 8 \/ Projected/)).toHaveTextContent("unresolved tie");
+  rerender(<LeagueOverview snapshot={{...snapshot,retrieval_finished_at_utc:new Date().toISOString()}} projection={full}/>);
+  expect(journey.getByText("Today",{selector:"strong"})).toBeVisible();
+});
+
 test("Journey keeps deterministic ranks and focus in Monte Carlo and clears them on a snapshot change",async()=>{
   const user=userEvent.setup(), record=run("journey-forecast","2026-10-23T12:00:00Z");
   vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(commandResult(record)));

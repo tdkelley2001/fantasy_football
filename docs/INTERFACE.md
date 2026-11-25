@@ -129,9 +129,13 @@ Select the team again, dismiss the overlay, or press Escape to clear focus.
 Selection does not change the analysis.
 
 Season Journey plots every available team rank by regular-season scoring
-week. The snapshot rank is a distinct starting observation, and earlier
-weekly ranks require reconciled standings evidence the current endpoint
-does not supply. Unresolved ties share a rank, and missing ranks leave gaps.
+week. Dashed historical paths show ranks replayed from a reconciled prefix
+of settled fantasy matchups. The snapshot rank is a distinct starting
+observation, labeled Today if retrieved on the current local date and
+otherwise shown with the retrieval date. The chart joins the historical path
+to the snapshot only when their ranks agree. Multiweek historical periods
+produce ranks at settlement, unresolved ties share a rank, and unavailable
+ranks leave gaps.
 The playoff field line is a field-size reference. Use the paths, their points,
 or the keyboard-accessible team list to focus a team and inspect its exact weekly
 ranks. In Monte Carlo mode the same trajectories are labeled as the deterministic

@@ -318,6 +318,11 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .journey-line, .journey-hit { fill: none; vector-effect: non-scaling-stroke; }
 .journey-line { pointer-events: none; stroke: currentColor; stroke-width: 2; }
 .journey-line.from-observed { stroke-dasharray: 4 3; }
+.journey-line.historical { stroke-dasharray: 6 3; }
+.journey-boundary { stroke: var(--warm); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.journey-boundary-tick { fill: var(--text); font-weight: 700; }
+.journey-boundary-label { margin: .35rem 0; font-size: .8rem; color: var(--muted); }
+.journey-boundary-label strong { color: var(--text); }
 .journey-hit { stroke: transparent; stroke-width: 14; cursor: pointer; }
 .journey-point { fill: currentColor; cursor: pointer; }
 .journey-point.observed, .journey-point.tied { fill: var(--panel); stroke: currentColor; stroke-width: 2; }

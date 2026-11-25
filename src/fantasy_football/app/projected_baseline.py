@@ -8,6 +8,7 @@ from fantasy_football.app.contracts import (
     ProjectedObservedScore,
     ProjectedSeasonWeek,
 )
+from fantasy_football.app.historical_journey import historical_journey
 from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snapshot
 from fantasy_football.canonical.model import LeagueSnapshot, MatchupPhase
 from fantasy_football.canonical.validation import validated_snapshot
@@ -42,8 +43,9 @@ def project_baseline(loaded, request) -> ProjectedBaselineResult:
     with validated_snapshot(loaded.snapshot):
         inputs = prepare_projection_request(loaded, request)
         result, observations = inputs.execute()
-        standings_series = _standings_series(
-            inputs.snapshot, result, request.standings_fallback_seed
+        standings_series = historical_journey(
+            loaded,
+            _standings_series(inputs.snapshot, result, request.standings_fallback_seed),
         )
     postseason = result.final_postseason_state
     return projected_season_result(

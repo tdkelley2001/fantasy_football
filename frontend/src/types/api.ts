@@ -329,8 +329,10 @@ export interface CglHistory {
 export interface JourneyStandingsPoint {
   readonly scoring_week: number;
   readonly matchup_period_id: number;
-  readonly basis: "snapshot_start" | "projected";
+  readonly basis: "snapshot_start" | "projected" | "historical_replay";
   readonly status: "complete" | "unresolved" | "unavailable";
+  readonly period_end_scoring_week?: number;
+  readonly historical_boundary?: "reconciled" | "records_unverified" | "ranks_unverified";
   readonly teams: readonly {team_id: number; rank: number | null; unresolved_tie: boolean}[];
 }
 

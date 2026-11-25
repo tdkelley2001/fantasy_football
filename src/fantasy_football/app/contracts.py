@@ -307,9 +307,15 @@ class JourneyTeamRank(ContractModel):
 class JourneyStandingsPoint(ContractModel):
     scoring_week: PositiveInt
     matchup_period_id: PositiveInt
-    basis: Literal["snapshot_start", "projected"]
+    basis: Literal["snapshot_start", "projected", "historical_replay"]
     status: Literal["complete", "unresolved", "unavailable"]
     teams: tuple[JourneyTeamRank, ...]
+    period_end_scoring_week: PositiveInt | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    historical_boundary: (
+        Literal["reconciled", "records_unverified", "ranks_unverified"] | None
+    ) = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class ProjectedChampionshipRound(ContractModel):
