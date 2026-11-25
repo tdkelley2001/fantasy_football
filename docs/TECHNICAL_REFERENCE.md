@@ -504,9 +504,23 @@ the preserved team ranks entering the modeled regular-season horizon.
 and the existing ranking authority for any explicitly configured standings
 fallback seed. Shared ranks carry the unresolved-tie marker. Unexecuted weeks
 or unsupported ranking results retain null ranks, and postseason weeks are
-excluded. The series includes neither reconstructed historical standings
-nor Monte Carlo weekly distributions. Older responses can omit the field.
-Other projected response paths continue to omit it.
+excluded. Older responses and other projected response paths can omit the field.
+
+`historical_replay` points use the retained ESPN league schedule and full
+period settings from the verified snapshot. The historical calendar must
+agree with the canonical horizon. Earlier regular-season periods are ranked
+only when every team has a settled matchup in each completed period and the
+prefix exactly reconciles to snapshot wins, losses, ties, and points for and
+against. The replay uses the supported standings rules recorded in the snapshot
+without a modeled fallback seed. It does not authenticate game-date rule
+changes or reproduce an ESPN standings observation from each week.
+`period_end_scoring_week` identifies the settlement boundary for each
+historical point. Intermediate weeks of multiweek periods and unverifiable
+prefixes have null ranks. `historical_boundary` on the starting observation
+records whether the last replayed ranks also agree uniquely with every stored
+starting rank. Record reconciliation and rank agreement are separate; an
+unverified boundary breaks the connecting line. The series supplies no Monte
+Carlo weekly distributions.
 
 
 The additive projected-baseline `championship_rounds` field binds configured
