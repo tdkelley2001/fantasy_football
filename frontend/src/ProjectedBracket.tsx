@@ -1,3 +1,4 @@
+import {commandTeamColor} from "./commandTeamIdentity";
 import type {ProjectedBaselineResult, ProjectedPostseasonMatchup, SnapshotSummary} from "./types/api";
 
 type Props = {
@@ -27,7 +28,7 @@ export function ProjectedBracket({snapshot, result, selected, onSelect}: Props) 
     const seed=seeds.get(id);
     const winner=match.winner_team_id===id && match.status!=="bye";
     return <button type="button" className="bracket-team" aria-pressed={selected===id} onClick={()=>onSelect(id)}>
-      <span>{seed!=null && <small>Seed {seed}</small>}<strong>{name}</strong></span>
+      <span>{seed!=null && <small>Seed {seed}</small>}<strong><span className="journey-swatch" style={{background:commandTeamColor(id)}} aria-hidden="true"/> {name}</strong></span>
       <span>{total!=null && <b>{total.toFixed(2)}</b>}{winner && <small>Winner</small>}</span>
     </button>;
   };

@@ -370,3 +370,31 @@ test("Monte Carlo postseason uses supplied estimates and keeps a separate determ
   await user.click(screen.getByRole("button",{name:"Projected season"}));
   expect(screen.getByRole("complementary",{name:"Team Focus"})).toHaveTextContent(/North Harbor/);
 });
+
+test("shared team accents and endpoint labels survive forecast sorting changes",async()=>{
+  const user=userEvent.setup(),record=run("canvas-forecast","2026-10-23T12:00:00Z");
+  vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(commandResult(record)));
+  const projection=withJourney();
+  const {container}=render(<LeagueOverview snapshot={snapshot} projection={projection} runs={[record]}
+    forecastRequests={new Map([[record.run_id,forecastRequest]])}/>);
+  const journey=within(screen.getByRole("region",{name:"Season Journey"}));
+  const race=within(screen.getByRole("region",{name:"Playoff Race"}));
+  await journey.findByText("Deterministic reference for the Monte Carlo forecast");
+  const team=snapshot.teams[0];
+  const entry=()=>race.getByRole("button",{name:new RegExp(team.display_name)});
+  const color=entry().style.getPropertyValue("--command-team-color");
+  expect(color).not.toBe("");
+  const legend=journey.getByRole("button",{name:team.display_name});
+  await user.click(legend);
+  expect(entry()).toHaveAttribute("aria-pressed","true");
+  const path=container.querySelector<SVGElement>(`[data-team-id="${team.team_id}"]`)!;
+  expect(path.style.color).toBe(legend.querySelector<HTMLElement>(".journey-swatch")!.style.backgroundColor);
+  expect(path.querySelector(".journey-endpoint")).toHaveTextContent(team.display_name);
+  expect(container.querySelector(".journey-ranks")?.closest(".journey-scroll")).toBeNull();
+  await user.click(screen.getByRole("button",{name:"Projected season"}));
+  expect(entry().style.getPropertyValue("--command-team-color")).toBe(color);
+  expect(entry()).toHaveAttribute("aria-pressed","true");
+  expect(journey.getByText("2-team field reference")).toBeInTheDocument();
+  await user.click(screen.getByRole("button",{name:"Dismiss Team Focus"}));
+  expect(legend).toHaveFocus();
+});
