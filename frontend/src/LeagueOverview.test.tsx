@@ -384,8 +384,15 @@ test("Monte Carlo postseason uses supplied estimates and keeps a separate determ
   await user.click(outlook.getByText("Accessible exact placement table"));
   expect(within(outlook.getByRole("table")).getByText("12.3456%")).toBeVisible();
   const focus=within(screen.getByRole("complementary",{name:"Team Focus"}));
-  expect(focus.getAllByText("12.3456%")[0]).toBeVisible();
-  expect(focus.getByText(/9.3456%.*15.3456% simultaneous interval.*Precision target not reached/)).toBeVisible();
+  const championship=within(focus.getByText("Championship",{exact:true}).parentElement!);
+  expect(championship.getByText("12.3%")).toBeVisible();
+  expect(championship.getByText("Sampling interval: 9.3456% to 15.3456%")).toBeVisible();
+  expect(championship.getByText("Precision target not reached")).toBeVisible();
+  expect(focus.getByText("Intervals describe Monte Carlo sampling uncertainty.")).toBeVisible();
+  const exact=championship.getByText("12.3456% (probability 0.123456)");
+  expect(exact).not.toBeVisible();
+  await user.click(focus.getByText("Exact championship values"));
+  expect(exact).toBeVisible();
   await user.click(focus.getByText("Final placement probabilities"));
   expect(focus.getByText("1st")).toBeVisible();
   expect(outlook.getByRole("region",{name:"Championship / Round 2"})).not.toBeVisible();
