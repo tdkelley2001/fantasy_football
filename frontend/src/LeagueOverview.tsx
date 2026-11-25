@@ -246,7 +246,7 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
         {team && !standingsSeries?.length && <p className="command-journey-focus">
           {team.display_name} / Observed rank {team.standing??"unavailable"}
         </p>}
-        {team && <aside className={`command-team-focus ${postseasonFocus?"postseason-focus":""}`} aria-label="Team Focus" style={{borderColor:commandTeamColor(team.team_id)}}>
+        {team && <aside className={`command-team-focus ${postseasonFocus?"postseason-focus":""} ${compactFocusExpanded?"focus-expanded":""}`} aria-label="Team Focus" style={{borderColor:commandTeamColor(team.team_id)}}>
           <div className="command-focus-heading"><h3><TeamMark team={team}/> {team.display_name}</h3>
             <button type="button" onClick={dismiss} aria-label="Dismiss Team Focus">Close</button>
           </div>
@@ -300,12 +300,12 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
         <div className="command-postseason-forecast">
           <section aria-labelledby="command-title-race">
             <h4 id="command-title-race">Championship probability</h4>
-            <ProbabilityPlot teams={ordered} results={probabilities} {...bracketFocus}/>
+            <ProbabilityPlot teams={ordered} results={probabilities} compact {...bracketFocus}/>
           </section>
           <section aria-labelledby="command-placements">
             <h4 id="command-placements">Final placement matrix</h4>
             <p className="bracket-context">Simulated finish probabilities; sampling precision is shown separately.</p>
-            <PlacementHeatmap teams={ordered} results={probabilities} {...bracketFocus}/>
+            <PlacementHeatmap teams={ordered} results={probabilities} compact {...bracketFocus}/>
           </section>
         </div>
         <RunDisclosure summary={summary}/>
@@ -396,10 +396,88 @@ function racePercent(value: number) {
 function RunContext({completed,selected,onChange}:{completed:readonly BackgroundRunRecord[];selected:string|null;onChange:(id:string)=>void}){return <section className="analysis-context" aria-label="Analysis context"><div><span className="overline">Analysis source</span><strong>{completed.length?`${completed.length} completed baseline run${completed.length===1?"":"s"}`:"No usable completed baseline"}</strong><small>Newest retained result is selected by default. Selection never launches a run.</small></div>{completed.length>0&&<label><span>Completed run</span><select value={selected??""} onChange={event=>onChange(event.target.value)}>{completed.map(run=><option key={run.run_id} value={run.run_id}>{formatDate(run.finished_at_utc??run.created_at_utc)} · {short(run.run_id)}</option>)}</select></label>}</section>}
 function AnalyticsDashboard({snapshot,summary}:{snapshot:SnapshotSummary;summary:BackgroundBaselineResultSummary}){const teams=useMemo(()=>[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id),[snapshot]);const results=useMemo(()=>new Map(summary.result.teams.map(team=>[team.team_id,team])),[summary]);const [teamId,setTeamId]=useState(teams[0]?.team_id);useEffect(()=>setTeamId(current=>teams.some(team=>team.team_id===current)?current:teams[0]?.team_id),[snapshot.snapshot_id,teams]);const selected=teams.find(team=>team.team_id===teamId),selectedResult=teamId===undefined?undefined:results.get(teamId);return <><PrecisionNotice summary={summary}/><div className="analytics-grid"><section className="analytics-panel championship-panel" aria-labelledby="championship-title"><PanelTitle eyebrow="Title race" title="Championship probability" id="championship-title" note="Engine-supplied interval whiskers"/><ProbabilityPlot teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><aside className="analytics-panel selected-team" aria-live="polite"><span className="overline">Selected team</span><div className="team-identity"><TeamMark team={selected}/><div><h2>{selected?.display_name??"Unavailable"}</h2><p>{selected?`${selected.wins}–${selected.losses}${selected.ties?`–${selected.ties}`:""} · ${selected.points_for.toFixed(1)} PF`:"No matching team"}</p></div></div><Metric label="Championship" estimate={selectedResult?.championship}/><Metric label="Playoff qualification" estimate={selectedResult?.playoff_qualification}/><div className="selected-observed"><span>Observed standing <b>{selected?.standing??"—"}</b></span><span>Playoff seed <b>{selected?.playoff_seed??"—"}</b></span></div><p className="integrity-note"><ShieldCheck/> Forecast probabilities and observed snapshot facts remain explicitly separate.</p></aside></div><section className="analytics-panel playoff-panel" aria-labelledby="playoff-title"><PanelTitle eyebrow="Qualification field" title="Playoff probability bands" id="playoff-title" note="Bands include supplied interval markers"/><PlayoffBands teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><section className="analytics-panel heatmap-panel" aria-labelledby="placement-title"><PanelTitle eyebrow="Outcome distribution" title="Final placement matrix" id="placement-title" note="Exact values remain visible"/><PlacementHeatmap teams={teams} results={results} selected={teamId} onSelect={setTeamId}/></section><RunDisclosure summary={summary}/></>}
 function PrecisionNotice({summary}:{summary:BackgroundBaselineResultSummary}){const r=summary.result,metricPrecisionMissing=r.teams.some(team=>![team.championship,team.playoff_qualification,...team.final_placements.map(item=>item.estimate)].every(metric=>metric.precision_reached));const notices=[r.incomplete_paths>0&&`${r.incomplete_paths.toLocaleString()} simulation paths were incomplete`,r.incomplete_capabilities.length>0&&`${r.incomplete_capabilities.length} analytical capabilities were incomplete`,!r.league_wide_precision_reached&&"the league-wide precision target was not reached",metricPrecisionMissing&&"one or more metric-level precision targets were not reached"].filter(Boolean) as string[];return <>{notices.length>0&&<div className="analysis-warning precision-warning" role="status"><AlertTriangle/><div><strong>Precision or coverage qualification</strong><span>Execution completed, but {notices.join("; ")}. Review technical details below.</span><small>Confidence intervals describe Monte Carlo sampling uncertainty, not outcome-model uncertainty.</small></div></div>}</>;}
-function ProbabilityPlot({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const ordered=[...teams].sort((a,b)=>(results.get(b.team_id)?.championship.probability??-1)-(results.get(a.team_id)?.championship.probability??-1)||a.team_id-b.team_id);return <div className="probability-plot">{ordered.map(team=>{const estimate=results.get(team.team_id)?.championship,p=estimate?.probability,interval=estimate?.interval;return <button key={team.team_id} className={selected===team.team_id?"selected":""} onClick={()=>onSelect(team.team_id)} aria-pressed={selected===team.team_id} aria-label={`${team.display_name}: championship ${metricDescription(estimate)}`}><TeamMark team={team}/><strong>{team.display_name}</strong><span className="probability-track">{p!==null&&p!==undefined&&<><i className="dot" style={{left:pct(p)}}/>{interval&&<i className="interval" style={{left:pct(interval.lower_probability),width:pct(interval.upper_probability-interval.lower_probability)}}/>}</>}</span><b>{percent(p)}{estimate&&!estimate.precision_reached&&<small>Precision pending</small>}</b></button>})}<div className="probability-axis"><span>0%</span><span>50%</span><span>100%</span></div></div>}
+const overviewPercent = new Intl.NumberFormat(undefined,{style:"percent",maximumSignificantDigits:3});
+
+function ProbabilityPlot({teams,results,selected,onSelect,compact=false}: Focus & {
+  teams:readonly TeamSummary[];
+  results:ReadonlyMap<number,TeamProbabilityResult>;
+  compact?:boolean;
+}) {
+  const ordered=[...teams].sort((a,b)=>
+    (results.get(b.team_id)?.championship.probability??-1)-(results.get(a.team_id)?.championship.probability??-1) || a.team_id-b.team_id);
+  return <div className={`probability-plot ${compact?"postseason-title-race":""}`}>
+    {ordered.map(team=>{
+      const estimate=results.get(team.team_id)?.championship, p=estimate?.probability, interval=estimate?.interval;
+      return <button key={team.team_id} className={selected===team.team_id?"selected":""}
+        onClick={()=>onSelect(team.team_id)} aria-pressed={selected===team.team_id}
+        aria-label={`${team.display_name}: championship ${metricDescription(estimate)}`}
+        style={compact?{"--postseason-accent":commandTeamColor(team.team_id)} as React.CSSProperties:undefined}>
+        <TeamMark team={team}/><strong>{team.display_name}</strong>
+        <span className="probability-track">{p!=null&&<>
+          <i className="dot" style={{left:pct(p)}}/>
+          {interval&&<i className="interval" style={{left:pct(interval.lower_probability),
+            width:pct(interval.upper_probability-interval.lower_probability)}}/>}
+        </>}</span>
+        <b>{compact&&p!=null?overviewPercent.format(p):percent(p)}
+          {estimate&&!estimate.precision_reached&&<small>Precision pending</small>}
+        </b>
+      </button>;
+    })}
+    <div className="probability-axis"><span>0%</span><span>50%</span><span>100%</span></div>
+  </div>;
+}
 function PlayoffBands({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const ordered=[...teams].sort((a,b)=>(results.get(b.team_id)?.playoff_qualification.probability??-1)-(results.get(a.team_id)?.playoff_qualification.probability??-1)||a.team_id-b.team_id);return <div className="playoff-bands">{ordered.map(team=>{const estimate=results.get(team.team_id)?.playoff_qualification,p=estimate?.probability,interval=estimate?.interval;return <button key={team.team_id} onClick={()=>onSelect(team.team_id)} className={selected===team.team_id?"selected":""} aria-pressed={selected===team.team_id} aria-label={`${team.display_name}: playoff qualification ${metricDescription(estimate)}`}><span><TeamMark team={team}/><strong>{team.display_name}</strong></span><span className="band">{p!==null&&p!==undefined&&<i className="band-fill" style={{width:pct(p)}}/>}{interval&&<i className="band-interval" style={{left:pct(interval.lower_probability),width:pct(interval.upper_probability-interval.lower_probability)}}/>}{p===null||p===undefined?<em>Unavailable</em>:<b>{percent(p)}{!estimate?.precision_reached&&<small>Precision pending</small>}</b>}{p!==null&&p!==undefined&&!interval&&<span className="interval-missing">Interval unavailable</span>}</span></button>})}</div>}
-function PlacementHeatmap({teams,results,selected,onSelect}:{teams:readonly TeamSummary[];results:ReadonlyMap<number,TeamProbabilityResult>;selected:number|undefined;onSelect:(id:number)=>void}){const places=[...new Set([...results.values()].flatMap(team=>team.final_placements.map(item=>item.placement)))].sort((a,b)=>a-b);return <><div className="placement-scroll"><div className="placement-matrix" style={{gridTemplateColumns:`minmax(130px,1.4fr) repeat(${places.length},minmax(48px,1fr))`}}><span className="matrix-corner">Team / finish</span>{places.map(place=><strong key={place}>{ordinal(place)}</strong>)}{teams.map(team=><PlacementRow key={team.team_id} team={team} result={results.get(team.team_id)} places={places} selected={selected===team.team_id} onSelect={onSelect}/>)}</div></div><details className="exact-table"><summary>Accessible exact placement table</summary><table><thead><tr><th>Team</th>{places.map(place=><th key={place}>{ordinal(place)}</th>)}</tr></thead><tbody>{teams.map(team=><tr key={team.team_id}><th>{team.display_name}</th>{places.map(place=><td key={place}>{percent(results.get(team.team_id)?.final_placements.find(item=>item.placement===place)?.estimate.probability)}</td>)}</tr>)}</tbody></table></details></>}
-function PlacementRow({team,result,places,selected,onSelect}:{team:TeamSummary;result:TeamProbabilityResult|undefined;places:readonly number[];selected:boolean;onSelect:(id:number)=>void}){return <><button className={`matrix-team ${selected?"selected":""}`} onClick={()=>onSelect(team.team_id)} aria-pressed={selected}><TeamMark team={team}/>{team.display_name}</button>{places.map(place=>{const p=result?.final_placements.find(item=>item.placement===place)?.estimate.probability;return <span key={place} className={`heat-cell ${p===null||p===undefined?"unavailable":""}`} style={p===null||p===undefined?undefined:{"--heat":String(.08+p*.82)} as React.CSSProperties} aria-label={`${team.display_name}, ${ordinal(place)}: ${percent(p)}`} title={`${team.display_name} · ${ordinal(place)} · ${percent(p)}`}>{percent(p)}</span>})}</>}
+function PlacementHeatmap({teams,results,selected,onSelect,compact=false}: Focus & {
+  teams:readonly TeamSummary[];
+  results:ReadonlyMap<number,TeamProbabilityResult>;
+  compact?:boolean;
+}) {
+  const places=[...new Set([...results.values()].flatMap(team=>team.final_placements.map(item=>item.placement)))].sort((a,b)=>a-b);
+  if(!places.length)return <p>Final placement probabilities are unavailable.</p>;
+  return <>
+    {compact && <p className="bracket-context">Darker cells indicate higher probability. Hatched cells are unavailable.</p>}
+    <div className={`placement-scroll ${compact?"postseason-placement":""}`}
+      role={compact?"region":undefined} aria-label={compact?"Placement probabilities by team":undefined} tabIndex={compact?0:undefined}>
+      <div className="placement-matrix" style={compact?{"--placements":places.length} as React.CSSProperties:
+        {gridTemplateColumns:`minmax(130px,1.4fr) repeat(${places.length},minmax(48px,1fr))`}}>
+        <span className="matrix-corner">Team / finish</span>
+        {places.map(place=><strong key={place}>{compact?<><span aria-hidden="true">{place}</span><span className="sr-only">{ordinal(place)}</span></>:ordinal(place)}</strong>)}
+        {teams.map(team=><PlacementRow key={team.team_id} team={team} result={results.get(team.team_id)}
+          places={places} selected={selected===team.team_id} onSelect={onSelect} compact={compact}/>)}
+      </div>
+    </div>
+    <details className="exact-table"><summary>Accessible exact placement table</summary>
+      <div className={compact?"postseason-exact-scroll":undefined} role={compact?"region":undefined}
+        aria-label={compact?"Exact placement values by team":undefined} tabIndex={compact?0:undefined}>
+        <table><thead><tr><th scope="col">Team</th>{places.map(place=><th key={place} scope="col">{ordinal(place)}</th>)}</tr></thead>
+        <tbody>{teams.map(team=><tr key={team.team_id}><th scope="row">{team.display_name}</th>{places.map(place=>
+          <td key={place}>{percent(results.get(team.team_id)?.final_placements.find(item=>item.placement===place)?.estimate.probability)}</td>)}</tr>)}</tbody></table>
+      </div>
+    </details>
+  </>;
+}
+
+function PlacementRow({team,result,places,selected,onSelect,compact}: {
+  team:TeamSummary; result:TeamProbabilityResult|undefined; places:readonly number[];
+  selected:boolean; onSelect:(id:number)=>void; compact:boolean;
+}) {
+  const accent=commandTeamColor(team.team_id);
+  return <>
+    <button className={`matrix-team ${selected?"selected":""}`} onClick={()=>onSelect(team.team_id)} aria-pressed={selected}
+      style={compact?{"--postseason-accent":accent} as React.CSSProperties:undefined}>
+      <TeamMark team={team}/><span>{team.display_name}</span>
+    </button>
+    {places.map(place=>{
+      const p=result?.final_placements.find(item=>item.placement===place)?.estimate.probability;
+      const label=`${team.display_name}, ${ordinal(place)}: ${percent(p)}`;
+      return <span key={place} className={`heat-cell ${p==null?"unavailable":""} ${selected&&compact?"focused":""}`}
+        style={{"--heat":p!=null?String(.08+p*.82):undefined,"--postseason-accent":compact?accent:undefined} as React.CSSProperties}
+        aria-label={label} title={label}>
+        <span className={compact?"placement-overview-value":undefined}>{compact&&p!=null?overviewPercent.format(p):percent(p)}</span>
+      </span>;
+    })}
+  </>;
+}
 function RunDisclosure({summary}:{summary:BackgroundBaselineResultSummary}){const r=summary.result;return <details className="run-disclosure"><summary><BarChart3/> Analysis precision, provenance, and limitations</summary><p>Execution status, capability completeness, and Monte Carlo precision are independent. Confidence intervals quantify sampling uncertainty only; model evidence and calibration limitations remain separate.</p><div className="run-facts"><span><b>Completed</b> execution</span><span><b>{r.completed_paths.toLocaleString()} / {r.requested_paths.toLocaleString()}</b> completed paths</span><span><b>{r.incomplete_paths.toLocaleString()}</b> incomplete paths</span><span><b>{r.league_wide_precision_reached?"Reached":"Not reached"}</b> league-wide precision</span><span><b>{r.teams.filter(team=>[team.championship,team.playoff_qualification,...team.final_placements.map(item=>item.estimate)].some(metric=>!metric.precision_reached)).length}</b> teams with pending metric precision</span><span><b>{human(r.stopping_reason)}</b> stop reason</span></div><dl><div><dt>Outcome model</dt><dd>{r.provenance.model_id}</dd></div><div><dt>Master seed</dt><dd>{r.provenance.master_seed}</dd></div><div><dt>Simulation identity</dt><dd>{short(r.provenance.engine_run_identity_sha256)}</dd></div><div><dt>Configuration</dt><dd>{short(r.provenance.simulation_config_sha256)}</dd></div></dl>{r.incomplete_capabilities.length>0&&<div><strong>Incomplete capabilities</strong><ul>{r.incomplete_capabilities.map(([capability,week])=><li key={`${capability}-${week}`}>{human(capability)} at scoring week {week}</li>)}</ul></div>}{r.limitations.length>0&&<div><strong>Outcome-model and evidence limitations</strong><ul>{r.limitations.map(item=><li key={item}>{item}</li>)}</ul></div>}</details>}
 function NoAnalysis({runs}:{runs:readonly BackgroundRunRecord[]}){const active=runs.filter(run=>["queued","running","cancel_requested"].includes(run.status)),terminal=runs.filter(run=>["failed","cancelled","interrupted"].includes(run.status));return <><AnalyticsState icon={<Trophy/>} title={active.length?"Baseline analysis in progress":"No completed baseline analysis"} body={active.length?`${active.length} matching run${active.length===1?" is":"s are"} active. This page will not start or substitute analysis.`:"No retained completed baseline result matches this canonical snapshot."}/>{terminal.length>0&&<p className="run-history-note">{terminal.length} matching run{terminal.length===1?"":"s"} ended without a usable result: {[...new Set(terminal.map(run=>run.status))].join(", ")}.</p>}</>}
 function ObservedSnapshot({snapshot}:{snapshot:SnapshotSummary}){const teams=[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id);return <section className="analytics-panel observed-fallback" aria-labelledby="observed-title"><PanelTitle eyebrow="Observed snapshot" title="Current league standings" id="observed-title" note="No forecast values are implied"/><div className="observed-list">{teams.map(team=><div key={team.team_id}><span>{team.standing??"—"}</span><TeamMark team={team}/><strong>{team.display_name}</strong><span>{team.wins}–{team.losses}</span><b>{team.points_for.toFixed(1)} PF</b></div>)}</div></section>}

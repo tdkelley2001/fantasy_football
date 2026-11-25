@@ -308,6 +308,11 @@ test("projected bracket uses supplied seeds, bye, advancement and multiweek scor
   const outlook=within(screen.getByRole("region",{name:"Postseason Outlook"}));
   const first=within(outlook.getByRole("region",{name:"Round 1"}));
   expect(first.getByText("Bye / Advances")).toBeInTheDocument();
+  const links=container.querySelectorAll(".bracket-links path");
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveAttribute("data-from","node-a");
+  expect(links[0]).toHaveAttribute("data-to","node-b");
+  expect(links[0]).not.toHaveClass("focused");
   expect(first.getByText("Seed 1")).toBeInTheDocument();
   const final=within(outlook.getByRole("region",{name:"Championship / Round 2"}));
   expect(final.getByText("Weeks 16, 17")).toBeInTheDocument();
@@ -320,6 +325,8 @@ test("projected bracket uses supplied seeds, bye, advancement and multiweek scor
   entrant.focus();
   await user.keyboard("{Enter}");
   expect(first.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  expect(links[0]).toHaveClass("focused");
+  expect(final.getByText("Loss")).toBeInTheDocument();
   const race=within(screen.getByRole("region",{name:"Playoff Race"}));
   expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
   const journey=within(screen.getByRole("region",{name:"Season Journey"}));
@@ -337,13 +344,21 @@ test("projected bracket uses supplied seeds, bye, advancement and multiweek scor
 });
 
 test("configured pending rounds display source slots without inventing participants or winners",()=>{
-  render(<LeagueOverview snapshot={snapshot} projection={withBracket(true)}/>);
+  const {container}=render(<LeagueOverview snapshot={snapshot} projection={withBracket(true)}/>);
   const final=within(screen.getByRole("region",{name:"Championship / Round 2"}));
   expect(final.getByText("Weeks 16, 17")).toBeInTheDocument();
   expect(final.getByText("Participants unresolved")).toBeInTheDocument();
   expect(final.getByText("Winner of round 1, match 1")).toBeInTheDocument();
   expect(final.queryByRole("button")).not.toBeInTheDocument();
   expect(final.queryByText("Winner",{exact:true})).not.toBeInTheDocument();
+  expect(container.querySelector("[data-to='node-b']")).not.toHaveClass("focused");
+});
+
+test("rendered matchups without a supplied graph never acquire advancement links",()=>{
+  render(<LeagueOverview snapshot={snapshot} projection={withJourney()}/>);
+  const outlook=screen.getByRole("region",{name:"Postseason Outlook"});
+  expect(within(outlook).getByRole("button",{name:/North Harbor.*Winner/})).toBeInTheDocument();
+  expect(outlook.querySelector(".bracket-links")).toBeNull();
 });
 
 test("Monte Carlo postseason uses supplied estimates and keeps a separate deterministic reference",async()=>{
@@ -351,14 +366,23 @@ test("Monte Carlo postseason uses supplied estimates and keeps a separate determ
   const payload=commandResult(record);
   const teams=payload.result.teams.map((team,i)=>i===0?{...team,
     championship:{...estimate(.123456),precision_reached:false},final_placements:[{placement:1,estimate:estimate(.123456)}],
-  }:team);
+  }:i===1?{...team,final_placements:[{placement:1,estimate:estimate(null)},{placement:2,estimate:estimate(0)}]}:team);
   vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json({...payload,result:{...payload.result,teams}}));
   render(<LeagueOverview snapshot={snapshot} projection={withBracket()} runs={[record]}
     forecastRequests={new Map([[record.run_id,forecastRequest]])}/>);
   const outlook=within(screen.getByRole("region",{name:"Postseason Outlook"}));
   const titleRace=within(await outlook.findByRole("region",{name:"Championship probability"}));
   expect(titleRace.getAllByRole("button")).toHaveLength(snapshot.teams.length);
-  await user.click(titleRace.getByRole("button",{name:/North Harbor.*12.3456%/}));
+  const leader=titleRace.getByRole("button",{name:/North Harbor.*12.3456%/});
+  expect(within(leader).getByText("12.3%")).toBeVisible();
+  await user.click(leader);
+  const matrix=outlook.getByRole("region",{name:"Placement probabilities by team"});
+  expect(within(matrix).getByLabelText("North Harbor, 1st: 12.3456%")).toHaveClass("focused");
+  const second=snapshot.teams[1].display_name;
+  expect(within(matrix).getByLabelText(`${second}, 1st: Unavailable`)).toHaveClass("unavailable");
+  expect(within(matrix).getByLabelText(`${second}, 2nd: 0%`)).not.toHaveClass("unavailable");
+  await user.click(outlook.getByText("Accessible exact placement table"));
+  expect(within(outlook.getByRole("table")).getByText("12.3456%")).toBeVisible();
   const focus=within(screen.getByRole("complementary",{name:"Team Focus"}));
   expect(focus.getAllByText("12.3456%")[0]).toBeVisible();
   expect(focus.getByText(/9.3456%.*15.3456% simultaneous interval.*Precision target not reached/)).toBeVisible();
