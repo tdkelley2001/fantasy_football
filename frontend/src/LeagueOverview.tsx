@@ -2,6 +2,7 @@ import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } from "lucide-react";
 import { JourneyTeamWeeks, SeasonJourney } from "./SeasonJourney";
+import { commandTeamColor } from "./commandTeamIdentity";
 import { ProjectedBracket } from "./ProjectedBracket";
 import { ProjectedBaseline, ProjectionReadiness } from "./ProjectedBaseline";
 import { api, ApiError, projectedBaselinePolicy } from "./lib/api";
@@ -163,6 +164,7 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
   const choice = modePreference ? modePreference.choice : localChoice;
   const setChoice = modePreference?.select ?? setLocalChoice;
   const [focusedId, setFocusedId] = useState<number>();
+  const [compactFocusExpanded,setCompactFocusExpanded] = useState(false);
   const [postseasonFocus, setPostseasonFocus] = useState(false);
   const modeControl = useRef<HTMLButtonElement>(null);
   const focusTrigger = useRef<HTMLElement|null>(null);
@@ -171,6 +173,7 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
     selected: team?.team_id,
     onSelect: id=> {
       setPostseasonFocus(false);
+      setCompactFocusExpanded(false);
       focusTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setFocusedId(current=>current===id?undefined:id);
     },
@@ -236,12 +239,6 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
     {(forecast.error || (choice==="monte_carlo" && !summary && !forecast.loading)) &&
       <p role="status">{summary ? "Retained run issue." : "Monte Carlo forecast unavailable."} {forecast.error??"Select or request a compatible baseline."}</p>}
     <div className="command-canvas" role="group" aria-label="League forecast canvas">
-      <section className="command-race" aria-labelledby="command-race">
-        <h3 id="command-race">Playoff Race</h3>
-        {!summary && projection && !projected && <ProjectionReadiness projection={projection}/>}
-        <CommandPlayoffRace snapshot={snapshot} teams={ordered} ranks={ranks}
-          probabilities={summary ? probabilities : null} {...focus}/>
-      </section>
       <section className="command-journey" aria-labelledby="command-journey">
         <h3 id="command-journey">Season Journey</h3>
         <SeasonJourney snapshot={snapshot} series={standingsSeries}
@@ -249,11 +246,16 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
         {team && !standingsSeries?.length && <p className="command-journey-focus">
           {team.display_name} / Observed rank {team.standing??"unavailable"}
         </p>}
-        {team && <aside className={`command-team-focus ${postseasonFocus?"postseason-focus":""}`} aria-label="Team Focus">
-          <div className="command-focus-heading"><h3>{team.display_name}</h3>
+        {team && <aside className={`command-team-focus ${postseasonFocus?"postseason-focus":""}`} aria-label="Team Focus" style={{borderColor:commandTeamColor(team.team_id)}}>
+          <div className="command-focus-heading"><h3><TeamMark team={team}/> {team.display_name}</h3>
             <button type="button" onClick={dismiss} aria-label="Dismiss Team Focus">Close</button>
           </div>
           <p role="status">Observed record {team.wins}-{team.losses}-{team.ties} / Rank {team.standing??"unavailable"}</p>
+          <button type="button" className="compact-focus-toggle" aria-expanded={compactFocusExpanded}
+            aria-controls="command-focus-detail" onClick={()=>setCompactFocusExpanded(open=>!open)}>
+            {compactFocusExpanded?"Hide team details":"Show team details"}
+          </button>
+          <div id="command-focus-detail" className={compactFocusExpanded?"compact-expanded":""}>
           {summary ? <>
             <Metric label="Playoff qualification" estimate={teamForecast?.playoff_qualification}/>
             <Metric label="Championship" estimate={teamForecast?.championship}/>
@@ -281,7 +283,14 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
             {summary && <p className="bracket-context">Deterministic reference</p>}
             <JourneyTeamWeeks series={standingsSeries} teamId={team.team_id}/>
           </>}
+          </div>
         </aside>}
+      </section>
+      <section className="command-race" aria-labelledby="command-race">
+        <h3 id="command-race">Playoff Race</h3>
+        {!summary && projection && !projected && <ProjectionReadiness projection={projection}/>}
+        <CommandPlayoffRace snapshot={snapshot} teams={ordered} ranks={ranks}
+          probabilities={summary ? probabilities : null} {...focus}/>
       </section>
     </div>
     <section className="command-postseason" aria-labelledby="command-postseason">
@@ -344,7 +353,7 @@ function CommandPlayoffRace({snapshot, teams, ranks, probabilities, selected, on
         const cutoff=fieldSize===index+1 && index+1<ordered.length &&
           (probabilities ? probability!=null : row?.final_regular_rank===fieldSize);
         return <li key={team.team_id} className={cutoff ? "race-field-cut":undefined}>
-          <button type="button" className={`race-entry ${probabilities?"race-probability":""}`}
+          <button type="button" className={`race-entry ${probabilities?"race-probability":""}`} style={{"--command-team-color":commandTeamColor(team.team_id)} as React.CSSProperties}
             aria-pressed={focus} onClick={()=>onSelect(team.team_id)}>
             {!probabilities && <span className="race-rank">
               <span className="sr-only">Projected rank </span>{row?.final_regular_rank??"Unavailable"}
@@ -396,7 +405,7 @@ function NoAnalysis({runs}:{runs:readonly BackgroundRunRecord[]}){const active=r
 function ObservedSnapshot({snapshot}:{snapshot:SnapshotSummary}){const teams=[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id);return <section className="analytics-panel observed-fallback" aria-labelledby="observed-title"><PanelTitle eyebrow="Observed snapshot" title="Current league standings" id="observed-title" note="No forecast values are implied"/><div className="observed-list">{teams.map(team=><div key={team.team_id}><span>{team.standing??"—"}</span><TeamMark team={team}/><strong>{team.display_name}</strong><span>{team.wins}–{team.losses}</span><b>{team.points_for.toFixed(1)} PF</b></div>)}</div></section>}
 function AnalyticsState({icon,title,body}:{icon:React.ReactNode;title:string;body:string}){return <section className="analytics-state">{icon}<div><span className="overline">Analytics status</span><h2>{title}</h2><p>{body}</p></div></section>}
 function PanelTitle({eyebrow,title,id,note}:{eyebrow:string;title:string;id:string;note:string}){return <header className="section-heading"><div><span className="overline">{eyebrow}</span><h2 id={id}>{title}</h2></div><small>{note}</small></header>}
-function TeamMark({team}:{team:TeamSummary|undefined}){const name=team?.display_name??"TBD";return <span className={`team-mark accent-${team?team.team_id%4:0}`} aria-hidden="true"><i/>{name.split(/\s+/).map(part=>part[0]).join("").slice(0,3).toUpperCase()}</span>}
+function TeamMark({team}:{team:TeamSummary|undefined}){const name=team?.display_name??"TBD";return <span className={`team-mark command-team-mark accent-${team?team.team_id%4:0}`} style={team?{"--command-team-color":commandTeamColor(team.team_id)} as React.CSSProperties:undefined} aria-hidden="true"><i/>{name.split(/\s+/).map(part=>part[0]).join("").slice(0,3).toUpperCase()}</span>}
 function Metric({label,estimate}:{label:string;estimate:ProbabilityValue|undefined}){return <div className="forecast-metric"><span>{label}</span><strong>{percent(estimate?.probability)}</strong><small>{estimate?.interval?`${percent(estimate.interval.lower_probability)}–${percent(estimate.interval.upper_probability)} simultaneous interval`:"Interval unavailable"}{estimate&&!estimate.precision_reached?" · Precision target not reached":""}</small></div>}
 function validateResult(value:BackgroundBaselineResultSummary,snapshot:SnapshotSummary,runId:string,requestIdentity:string|undefined){if(value.api_schema_version!=="1.0"||value.result.api_schema_version!=="1.0")return "This retained result uses an unsupported schema version.";if(value.run.run_id!==runId||value.run.run_type!=="baseline"||value.run.status!=="completed"||!value.run.result_available||value.run.request_sha256!==requestIdentity)return "The retained result identity does not match the selected baseline run.";if(value.run.snapshot_id!==snapshot.snapshot_id||value.result.provenance.snapshot_id!==snapshot.snapshot_id)return "The retained result belongs to a different snapshot.";if(value.result.provenance.canonical_sha256!==snapshot.canonical_sha256)return "The retained result canonical identity does not match the active snapshot.";if(value.result.teams.some(team=>!snapshot.teams.some(item=>item.team_id===team.team_id)))return "The retained result contains a team outside the active snapshot.";return null}
 function dateKey(run:BackgroundRunRecord){return run.finished_at_utc??run.created_at_utc}

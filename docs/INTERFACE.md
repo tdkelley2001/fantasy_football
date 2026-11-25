@@ -125,6 +125,13 @@ or the keyboard-accessible team list to focus a team and inspect its exact weekl
 ranks. In Monte Carlo mode the same trajectories are labeled as the deterministic
 reference. [Projected baseline response](TECHNICAL_REFERENCE.md#route-and-success-schema-inventory)
 
+The shared forecast canvas uses the same canonical team accent across
+qualification, standings, and postseason selections. Names and explicit
+selection states accompany the colors. On narrow screens, Season Journey
+precedes Playoff Race, and the rank axis stays visible when scrolling weeks.
+The selected trajectory has a direct endpoint label. Narrow screens start
+Team Focus in a compact state with an explicit control for its analytical detail.
+
 Postseason Outlook shows the projected championship bracket in configured round
 order. The bracket uses supplied seeds, bye status, outcomes, scores, and
 scoring weeks. When the simulator supplies the bracket graph, pending slots

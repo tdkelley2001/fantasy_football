@@ -1,9 +1,5 @@
+import {commandTeamColor} from "./commandTeamIdentity";
 import type {JourneyStandingsPoint, SnapshotSummary} from "./types/api";
-
-const colors = [
-  "#008a83", "#ca6d27", "#6376cf", "#a7579d", "#5d7e35", "#bf535e", "#3b81ae",
-  "#907234", "#7560ac", "#1e819e", "#a96546", "#687a92", "#a17b0f", "#4d8770",
-];
 
 export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}: {
   snapshot: SnapshotSummary;
@@ -21,9 +17,9 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
   const last = projected[projected.length-1].scoring_week;
   const width = Math.max(470, 78 + (last-first+1)*35);
   const height = Math.max(280, 48+teams.length*19);
-  const step = (width-73)/(last-first+1);
+  const step = (width-56)/(last-first+1);
   const x = (point: JourneyStandingsPoint) =>
-    44 + (point.basis==="snapshot_start" ? 0 : point.scoring_week-first+1)*step;
+    28 + (point.basis==="snapshot_start" ? 0 : point.scoring_week-first+1)*step;
   const y = (rank: number) => 24 + (rank-1)*(height-64)/Math.max(1,teams.length-1);
   const rankAt = (point: JourneyStandingsPoint, teamId: number) => {
     if (point.status==="unavailable") return undefined;
@@ -32,7 +28,7 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
   };
   const slotCount = snapshot.league_structure?.championship_qualifier_count;
   const cutoff = slotCount!=null && slotCount>0 && slotCount<teams.length ? y(slotCount+.5):null;
-  const rankedTeams = teams.map((team,index)=>({team,color:colors[index%colors.length]}));
+  const rankedTeams = teams.map(team=>({team,color:commandTeamColor(team.team_id)}));
   const drawnTeams = [...rankedTeams].sort((a,b)=>Number(a.team.team_id===selected)-Number(b.team.team_id===selected));
   const hasGaps = series.some(point=>teams.some(team=>!rankAt(point,team.team_id)));
   const hasTies = series.some(point=>point.teams.some(row=>row.unresolved_tie));
@@ -42,18 +38,26 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
       ? "Deterministic reference for the Monte Carlo forecast"
       : "Observed starting rank and projected weekly finishes"}</p>
     <p className="journey-scroll-hint">Scroll the chart to see more weeks.</p>
-    <div className="journey-scroll" role="region" aria-label="Weekly standings chart (scroll for more weeks)" tabIndex={0}>
-      <svg viewBox={`0 0 ${width} ${height}`} style={{minWidth:Math.min(680,width)}} aria-hidden="true">
+    <div className="journey-frame" style={{height}}>
+      <svg className="journey-ranks" viewBox={`0 0 36 ${height}`} aria-hidden="true">
         <text x="4" y="12" className="journey-axis">Rank</text>
-        {teams.map((_,index)=><g key={index}>
-          <text x="28" y={y(index+1)+3} textAnchor="end" className="journey-axis">{index+1}</text>
-          <line x1="36" x2={width-28} y1={y(index+1)} y2={y(index+1)} className="journey-grid"/>
-        </g>)}
-        {cutoff!==null && <line x1="36" x2={width-28} y1={cutoff} y2={cutoff} className="journey-cutoff"/>}
+        {teams.map((_,index)=><text key={index} x="28" y={y(index+1)+3}
+          textAnchor="end" className="journey-axis">{index+1}</text>)}
+      </svg>
+      <div className="journey-scroll" role="region" aria-label="Weekly standings chart (scroll for more weeks)" tabIndex={0}>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{minWidth:Math.min(680,width)}} aria-hidden="true">
+        {teams.map((_,index)=><line key={index} x1="0" x2={width-14}
+          y1={y(index+1)} y2={y(index+1)} className="journey-grid"/>)}
+        {cutoff!==null && <g>
+          <line x1="0" x2={width-14} y1={cutoff} y2={cutoff} className="journey-cutoff"/>
+          <text x={width-18} y={cutoff-4} textAnchor="end" className="journey-cutoff-label">{slotCount}-team field reference</text>
+        </g>}
         {series.map(point=><text key={`${point.basis}:${point.scoring_week}`} x={x(point)} y={height-12}
-          textAnchor="middle" className="journey-axis">{point.basis==="snapshot_start" ? "Start" : `W${point.scoring_week}`}</text>)}
+          textAnchor="middle" className="journey-axis">{point.basis==="snapshot_start" ? "Observed" : `W${point.scoring_week}`}</text>)}
         {drawnTeams.map(({team,color})=>{
           const isFocused=team.team_id===selected;
+          const lastRanked = isFocused ? [...series].reverse().find(point=>rankAt(point,team.team_id)) : undefined;
+          const endpoint = lastRanked && rankAt(lastRanked,team.team_id)?.rank;
           const segments=series.slice(1).flatMap((point,index)=>{
             const before=series[index], from=rankAt(before,team.team_id), to=rankAt(point,team.team_id);
             return from?.rank!=null && to?.rank!=null &&
@@ -77,12 +81,14 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
                 <title>{`${team.display_name}, ${point.basis==="snapshot_start"?"snapshot start":`week ${point.scoring_week}`}: rank ${row.rank}${row.unresolved_tie?", unresolved tie":""}`}</title>
               </circle>;
             })}
+            {lastRanked && endpoint!=null && <text x={x(lastRanked)+(x(lastRanked)<110?8:-8)} y={y(endpoint)-7}
+              textAnchor={x(lastRanked)<110?"start":"end"} className="journey-endpoint" onClick={()=>onSelect(team.team_id)}>{team.display_name}</text>}
           </g>;
         })}
       </svg>
+      </div>
     </div>
-    <p className="journey-context">Start marks the snapshot entering Week {first}. Historical weekly ranks are unavailable.
-      {cutoff!==null && ` The dashed gold line marks the ${slotCount}-team playoff field for reference.`}
+    <p className="journey-context">Observed rank enters Week {first}. Historical weekly ranks are unavailable.
       {hasTies && " Ringed points show shared ranks with unresolved tiebreakers."}
       {hasGaps && " Gaps indicate unavailable ranks."}
     </p>
