@@ -186,7 +186,7 @@ and compatible retained results are displayed in Playoff Race.
 
 ### Evaluate a specific exchange
 
-1. Open **Trade Lab** on the selected snapshot. Choose teams and rostered players,
+1. Open **Transactions → Evaluate** on the selected snapshot. Choose teams and rostered players,
    then add the exchange as a committed draft step. Pins protect players
    against structural completion drops. They do not grant ESPN permissions.
 2. Choose **Evaluate Trade**. Review the effective timing, the two teams'
@@ -201,13 +201,17 @@ Review [interpretation](#interpret-and-compare-results) before acting outside Wa
 
 ### Search a finite set of alternatives
 
-In **Opportunity Explorer**, choose a requesting team and counterparty, then
+In **Transactions → Discover**, choose a requesting team and counterparty, then
 select **Find projected trades** for a bounded one-for-one preview. Expand
 a candidate to inspect both projected seasons using the same lineup,
 standings and postseason display as Trade Lab. On live snapshots, including
 fully unplayed weeks, trade timing requires verified platform evidence, and
 an eligible trade may start in a later week. Unsupported timing is shown
 on its candidate. Generation and evaluation coverage are reported separately.
+When an evaluated candidate supplies a reproducible exchange, choose **Open in
+Evaluate**, review the players and timing, and choose **Load exchange**. Loading
+replaces the current draft. You can keep the current draft instead. Switching
+views alone preserves work in both.
 The Monte Carlo search below is available for larger scopes and
 probability estimates. Its retained results are unchanged.
 
@@ -218,7 +222,10 @@ review the verified effective week.
 
 1. In **Simulation Center**, choose **Action search** and the requesting team. Select supported action families, counterparties and outgoing/incoming/acquisition pools. Begin with a small explicit universe and bounds; acquisition pools are unowned players, not outgoing roster players.
 2. Review the **Candidate universe preview** and effective request. **Include only selected** with no selections is invalid, not “all players.” Preview pool counts are not proof all feasible paths will be generated or evaluated. Advanced path/state/candidate/time/worker limits can cap work; response-page size does not cap the computation.
-3. Choose **Submit action search**, then monitor it. Once a completed retained result is available, open it in **Opportunity Explorer**. Explorer reads retained outcomes without rerunning the search; it does not submit/cancel searches itself.
+3. Choose **Submit action search**, then monitor it. Open a completed run in
+   **Transactions → Discover**, under **Retained action searches**. The
+   retained paths remain inspectable with their original coverage and results.
+   Their result records do not supply editable timelines.
 4. Filter **Action**, **Authorization**, **Acquisition** and **Evaluation** and select a supported sort. Inspect the selected path's ordered actions, required assumptions, caveats and all-team effects, not only its requesting-manager impact.
 5. Compare up to four paths in the local comparison tray for that retained search. Distinct paths can share the same completed state and numerical evidence; they are not independent replications. Changing snapshot/run clears incompatible local comparison context.
 

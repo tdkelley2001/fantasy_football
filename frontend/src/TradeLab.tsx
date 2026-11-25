@@ -6,6 +6,11 @@ import type {BackgroundManualScenarioResultSummary,ProjectedScenarioResult,Manua
 
 export interface DraftTransfer {readonly player_id:number;readonly from_team_id:number;readonly to_team_id:number}
 export interface DraftStep {readonly step_id:string;readonly timing?:"earliest"|"selected";readonly selectedWeek?:number;readonly transfers:readonly DraftTransfer[]}
+export interface DiscoveryDraft {
+  readonly teamId: number;
+  readonly counterpartyId: number;
+  readonly step: DraftStep;
+}
 export interface DraftReplay {readonly ownership:ReadonlyMap<number,number>;readonly changes:readonly RosterChangeInput[]}
 type Settings={masterSeed:number;paths:number;confidence:number;targetHalfWidth:number;irPolicy:"projection_based"|"strict";waiverBoundary:"unresolved"|"modeled_weekly_v1";baseStddev:number;projectionScale:number};
 const defaults:Settings={masterSeed:20261030,paths:100,confidence:.95,targetHalfWidth:.1,irPolicy:"projection_based",waiverBoundary:"modeled_weekly_v1",baseStddev:3,projectionScale:.35};
@@ -42,12 +47,21 @@ export function buildManualScenarioRequest(snapshot:SnapshotSummary,steps:readon
   return {api_schema_version:"1.0",snapshot:{snapshot_id:snapshot.snapshot_id,league_id:snapshot.league_id,season:snapshot.season},simulation:{master_seed:settings.masterSeed,path_count:settings.paths,first_path_index:0,ir_policy:settings.irPolicy,waiver_boundary:settings.waiverBoundary,reject_incomplete_valuations:true,require_complete:true,use_observed_current_week_lineup:Boolean(intent.effective_trades)||!snapshot.live_scoring},precision:{family_confidence_level:settings.confidence,target_half_width_probability:settings.targetHalfWidth,minimum_paths:settings.paths,maximum_paths:settings.paths,evaluation_interval_paths:settings.paths},outcome_model:{model_type:"provisional_normal",base_stddev_points:settings.baseStddev,projection_scale:settings.projectionScale},scenario:intent};
 }
 
-export function TradeLab({snapshot,preferredRunId}:{readonly snapshot:SnapshotSummary;readonly preferredRunId?:string|null}){
-  return <TradeWorkspace key={`${snapshot.snapshot_id}:${snapshot.canonical_sha256}`} snapshot={snapshot} preferredRunId={preferredRunId}/>;
+type TradeProps = {
+  readonly snapshot: SnapshotSummary;
+  readonly preferredRunId?: string | null;
+  readonly embedded?: boolean;
+  readonly managerTeamId?: number;
+  readonly discoveryDraft?: DiscoveryDraft;
+  readonly clearDiscoveryDraft?: () => void;
+};
+
+export function TradeLab(props: TradeProps){
+  return <TradeWorkspace key={`${props.snapshot.snapshot_id}:${props.snapshot.canonical_sha256}`} {...props}/>;
 }
 
-function TradeWorkspace({snapshot,preferredRunId}:{snapshot:SnapshotSummary;preferredRunId?:string|null}){
-  const teams=[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id),[teamA,setTeamA]=useState(teams[0]?.team_id??0),[teamB,setTeamB]=useState(teams[1]?.team_id??0),[selectedA,setSelectedA]=useState<readonly number[]>([]),[selectedB,setSelectedB]=useState<readonly number[]>([]),[steps,setSteps]=useState<readonly DraftStep[]>([]),[editingId,setEditingId]=useState<string|null>(null),[protectedPlayers,setProtected]=useState<readonly ProtectedPlayerInput[]>([]),[search,setSearch]=useState(""),[position,setPosition]=useState(""),[settings,setSettings]=useState<Settings>(defaults),[configOpen,setConfigOpen]=useState(false),[result,setResult]=useState<BackgroundManualScenarioResultSummary|null>(null),[status,setStatus]=useState("Draft not evaluated"),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false),[stale,setStale]=useState(false),[observationNotice,setObservationNotice]=useState<string|null>(null);const revision=useRef(0),retainedRequest=useRef(0),controller=useRef<AbortController|null>(null),stepSequence=useRef(1);
+function TradeWorkspace({snapshot,preferredRunId,embedded,managerTeamId,discoveryDraft,clearDiscoveryDraft}:TradeProps){
+  const teams=[...snapshot.teams].sort((a,b)=>(a.standing??999)-(b.standing??999)||a.team_id-b.team_id),[teamA,setTeamA]=useState(managerTeamId??teams[0]?.team_id??0),[teamB,setTeamB]=useState(teams.find(team=>team.team_id!==(managerTeamId??teams[0]?.team_id))?.team_id??0),[selectedA,setSelectedA]=useState<readonly number[]>([]),[selectedB,setSelectedB]=useState<readonly number[]>([]),[steps,setSteps]=useState<readonly DraftStep[]>([]),[editingId,setEditingId]=useState<string|null>(null),[protectedPlayers,setProtected]=useState<readonly ProtectedPlayerInput[]>([]),[search,setSearch]=useState(""),[position,setPosition]=useState(""),[settings,setSettings]=useState<Settings>(defaults),[configOpen,setConfigOpen]=useState(false),[result,setResult]=useState<BackgroundManualScenarioResultSummary|null>(null),[status,setStatus]=useState("Draft not evaluated"),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false),[stale,setStale]=useState(false),[observationNotice,setObservationNotice]=useState<string|null>(null);const revision=useRef(0),retainedRequest=useRef(0),controller=useRef<AbortController|null>(null),stepSequence=useRef(1);
   const [projected,setProjected]=useState<ProjectedScenarioResult|null>(null);
   const [projecting,setProjecting]=useState(false),[projectionError,setProjectionError]=useState<string|null>(null);
   const projectionController=useRef<AbortController|null>(null);
@@ -110,9 +124,42 @@ function TradeWorkspace({snapshot,preferredRunId}:{snapshot:SnapshotSummary;pref
   };
   const canEvaluate = timed ? canTime && canScoreTimed && timings.every(timing => timing.valid) : untimedSupported;
   const clear=()=>commit(()=>{setSteps([]);setEditingId(null);setSelectedA([]);setSelectedB([]);setProtected([]);setResult(null);setStale(false);setObservationNotice(null);setStatus("Draft not evaluated")});
-  return <div className="trade-lab"><header className="trade-mast"><div><span className="overline">Trade Lab · final-state scenario analysis</span><h1>Build the exchange. See the whole league move.</h1><p>Draft chronological transactions, then intentionally evaluate their aggregated final ownership through the accepted scenario engine.</p></div><div className="trade-boundary"><ShieldAlert/><span><strong>What-if only</strong>No ESPN execution or trade acceptance is implied.</span></div></header>
+  const draftHeading = useRef<HTMLHeadingElement>(null);
+  const acceptDiscoveredExchange = (draft: DiscoveryDraft) => {
+    if (!applySteps([draft.step])) return;
+    retainedRequest.current++;
+    controller.current?.abort();
+    setTeamA(draft.teamId);
+    setTeamB(draft.counterpartyId);
+    setSelectedA([]);
+    setSelectedB([]);
+    setEditingId(null);
+    setProtected([]);
+    setSettings(defaults);
+    setResult(null);
+    setStale(false);
+    setStatus("Discovered exchange loaded. Review or edit it before evaluating.");
+    clearDiscoveryDraft?.();
+    draftHeading.current?.focus();
+  };
+  return <div className="trade-lab">
+    {embedded ? <header className="transaction-task"><h2 ref={draftHeading} tabIndex={-1}>Build the exchange</h2>
+      <p>Choose players, verify the effective week, and compare with the unchanged season.</p></header> :
+      <header className="trade-mast"><div><h1>Build the exchange. See the whole league move.</h1>
+        <p>Choose players, verify the effective week, and compare with the unchanged season.</p></div>
+        <div className="trade-boundary"><ShieldAlert/><span><strong>What-if only</strong>No ESPN execution or trade acceptance is implied.</span></div>
+      </header>}
+    {discoveryDraft && <section className="transaction-offer" aria-label="Discovered exchange">
+      <h3>Discovered exchange</h3>
+      <p>{discoveryDraft.step.transfers.map(move=>`${playerName(players,move.player_id)} to ${names.get(move.to_team_id)}`).join(" / ")}
+        {" / "}{discoveryDraft.step.selectedWeek===undefined?"Starting-roster edit":`Week ${discoveryDraft.step.selectedWeek}`}</p>
+      {(steps.length>0 || selectedA.length>0 || selectedB.length>0 || protectedPlayers.length>0 || result) &&
+        <p>Loading this exchange replaces the current draft, clears its evaluation, and resets its settings.</p>}
+      <button type="button" className="primary-button" onClick={()=>acceptDiscoveredExchange(discoveryDraft)}>Load exchange</button>
+      <button type="button" onClick={()=>{clearDiscoveryDraft?.();draftHeading.current?.focus();}}>Keep current draft</button>
+    </section>}
     <section className="trade-builder" aria-label="Two-team trade builder"><RosterPanel side="a" teamId={teamA} otherTeamId={teamB} teams={teams} snapshot={snapshot} ownership={ownership} selected={selectedA} setSelected={setSelectedA} protectedPlayers={protectedPlayers} setProtected={value=>commit(()=>setProtected(value))} search={search} setSearch={setSearch} position={position} setPosition={setPosition} onTeam={value=>selectTeams("a",value)}/><div className="exchange-core"><ArrowLeftRight/><strong>{editingId?`Editing step ${editIndex+1}`:"Proposed exchange"}</strong><span>{selectedA.length} → {names.get(teamB)}</span><span>{selectedB.length} → {names.get(teamA)}</span><button className="primary-button" onClick={saveStep} disabled={!selectedA.length&&!selectedB.length}>{editingId?"Save transaction step":"Add transaction step"}</button>{editingId&&<button onClick={cancelEdit}>Cancel edit</button>}</div><RosterPanel side="b" teamId={teamB} otherTeamId={teamA} teams={teams} snapshot={snapshot} ownership={ownership} selected={selectedB} setSelected={setSelectedB} protectedPlayers={protectedPlayers} setProtected={value=>commit(()=>setProtected(value))} search={search} setSearch={setSearch} position={position} setPosition={setPosition} onTeam={value=>selectTeams("b",value)}/></section>
-    <section className="trade-timeline"><header><div><span className="overline">Chronological draft</span><h2>{steps.length?`${steps.length} transaction step${steps.length===1?"":"s"}`:"No transaction steps yet"}</h2></div><p>Sequence is retained for inspection. The backend evaluates aggregated final ownership, not intermediate executability.</p></header>{steps.length?<ol>{steps.map((step,index)=><li key={step.step_id} className={editingId===step.step_id?"editing":""}><i>{index+1}</i><div><strong>{step.transfers.map(item=>`${playerName(players,item.player_id)}: ${names.get(item.from_team_id)} → ${names.get(item.to_team_id)}`).join(" · ")}</strong><small>Intermediate ownership only · transaction authorization not established</small></div><span className="step-controls"><button aria-label={`Move step ${index+1} earlier`} disabled={!index||editingId!==null} onClick={()=>applySteps(move(steps,index,index-1))}><ChevronUp/></button><button aria-label={`Move step ${index+1} later`} disabled={index===steps.length-1||editingId!==null} onClick={()=>applySteps(move(steps,index,index+1))}><ChevronDown/></button><button aria-label={`Edit step ${index+1}`} disabled={editingId!==null&&editingId!==step.step_id} onClick={()=>startEdit(step)}>Edit</button><button aria-label={`Remove step ${index+1}`} disabled={editingId!==null} onClick={()=>applySteps(steps.filter(item=>item.step_id!==step.step_id))}><Trash2/></button></span>{index<steps.length-1&&<ArrowDown/>}</li>)}</ol>:<p className="trade-empty">Select players from either roster and add the exchange as a step.</p>}</section>
+    <section className="trade-timeline"><header><div><span className="overline">Chronological draft</span><h2>{steps.length?`${steps.length} transaction step${steps.length===1?"":"s"}`:"No transaction steps yet"}</h2></div><p>Timed steps use the verified transaction boundary. Untimed steps evaluate aggregate starting-roster changes.</p></header>{steps.length?<ol>{steps.map((step,index)=><li key={step.step_id} className={editingId===step.step_id?"editing":""}><i>{index+1}</i><div><strong>{step.transfers.map(item=>`${playerName(players,item.player_id)}: ${names.get(item.from_team_id)} → ${names.get(item.to_team_id)}`).join(" · ")}</strong><small>Intermediate ownership only · transaction authorization not established</small></div><span className="step-controls"><button aria-label={`Move step ${index+1} earlier`} disabled={!index||editingId!==null} onClick={()=>applySteps(move(steps,index,index-1))}><ChevronUp/></button><button aria-label={`Move step ${index+1} later`} disabled={index===steps.length-1||editingId!==null} onClick={()=>applySteps(move(steps,index,index+1))}><ChevronDown/></button><button aria-label={`Edit step ${index+1}`} disabled={editingId!==null&&editingId!==step.step_id} onClick={()=>startEdit(step)}>Edit</button><button aria-label={`Remove step ${index+1}`} disabled={editingId!==null} onClick={()=>applySteps(steps.filter(item=>item.step_id!==step.step_id))}><Trash2/></button></span>{index<steps.length-1&&<ArrowDown/>}</li>)}</ol>:<p className="trade-empty">Select players from either roster and add the exchange as a step.</p>}</section>
     {canTime && steps.length > 0 && !timed && <button disabled={editingId !== null}
       onClick={() => commit(() => setSteps(steps.map(step => ({...step, timing:"earliest"}))))}>
       Use effective timing

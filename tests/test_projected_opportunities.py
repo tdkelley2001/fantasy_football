@@ -191,7 +191,12 @@ def test_projected_search_endpoint_matches_standalone_baseline_and_reports_limit
     assert result.status_code == 200, result.json()
     assert invalid.status_code == 422
     body = result.json()
-    assert body["baseline"]["season"] == standalone.json()
+    expected = standalone.json()
+    # Standalone Home presentation adds Journey and bracket graph metadata.
+    assert expected.pop("standings_series")
+    assert expected.pop("championship_rounds")
+    assert isinstance(expected.pop("consolation_rounds"), list)
+    assert body["baseline"]["season"] == expected
     assert body["candidate_coverage_complete"] and body["evaluation_coverage_complete"]
     assert "ranking_resolved" not in body
     assert "precision" not in body
