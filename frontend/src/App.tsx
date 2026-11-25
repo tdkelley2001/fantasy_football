@@ -6,8 +6,7 @@ import { api, ApiError } from "./lib/api";
 import type { BackgroundRunRecord, HealthResponse, SnapshotSummary } from "./types/api";
 import { CommandCenter, LeagueOverview, PlayoffRace, type ForecastMode, type ForecastRequest } from "./LeagueOverview";
 import { LeagueMatchups } from "./LeagueMatchups";
-import { OpportunityExplorer } from "./OpportunityExplorer";
-import { TradeLab } from "./TradeLab";
+import { TransactionsWorkspace } from "./TransactionsWorkspace";
 import { SimulationCenter } from "./SimulationCenter";
 import { LeagueRefresh } from "./LeagueRefresh";
 import { SeasonArchive } from "./SeasonArchive";
@@ -198,14 +197,13 @@ export function App() {
       <CommandCenter key={forecastSnapshotKey} snapshot={selected} projection={projection} runs={runs}
         runListStatus={runListStatus} loadRuns={readRuns} forecastRequests={forecastRequests} layered
         openCompatibleSimulation={()=>{navigate("simulation");setMatchProjectionInitially(true)}}/>
-    </HomeDashboard>:destination==="transactions"?<div className="workspace-page transaction-entry">
-      <h1>Transactions</h1>
-      <section><h2>Discover opportunities</h2><p>Explore projected trades and retained action searches.</p>
-        <button type="button" className="workspace-action" onClick={()=>navigate("opportunities")}>Opportunity Explorer</button></section>
-      <section><h2>Evaluate an exchange</h2><p>Compare an explicit trade with the unchanged season.</p>
-        <button type="button" className="workspace-action" onClick={()=>navigate("trades")}>Trade Lab</button></section>
-      <button type="button" className="workspace-action" onClick={()=>navigate("simulation")}>Configure simulations and searches</button>
-    </div>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="playoffs"?<PlayoffRace key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun} openSimulation={()=>navigate("simulation")}/>:destination==="league"?<LeagueOverview snapshot={selected} projection={projection} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} forecastRequests={forecastRequests} modePreference={{choice:forecastMode?.snapshotKey===forecastSnapshotKey?forecastMode.mode:undefined,select:mode=>setForecastMode({snapshotKey:forecastSnapshotKey,mode})}} openPlayoffRace={()=>navigate("playoffs")} openSimulation={()=>navigate("simulation")} openCompatibleSimulation={()=>{navigate("simulation");setMatchProjectionInitially(true)}} openArchive={year=>{setPreferredRun(null);go({destination:"history",year},true)}}/>:destination==="opportunities"?<OpportunityExplorer snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}/>:destination==="trades"?<TradeLab snapshot={selected} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:<FutureWorkspace activeRuns={runListStatus==="loaded"?activeRuns:undefined}/>}</main>
+    </HomeDashboard>:["transactions","opportunities","trades"].includes(destination)?managerState.loading?
+      <p role="status" className="runtime-caveat">Loading Transactions context...</p>:<TransactionsWorkspace
+      key={`${forecastSnapshotKey}:${managerState.selected}`} snapshot={selected}
+      managerTeamId={managerState.team?.team_id} view={destination==="trades"?"evaluate":"discover"}
+      runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}
+      navigate={view=>go({destination:view==="evaluate"?"trades":"transactions"})}
+      openSimulation={()=>navigate("simulation")}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="playoffs"?<PlayoffRace key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun} openSimulation={()=>navigate("simulation")}/>:destination==="league"?<LeagueOverview snapshot={selected} projection={projection} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} forecastRequests={forecastRequests} modePreference={{choice:forecastMode?.snapshotKey===forecastSnapshotKey?forecastMode.mode:undefined,select:mode=>setForecastMode({snapshotKey:forecastSnapshotKey,mode})}} openPlayoffRace={()=>navigate("playoffs")} openSimulation={()=>navigate("simulation")} openCompatibleSimulation={()=>{navigate("simulation");setMatchProjectionInitially(true)}} openArchive={year=>{setPreferredRun(null);go({destination:"history",year},true)}}/>:destination==="simulation"?<SimulationCenter matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:<FutureWorkspace activeRuns={runListStatus==="loaded"?activeRuns:undefined}/>}</main>
       </div>
     </div>
     {(menuOpen||contextOpen)&&<div className="scrim" aria-hidden="true" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}

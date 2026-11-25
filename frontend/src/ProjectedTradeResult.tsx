@@ -16,6 +16,7 @@ export function ProjectedTradeResult({snapshot, result}: {
     .flatMap(move => [move.from_team_id, move.to_team_id]));
   const limits = [...new Set([...result.baseline.unresolved_capabilities,...result.hypothetical.unresolved_capabilities])];
   const table = (caption: string, rows: ProjectedScenarioResult["hypothetical"]["teams"]) =>
+    <div className="transaction-result-table" role="group" aria-label={`${caption} comparison table`} tabIndex={0}>
     <table><caption>{caption}, baseline → hypothetical</caption>
       <thead><tr><th>Team</th><th>Record</th><th>Points for</th><th>Rank</th><th>Playoff seed</th><th>Final place</th></tr></thead>
       <tbody>{rows.map(after => {
@@ -29,7 +30,8 @@ export function ProjectedTradeResult({snapshot, result}: {
           <td>{label(before.postseason_seed)} → {label(after.postseason_seed)}</td>
           <td>{label(before.final_placement)} → {label(after.final_placement)}</td></tr>;
       })}</tbody>
-    </table>;
+    </table>
+    </div>;
   return <>
     <p>Champion in each projection · {team(result.baseline.champion_team_id)} → {team(result.hypothetical.champion_team_id)}</p>
     {limits.length > 0 && <p>Incomplete capabilities · {limits.join(", ")}</p>}

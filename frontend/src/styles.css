@@ -513,3 +513,36 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
  .home-briefing { grid-template-columns:1fr; gap:.9rem; }
  .product-primary button, .product-secondary button { min-height:2.75rem; }
 }
+
+/* Transactions shares the editorial masthead and one working surface. */
+.transactions-workspace { max-width: 1240px; margin: auto; padding: clamp(1rem,3vw,2.6rem) clamp(.8rem,3vw,2rem) 4rem; }
+.transactions-mast { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: .4rem 2rem; padding-block-end: 1rem; }
+.transactions-mast h1 { font: 700 clamp(2.25rem,5vw,4rem)/1.05 Georgia,serif; margin: .15rem 0 .45rem; }
+.transactions-mast p,.transaction-task p,.transaction-retained > p { color: var(--muted); margin: .25rem 0; }
+.transactions-mast .transaction-readonly { border-inline-start: 2px solid var(--warm); padding-inline-start: .7rem; max-width: 18rem; font-size: .85rem; }
+.transaction-views { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .9rem; border-block: 1px solid var(--line); margin-block-end: 1.2rem; }
+.transaction-views button { display: inline-flex; align-items: center; gap: .45rem; background: none; color: var(--muted); border: 0; border-block-end: 2px solid transparent; padding: .65rem .45rem; min-height: 44px; cursor: pointer; }
+.transaction-views button[aria-current=page] { color: var(--text); border-block-end-color: var(--warm); font-weight: 700; }
+.transaction-views svg { width: 1rem; }
+.transaction-views .transaction-configure { margin-inline-start: auto; font-size: .8rem; }
+.transactions-workspace .trade-lab,.transactions-workspace .opportunity { padding: 0; }
+.transactions-workspace .analytics-panel { min-width: 0; }
+.transaction-task { margin-block-end: 1rem; }
+.transaction-task h2 { margin: 0; }
+.transaction-offer { border-inline-start: 3px solid var(--warm); background: var(--panel); padding: .8rem 1rem; margin-block-end: 1rem; }
+.transaction-offer h3 { margin: 0; }
+.transaction-offer button { margin-inline-end: .5rem; }
+.transaction-search { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; margin-block: .9rem; }
+.transaction-search label,.retained-search-control label { display: grid; gap: .2rem; min-width: 0; }
+.transaction-search select,.retained-search-control select { max-width: 100%; }
+.transaction-candidate { border-block-start: 1px solid var(--line); padding: .65rem 0; }
+.transaction-candidate summary { min-height: 36px; cursor: pointer; }
+.transaction-candidate summary small { display: block; color: var(--muted); margin-inline-start: 1rem; }
+.transaction-result-table { min-width: 0; overflow-x: auto; }
+.transaction-retained { border-block-start: 1px solid var(--line); margin-block-start: 1.2rem; padding-block-start: .8rem; }
+.transaction-retained > summary { cursor: pointer; font-weight: 750; padding-block: .4rem; }
+.retained-search-control { margin-block: .75rem; }
+@media (max-width: 660px) {
+  .transaction-views .transaction-configure { margin-inline-start: 0; }
+  .transaction-search label { flex: 1 1 9rem; }
+}

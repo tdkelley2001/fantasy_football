@@ -423,6 +423,7 @@ export interface ProjectedOpportunityResult {
   evaluations: readonly ProjectedOpportunitySeason[];
   candidates: readonly (Pick<ProjectedScenarioResult, "timeline" | "explicit_changes" | "forced_drops" | "automatic_additions"> & {
     candidate_id: string;
+    actions?: readonly CandidateActionDetail[];
     evaluation_index: number | null;
     limitation: string | null;
     caveats: readonly string[];

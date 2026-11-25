@@ -30,8 +30,9 @@ Mandatory tactical fields, constellations, spatial maps and the immersive room m
 ## User journey and navigation
 
 Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then deliberately select the intended canonical snapshot. The shell unifies snapshot selection, connection, observed active-run count, refresh, theme and source/build context. Desktop and narrow-screen navigation prioritize Home and Transactions. Home
-shows the league briefing and Command Center. Transactions links to the
-existing Opportunity Explorer and Trade Lab. Supporting views include Team
+shows the league briefing and Command Center. Transactions brings projected
+discovery, retained action searches and manual evaluation into one workspace.
+Supporting views include Team
 Overview, League Overview, League Matchups, Playoff Race, Season Archive and
 Simulation Center. Existing direct routes remain available. Choosing a destination from the narrow-screen menu closes it and moves keyboard focus to the main content. On narrow screens, wide tables in Team Overview, League Matchups, League Overview results and Season Archive scroll within a labeled, keyboard-focusable region.
 
@@ -52,7 +53,14 @@ The browser reads relative API 1.0 URLs through [lib/api.ts](../frontend/src/lib
 
 Effect-owned AbortControllers plus latest-request/version and response-identity checks protect results, errors, status and loading, even if transport resolves after abort. Retry replaces the relevant local request. Detail/page/state failures settle independently instead of stranding loading. Rapid shell selection remains available while an earlier detail request is pending; late data cannot overwrite the active snapshot or stored selection. Team focus cannot bridge leagues just because numeric IDs coincide.
 
-Trade Lab is keyed by snapshot UUID/checksum; Explorer detail state by snapshot/run. Snapshot/run changes reset incompatible workspace selections. Simulation Center resets snapshot-specific selectors and observation. Local drafts/comparisons/filters are not a durable scenario library; navigating away can discard them. Context change or aborted fetch **does not cancel an accepted backend job**. Explicit run cancellation is separate; ambiguous submission failures are not automatically retried.
+The Transactions workspace is keyed by snapshot UUID/checksum and manager
+perspective. Switching Discover and Evaluate keeps local drafts and search
+state. Changing context clears incompatible local selections. Explorer detail
+state is keyed by snapshot/run. Simulation Center resets snapshot-specific
+selectors and observation. Local drafts, comparisons and filters are not a
+durable scenario library. Leaving Transactions can discard them. Context change
+or aborted fetch **does not cancel an accepted backend job**. Explicit run
+cancellation is separate. Ambiguous submission failures are not automatically retried.
 
 Only `war-room-theme` and `war-room-snapshot` preference identifiers persist in localStorage. Private rosters, drafts and results do not. The source/build drawer displays snapshot/schema/time/horizon and package/revision metadata; unavailable revision stays unavailable. An explicit revision string is not authenticated source bytes. [user guide](USER_GUIDE.md#know-what-is-stored) owns privacy safeguards.
 
@@ -195,6 +203,15 @@ League-wide and metric precision warnings remain prominent after completion. Nul
 The League Matchups scoreboard groups the active snapshot's schedule and verified prior regular-season scores by matchup period. It defaults to the current period when known. Select a week or multiweek period to view its pairings or reconciled scores. Scores are tied to the selected snapshot and use captured ESPN winner labels. Unverified periods show known pairings and an explicit score-availability message. Archived postseason results remain in Season Archive.
 
 ## Opportunity Explorer
+
+Discover presents bounded projected exchanges first, with retained action
+searches in a disclosure. An evaluated exchange can open in Evaluate when its
+single ordered trade, explicit ownership changes and effective timeline agree
+with the active snapshot. Live trades retain the exact resolved week. A
+structural candidate opens as a starting-roster edit only in the absence of
+live context. The user reviews and explicitly loads the exchange before it
+replaces a draft. Retained search paths remain inspectable because their
+result contract does not establish a reproducible editable timeline.
 
 Read-only discovery defaults to the newest usable completed action-search result for the snapshot, with explicit/preferred-run selection. Create/monitor searches in Simulation Center; Explorer does not launch, resume, cancel or alter them.
 

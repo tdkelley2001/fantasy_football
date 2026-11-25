@@ -2,8 +2,8 @@ const paths = {
   home: "/home",
   transactions: "/transactions",
   team: "/my-team/overview",
-  opportunities: "/players-moves/opportunities",
-  trades: "/players-moves/trade-lab",
+  opportunities: "/transactions/discover",
+  trades: "/transactions/evaluate",
   league: "/league/overview",
   playoffs: "/league/playoff-race",
   matchups: "/league/matchups",
@@ -19,6 +19,8 @@ export type WorkspaceRoute =
 
 export function readWorkspaceRoute(pathname: string): WorkspaceRoute {
   const path = pathname.replace(/\/$/, "");
+  if (path === "/players-moves/opportunities") return {destination:"opportunities"};
+  if (path === "/players-moves/trade-lab") return {destination:"trades"};
   const archive = /^\/history\/seasons\/(\d{4})$/.exec(path);
   if (archive && Number(archive[1]) >= 2000) {
     return { destination: "history", year: Number(archive[1]) };
