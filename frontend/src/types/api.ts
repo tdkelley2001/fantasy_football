@@ -357,12 +357,14 @@ export interface ProjectedPostseasonMatchup {
   away_total: number | null;
   winner_team_id: number | null;
   purpose?: string;
+  loser_team_id?: number | null;
   status?: "scheduled" | "in_progress" | "complete" | "bye";
   weekly_scores?: readonly {scoring_week: number; team_id: number; points: number}[];
 }
 
 export interface ProjectedBaselineResult {
   championship_rounds?: readonly ProjectedChampionshipRound[] | null;
+  consolation_rounds?: readonly ProjectedChampionshipRound[] | null;
   standings_series?: readonly JourneyStandingsPoint[] | null;
   snapshot_id: string;
   canonical_sha256: string;

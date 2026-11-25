@@ -519,6 +519,16 @@ the existing matchup records. Older responses and other projection routes may
 omit the round field. The retained Monte Carlo contract provides qualification,
 championship and placement probabilities without round-advancement estimates.
 
+The optional projected-baseline `consolation_rounds` field uses the same
+period and node shape. Nodes come from the consolation graph, whose sources
+may reference either the winner or loser of an earlier node. For an explicit
+ladder configuration, only opening graph nodes are returned because later
+matchups use the configured position transitions. The existing `postseason`
+records and team final placements remain authoritative in both cases. A round
+without nodes supplies its configured scoring weeks without establishing
+connections, including when bye re-entry remains unresolved. Older responses
+and other projection routes can omit the field.
+
 Projected scenario comparison adds the existing manual scenario intent to the
 projection request. The response contains both season results, their final
 rosters, the resolved effective timeline, explicit edits and structural roster

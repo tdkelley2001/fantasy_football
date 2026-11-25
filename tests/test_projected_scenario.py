@@ -54,6 +54,7 @@ def test_projection_comparison_matches_baseline_and_direct_structural_execution(
     baseline = baseline_response.json()
     assert baseline.pop("standings_series")
     assert baseline.pop("championship_rounds")
+    baseline.pop("consolation_rounds")
     assert identical.json()["baseline"] == identical.json()["hypothetical"] == baseline
 
     inputs = prepare_projection_request(store.loaded, request)

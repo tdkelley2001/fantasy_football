@@ -430,6 +430,10 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .bracket-links { width: 100%; height: 100%; position: absolute; inset: 0; pointer-events: none; }
 .bracket-links path { fill: none; stroke: var(--muted); stroke-width: 1.25; opacity: .6; }
 .bracket-links path.focused { stroke: var(--postseason-accent); stroke-width: 3; opacity: 1; }
+.bracket-links path[data-outcome=loser] { stroke-dasharray: 4 3; }
+.consolation-bracket { border-block-start: 1px solid var(--line); margin-block-start: 1.5rem; padding-block-start: .85rem; }
+.consolation-bracket .bracket-round:last-child { border-color: var(--line); }
+.consolation-bracket .bracket-context:first-child { font-weight: 650; }
 
 .postseason-title-race { gap: 1px; }
 .postseason-title-race button { grid-template-columns: 1.75rem minmax(0,1fr) 5.15rem; gap: .2rem .4rem; min-height: 2.75rem; padding: .3rem; border-radius: 0; }
@@ -456,7 +460,7 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 }
 @media (max-width: 840px) {
   .bracket-rounds { width: auto; gap: 1rem; }
-  .bracket-links { display: none; }
+  .bracket-links, .bracket-route-key { display: none; }
   .postseason-placement .placement-matrix { grid-template-columns: minmax(5.45rem,1.7fr) repeat(var(--placements),minmax(.9rem,1fr)); gap: 1px; }
   .postseason-placement .placement-matrix > strong { padding: .25rem 0; }
   .postseason-placement .matrix-team .team-mark { display: none; }

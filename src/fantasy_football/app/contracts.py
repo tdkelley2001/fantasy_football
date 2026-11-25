@@ -320,6 +320,9 @@ class ProjectedChampionshipRound(ContractModel):
 
 
 class ProjectedBaselineResult(ContractModel):
+    consolation_rounds: tuple[ProjectedChampionshipRound, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     championship_rounds: tuple[ProjectedChampionshipRound, ...] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

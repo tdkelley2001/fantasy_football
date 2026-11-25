@@ -343,6 +343,68 @@ test("projected bracket uses supplied seeds, bye, advancement and multiweek scor
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
+test("Home presents supplied consolation routes, final places and shared keyboard focus",async()=>{
+  const user=userEvent.setup();
+  const projection=withBracket();
+  if(projection.state.status!=="available")throw Error("Projection fixture unavailable");
+  const result=projection.state.result;
+  const [,,winner,loser]=snapshot.teams;
+  const opening={matchup_id:"c1",purpose:"c-open",round_number:1,bracket_type:"consolation",
+    status:"complete" as const,home_team_id:winner.team_id,away_team_id:loser.team_id,
+    winner_team_id:winner.team_id,loser_team_id:loser.team_id,home_total:102,away_total:93};
+  const final={...opening,matchup_id:"c2",purpose:"c-place",round_number:2,
+    scoring_weeks:[16,17],home_total:204,away_total:183,weekly_scores:[
+      {scoring_week:16,team_id:winner.team_id,points:102},
+      {scoring_week:17,team_id:winner.team_id,points:102},
+    ]};
+  const consolation_rounds=[
+    {round_number:1,matchup_period_id:14,scoring_weeks:[15],
+      nodes:[{node_id:"c-open",position:0,sources:[3,4].map(seed=>({seed,matchup_id:null,outcome:null}))}]},
+    {round_number:2,matchup_period_id:15,scoring_weeks:[16,17],
+      nodes:[{node_id:"c-place",position:0,sources:["winner","loser"].map(outcome=>({seed:null,matchup_id:"c-open",outcome}))}]},
+  ];
+  const {container}=render(<CommandCenter layered snapshot={snapshot} projection={{...projection,
+    state:{status:"available",result:{...result,consolation_rounds,postseason:[...result.postseason,opening,final]}}}}/>);
+  const bracket=screen.getByRole("region",{name:"Projected consolation bracket"});
+  const rounds=within(bracket);
+  expect(screen.getByRole("region",{name:"Championship rounds"})).toBeVisible();
+  expect(rounds.getByText("Winner of round 1, match 1")).toBeVisible();
+  expect(rounds.getByText("Loser of round 1, match 1")).toBeVisible();
+  expect(rounds.getByText("Weeks 16, 17")).toBeVisible();
+  expect(rounds.getByText("Place 4")).toBeVisible();
+  await user.click(rounds.getByText("Weekly scoring"));
+  expect(rounds.getByText(/Week 17.*102.00/)).toBeVisible();
+  const button=within(rounds.getByRole("region",{name:"Consolation round 1"})).getByRole("button",{name:new RegExp(loser.display_name)});
+  button.focus();
+  await user.keyboard("{Enter}");
+  expect(bracket.querySelector('path[data-outcome="loser"]')).toHaveClass("focused");
+  expect(bracket.querySelector('path[data-outcome="winner"]')).not.toHaveClass("focused");
+  expect(within(screen.getByRole("region",{name:"Playoff Race"}))
+    .getByRole("button",{name:new RegExp(loser.display_name)})).toHaveAttribute("aria-pressed","true");
+  expect(screen.getByText("Projected consolation rounds")).toBeVisible();
+  await user.keyboard("{Escape}");
+  expect(button).toHaveFocus();
+  expect((await axe.run(container)).violations).toEqual([]);
+});
+
+test("consolation matchups remain visible without supplied routes, including byes",()=>{
+  const projection=withBracket();
+  if(projection.state.status!=="available")throw Error("Projection fixture unavailable");
+  const result=projection.state.result;
+  const [, , first, second]=snapshot.teams;
+  const bye={matchup_id:"c-bye",round_number:1,bracket_type:"consolation",status:"bye" as const,
+    home_team_id:first.team_id,away_team_id:null,winner_team_id:first.team_id,home_total:null,away_total:null};
+  const pending={...bye,matchup_id:"c-later",round_number:2,status:"scheduled" as const,
+    away_team_id:second.team_id,winner_team_id:null};
+  render(<LeagueOverview snapshot={snapshot} projection={{...projection,state:{status:"available",
+    result:{...result,postseason:[...result.postseason,bye,pending]}}}}/>);
+  const bracket=screen.getByRole("region",{name:"Projected consolation bracket"});
+  expect(within(bracket).getByText("Bye")).toBeVisible();
+  expect(within(bracket).getByText("Outcome unresolved")).toBeVisible();
+  expect(within(bracket).getAllByText("Routing unresolved")).toHaveLength(2);
+  expect(bracket.querySelector(".bracket-links")).toBeNull();
+});
+
 test("configured pending rounds display source slots without inventing participants or winners",()=>{
   const {container}=render(<LeagueOverview snapshot={snapshot} projection={withBracket(true)}/>);
   const final=within(screen.getByRole("region",{name:"Championship / Round 2"}));
