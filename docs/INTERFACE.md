@@ -135,13 +135,19 @@ Team Focus in a compact state with an explicit control for its analytical detail
 Postseason Outlook shows the projected championship bracket in configured round
 order. The bracket uses supplied seeds, bye status, outcomes, scores, and
 scoring weeks. When the simulator supplies the bracket graph, pending slots
-retain their seed or preceding matchup reference. Unresolved participants and
-outcomes stay explicit. Round columns stack on narrow screens, and team
+retain their seed or preceding matchup reference. Wide layouts connect only the
+advancement edges supplied by the graph and highlight the selected team's
+confirmed path. Narrow layouts stack rounds and keep the same textual source
+references. Unresolved participants and outcomes stay explicit, and team
 buttons provide the same Team Focus interaction by keyboard and touch.
 
 Monte Carlo presents championship and placement probabilities, with the
 projected bracket available as a separately labeled reference. The probability
-display uses supplied estimates, intervals, and precision flags. The Team
+display uses supplied estimates, intervals, and precision flags. Overview
+percentages use concise labels; exact supplied estimates remain available in
+Team Focus and the accessible placement table. The placement heatmap keeps team
+labels visible while scrolling and distinguishes unavailable values from zero.
+The Team
 Focus overlay follows postseason selections and offers exact weekly ranks,
 projected bracket progress or placement probabilities where supported.
 
