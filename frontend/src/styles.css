@@ -334,3 +334,39 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
   .journey-scroll-hint { display: block; color: var(--muted); font-size: .75rem; margin: .25rem 0; }
   .command-journey:has(.journey-scroll) .command-team-focus { inset-block-start: 5rem; }
 }
+
+
+/* Postseason outlook */
+.bracket-context { margin: .3rem 0 .55rem; font-size: .8rem; color: var(--muted); }
+.bracket-rounds { display: flex; gap: 1rem; overflow-x: auto; padding: .5rem .25rem; }
+.bracket-round { flex: 1 0 13rem; min-width: 0; border-block-start: 2px solid var(--warm); }
+.bracket-round h4 { margin: .55rem 0 0; font-weight: 700; }
+.bracket-round ul, .bracket-secondary ul { list-style: none; margin: 0; padding: 0; }
+.bracket-round > ul { display: grid; gap: .6rem; }
+.bracket-slot { background: var(--panel); padding: .35rem; border: 1px solid var(--line); border-inline-start: 2px solid var(--line); }
+.bracket-slot:has([aria-pressed=true]) { border-inline-start-color: var(--teal); }
+.bracket-slot > small { color: var(--muted); padding-inline: .35rem; }
+.bracket-team { display: flex; justify-content: space-between; gap: .6rem; width: 100%; text-align: start; min-height: 2.5rem; align-items: center; padding: .35rem; overflow-wrap: anywhere; }
+.bracket-team + .bracket-team { border-block-start: 1px solid var(--line); }
+.bracket-team span:last-child { text-align: end; }
+.bracket-team small { display: block; font-size: .69rem; color: var(--warm); }
+.bracket-team b { font-variant-numeric: tabular-nums; }
+.bracket-team[aria-pressed=true] { background: var(--panel-2); outline: 1px solid var(--teal); outline-offset: -1px; }
+.bracket-team:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.bracket-status, .bracket-pending, .bracket-sources, .bracket-weekly { display: block; color: var(--muted); font-size: .75rem; padding: .3rem .35rem; margin: 0; }
+.bracket-sources li, .bracket-weekly li { padding-inline: .35rem; }
+.bracket-secondary { border-block-start: 1px solid var(--line); padding: .6rem 0; margin-block: .7rem; }
+.command-postseason-forecast { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,3fr); gap: 1rem; }
+.command-team-focus { max-height: min(22rem,72vh); overflow: auto; }
+.command-team-focus .forecast-metric { padding: .35rem 0; }
+
+@media (max-width: 840px) {
+  .bracket-rounds { flex-direction: column; }
+  .bracket-round { flex-basis: auto; }
+  .command-postseason-forecast { grid-template-columns: minmax(0, 1fr); }
+}
+
+.league-command .command-journey .command-team-focus.postseason-focus { position: fixed; z-index: 15; inset: auto 1rem 1rem auto; width: min(16rem,calc(100% - 2rem)); }
+
+.command-journey .command-team-focus .command-focus-heading h3 { font-size: 1.1rem; }
+.command-focus-heading button { flex-shrink: 0; white-space: nowrap; }

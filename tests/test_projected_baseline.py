@@ -167,6 +167,27 @@ def test_projected_baseline_http_matches_direct_and_identical_monte_carlo_scores
     assert postseason is not None
     bracket = postseason.championship_matchups + postseason.consolation_matchups
     assert payload["postseason"] == TypeAdapter(tuple).dump_python(bracket, mode="json")
+    assert postseason.championship_graph is not None
+    periods = {
+        period.matchup_period_id: period.scoring_weeks
+        for period in snapshot.matchup_periods
+    }
+    assert payload["championship_rounds"] == [
+        {
+            "round_number": round_.round_number,
+            "matchup_period_id": round_.matchup_period_id,
+            "scoring_weeks": list(periods[round_.matchup_period_id]),
+            "nodes": TypeAdapter(tuple).dump_python(
+                tuple(
+                    node
+                    for node in postseason.championship_graph.nodes
+                    if node.round_number == round_.round_number
+                ),
+                mode="json",
+            ),
+        }
+        for round_ in snapshot.rules.championship.rounds
+    ]
     assert payload["transactions"] == TypeAdapter(tuple).dump_python(
         direct.final_evolving_state.ledger, mode="json"
     )

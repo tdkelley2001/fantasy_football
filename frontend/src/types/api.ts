@@ -334,7 +334,35 @@ export interface JourneyStandingsPoint {
   readonly teams: readonly {team_id: number; rank: number | null; unresolved_tie: boolean}[];
 }
 
+export interface ProjectedChampionshipRound {
+  round_number: number;
+  matchup_period_id: number;
+  scoring_weeks: readonly number[];
+  nodes: readonly {
+    node_id: string;
+    position: number;
+    sources: readonly {seed: number | null; matchup_id: string | null; outcome: string | null}[];
+  }[];
+}
+
+export interface ProjectedPostseasonMatchup {
+  matchup_id: string;
+  round_number: number;
+  bracket_type: string;
+  matchup_period_id?: number;
+  scoring_weeks?: readonly number[];
+  home_team_id: number;
+  away_team_id: number | null;
+  home_total: number | null;
+  away_total: number | null;
+  winner_team_id: number | null;
+  purpose?: string;
+  status?: "scheduled" | "in_progress" | "complete" | "bye";
+  weekly_scores?: readonly {scoring_week: number; team_id: number; points: number}[];
+}
+
 export interface ProjectedBaselineResult {
+  championship_rounds?: readonly ProjectedChampionshipRound[] | null;
   standings_series?: readonly JourneyStandingsPoint[] | null;
   snapshot_id: string;
   canonical_sha256: string;
@@ -353,11 +381,7 @@ export interface ProjectedBaselineResult {
     lineups: readonly {team_id: number; realized_points: number; lineup: {assignments: readonly {player_id: number}[]}}[];
     matchups: readonly {matchup_id: number; home_team_id: number; away_team_id: number; home_score: number; away_score: number; outcome: string}[];
   }[];
-  postseason: readonly {
-    matchup_id: string; round_number: number; bracket_type: string;
-    home_team_id: number; away_team_id: number | null;
-    home_total: number | null; away_total: number | null; winner_team_id: number | null;
-  }[];
+  postseason: readonly ProjectedPostseasonMatchup[];
   transactions: readonly {sequence: number; scoring_week: number; action: string; player_id: number | null}[];
   observed_scores: readonly {
     player_id: number;

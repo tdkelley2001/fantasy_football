@@ -125,6 +125,19 @@ or the keyboard-accessible team list to focus a team and inspect its exact weekl
 ranks. In Monte Carlo mode the same trajectories are labeled as the deterministic
 reference. [Projected baseline response](TECHNICAL_REFERENCE.md#route-and-success-schema-inventory)
 
+Postseason Outlook shows the projected championship bracket in configured round
+order. The bracket uses supplied seeds, bye status, outcomes, scores, and
+scoring weeks. When the simulator supplies the bracket graph, pending slots
+retain their seed or preceding matchup reference. Unresolved participants and
+outcomes stay explicit. Round columns stack on narrow screens, and team
+buttons provide the same Team Focus interaction by keyboard and touch.
+
+Monte Carlo presents championship and placement probabilities, with the
+projected bracket available as a separately labeled reference. The probability
+display uses supplied estimates, intervals, and precision flags. The Team
+Focus overlay follows postseason selections and offers exact weekly ranks,
+projected bracket progress or placement probabilities where supported.
+
 The observed section shows standings and the known team pairings for the snapshot's current scoring period. Recent results shows the latest prior regular-season period only when the captured ESPN schedule reconciles to that snapshot's standings. Results are as of the snapshot and can change with later stat corrections. Incomplete or conflicting evidence has an explicit unavailable state. A configured archive for the same league supplies the latest completed championship before the active snapshot's season. The bracket shortcut opens that year in Season Archive and leaves the active snapshot unchanged. Detailed projected results remain separately labeled below the observed and historical sections.
 
 ## Playoff Race
