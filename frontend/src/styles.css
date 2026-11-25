@@ -473,3 +473,34 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .focus-probability .focus-precision { color: var(--warm); font-weight: 600; }
 .focus-probability dt { font-weight: 600; }
 .focus-probability dd { margin: 0 0 .25rem; }
+
+/* War Room editorial shell, adapted from the Record Book palette */
+:root { --bg:#07182b; --panel:#10253c; --panel-2:#17334e; --text:#fff8e9; --muted:#b3c4d4; --line:#39536d; --warm:#f1cf70; }
+:root[data-theme="light"] { --bg:#f6f2e8; --panel:#fffdf8; --panel-2:#eee7d8; --text:#07182b; --muted:#53616c; --line:#d8cfbc; --warm:#795207; }
+.app-header { background:#07182b; color:#fffdf8; border-block-end: 3px solid #d9a928; }
+.app-header small, .app-header .brand span, .app-header .connection-state, .app-header .run-indicator,
+.app-header .header-manager-control > span { color:#e3e8ee; }
+.app-header button { color:#fffdf8; background:#102a46; border-color:#426079; }
+.workspace-sidebar .product-primary, .mobile-menu .product-primary { display:grid; gap:.4rem; margin-block-end:1.15rem; }
+.workspace-sidebar .product-primary button, .mobile-menu .product-primary button { display:flex; align-items:center; gap:.65rem; color:var(--text); padding:.65rem .55rem; text-align:start; width:100%; font-weight:700; }
+.workspace-sidebar .product-primary button.active, .mobile-menu .product-primary button.active { background:var(--panel-2); border-inline-start:2px solid var(--warm); box-shadow:none; }
+.product-primary svg { width:1rem; height:1rem; }
+.product-secondary { display:grid; gap:.15rem; border-block-start:1px solid var(--line); padding-block-start:.7rem; }
+.workspace-sidebar .product-secondary button, .mobile-menu .product-secondary button { display:block; text-align:start; padding:.45rem .55rem; color:var(--muted); font-size:.83rem; }
+.product-secondary button[aria-current=page] { font-weight:700; color:var(--text); }
+.product-home .workspace-page-heading h1 { font-family: Georgia,serif; letter-spacing:-.025em; }
+.product-home .workspace-page-heading h2 { color:var(--text); font-weight:650; }
+.home-briefing { display:grid; grid-template-columns:1fr 1fr; gap:.5rem 1.5rem; border-block:1px solid var(--line); padding-block:.65rem; }
+.home-briefing .home-summary { padding: 0; }
+.home-briefing h2 { font-size:1.05rem; font-weight:700; }
+.home-briefing dl { display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin:.35rem 0; }
+.home-briefing dl div { display:flex; gap:.35rem; }
+.home-briefing dd { margin:0; font-weight:700; }
+.home-briefing button { margin-top:.4rem; }
+.race-enrichment { display:block; color:var(--muted); margin-block-start:.15rem; }
+.transaction-entry { display:grid; justify-items:start; gap:1rem; }
+.transaction-entry section { padding:.6rem 0; border-block-start:1px solid var(--line); }
+@media(max-width:650px) {
+ .home-briefing { grid-template-columns:1fr; gap:.9rem; }
+ .product-primary button, .product-secondary button { min-height:2.75rem; }
+}

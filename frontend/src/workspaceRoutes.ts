@@ -1,5 +1,6 @@
 const paths = {
   home: "/home",
+  transactions: "/transactions",
   team: "/my-team/overview",
   opportunities: "/players-moves/opportunities",
   trades: "/players-moves/trade-lab",

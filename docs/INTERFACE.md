@@ -29,7 +29,11 @@ Mandatory tactical fields, constellations, spatial maps and the immersive room m
 
 ## User journey and navigation
 
-Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then deliberately select the intended canonical snapshot. The shell unifies snapshot selection, connection, observed active-run count, refresh, theme and source/build context. Desktop uses a static sidebar. The narrow-screen menu uses the same group order and destinations. Players & Moves contains Opportunity Explorer and Trade Lab, League contains League Overview, League Matchups, Playoff Race and the deferred League Insights, History contains Season Archive, and Tools contains Simulation Center. Home contains Dashboard, and My Team contains Team Overview. Choosing a destination from the narrow-screen menu closes it and moves keyboard focus to the main content. On narrow screens, wide tables in Team Overview, League Matchups, League Overview results and Season Archive scroll within a labeled, keyboard-focusable region.
+Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then deliberately select the intended canonical snapshot. The shell unifies snapshot selection, connection, observed active-run count, refresh, theme and source/build context. Desktop and narrow-screen navigation prioritize Home and Transactions. Home
+shows the league briefing and Command Center. Transactions links to the
+existing Opportunity Explorer and Trade Lab. Supporting views include Team
+Overview, League Overview, League Matchups, Playoff Race, Season Archive and
+Simulation Center. Existing direct routes remain available. Choosing a destination from the narrow-screen menu closes it and moves keyboard focus to the main content. On narrow screens, wide tables in Team Overview, League Matchups, League Overview results and Season Archive scroll within a labeled, keyboard-focusable region.
 
 | Task | Workspace |
 |---|---|
@@ -71,6 +75,14 @@ Confidence intervals measure Monte Carlo sampling uncertainty, not model error. 
 ## Dashboard
 
 The header manager selector supplies Home and Team Overview. It restores a valid remembered choice first, then uses the configured local default if that manager resolves to one primary team. The browser stores the preference per league and season. It shows the selected team's observed record, standing, points for and known matchup in the snapshot's current scoring period. The snapshot timestamp identifies the evidence. The roster and league matchup shortcuts open the full views. League Overview and Simulation Center remain reachable before a manager is selected. Home is the default destination. Startup shows local service, saved data and ESPN refresh status. An authorized refresh is observed in the background, and existing saved data remains usable while it runs or if it fails. A validated publication activates the new snapshot. Home and League Overview share the automatically prepared projected baseline for the selected snapshot and policy during the session. The outlook distinguishes preparation, unsupported evidence and retryable failures. Home summarizes the single projected season and links to League Overview for details. Monte Carlo and opportunity searches require explicit user actions.
+
+
+Home uses the Command Center with a projection-led presentation. Compatible
+Monte Carlo evidence adds qualification estimates to the existing projected
+rank order and championship and placement context below the projected bracket.
+Team Focus labels evidence by source. The separate League Overview and Playoff
+Race routes retain their inspection controls. Transactions opens the existing
+analysis workspaces and leaves their individual links available.
 
 ## League Overview
 

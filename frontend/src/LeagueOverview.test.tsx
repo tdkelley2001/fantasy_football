@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
-import { LeagueOverview, PlayoffRace, type ForecastRequest } from "./LeagueOverview";
+import { CommandCenter, LeagueOverview, PlayoffRace, type ForecastRequest } from "./LeagueOverview";
 import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { api } from "./lib/api";
 import { snapshot } from "./test/fixtures";
@@ -428,4 +428,34 @@ test("shared team accents and endpoint labels survive forecast sorting changes",
   expect(journey.getByText("2-team field reference")).toBeInTheDocument();
   await user.click(screen.getByRole("button",{name:"Dismiss Team Focus"}));
   expect(legend).toHaveFocus();
+});
+
+test("Home layers compatible probabilities without changing projected ordering, weeks, or bracket",async()=>{
+  const user=userEvent.setup(),record=run("home-enrichment","2026-10-23T12:00:00Z");
+  const payload=commandResult(record);
+  vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json({...payload,result:{...payload.result,
+    teams:payload.result.teams.map((row,i)=>({...row,playoff_qualification:estimate(i*.3)})),
+  }}));
+  const request=new Map([[record.run_id,forecastRequest]]);
+  const projection=withBracket();
+  const {rerender}=render(<CommandCenter layered snapshot={snapshot} projection={projection} runs={[]} forecastRequests={request}/>);
+  const race=within(screen.getByRole("region",{name:"Playoff Race"}));
+  const order=()=>race.getAllByRole("button").map(row=>row.querySelector(".race-identity")?.textContent);
+  const initial=order();
+  const final=screen.getByRole("region",{name:"Championship / Round 2"});
+  await user.click(race.getByRole("button",{name:/North Harbor/}));
+  rerender(<CommandCenter layered snapshot={snapshot} projection={projection} runs={[record]} forecastRequests={request}/>);
+  expect(await screen.findByText("Showing the projected season with Monte Carlo evidence.")).toBeInTheDocument();
+  expect(order()).toEqual(initial);
+  expect(final).toBeVisible();
+  expect(race.getByText("MC qualification: 0%")).toBeVisible();
+  expect(screen.getByText("Deterministic reference for the Monte Carlo forecast")).toBeVisible();
+  const focus=within(screen.getByRole("complementary",{name:"Team Focus"}));
+  expect(focus.getByText("Projected season",{exact:true})).toBeVisible();
+  expect(focus.getByText("Monte Carlo estimates")).toBeVisible();
+  expect(screen.queryByRole("group",{name:"Forecast mode"})).not.toBeInTheDocument();
+  rerender(<CommandCenter layered snapshot={snapshot} projection={projection} runs={[record]} forecastRequests={new Map()}/>);
+  expect(race.queryByText(/MC qualification/)).not.toBeInTheDocument();
+  expect(order()).toEqual(initial);
+  expect(final).toBeVisible();
 });

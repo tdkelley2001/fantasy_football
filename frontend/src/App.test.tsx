@@ -146,7 +146,7 @@ test("remembers a manager perspective without changing the active snapshot", asy
   await user.click(screen.getByRole("button", { name: "View team roster" }));
   expect(await screen.findByText("Sanitized Player")).toBeInTheDocument();
   expect(await screen.findByRole("combobox", { name: "Manager perspective" })).toHaveValue(value);
-  await user.click(screen.getByRole("button", { name: "Dashboard" }));
+  await user.click(screen.getByRole("button", { name: "Home" }));
   expect(await screen.findByRole("combobox", { name: "Manager perspective" })).toHaveValue(value);
   await user.click(screen.getByRole("button", { name: "View league matchups" }));
   expect(screen.getByRole("heading", { name: "League Matchups" })).toBeInTheDocument();
@@ -202,13 +202,11 @@ test("groups existing workspaces and keeps the archive reachable without snapsho
   const user = userEvent.setup();
   render(<App />);
   await screen.findByRole("heading", { name: "No league data yet" });
-  const nav = within(screen.getByRole("navigation", { name: "Primary navigation" }));
-  const history = within(nav.getByRole("group", { name: "History" }));
-  const tools = within(nav.getByRole("group", { name: "Tools" }));
-  const moves = within(nav.getByRole("group", { name: "Players & Moves" }));
-  expect(tools.getByRole("button", { name: "Simulation Center" })).toBeInTheDocument();
-  expect(moves.getByRole("button", { name: "Trade Lab" })).toBeInTheDocument();
-  const archive = history.getByRole("button", { name: "Season Archive" });
+  const nav = within(screen.getByRole("navigation",{name:"Primary navigation"}));
+  expect(nav.getAllByRole("button").map(button=>button.textContent)).toEqual(["Home","Transactions"]);
+  const secondary=within(screen.getByRole("navigation",{name:"Supporting views"}));
+  expect(secondary.getByRole("button",{name:"Simulation Center"})).toBeInTheDocument();
+  const archive=secondary.getByRole("button",{name:"Season Archive"});
   await user.click(archive);
   expect(await screen.findByText("CGL history is not configured.")).toBeInTheDocument();
   expect(archive).toHaveAttribute("aria-current", "page");
@@ -218,7 +216,7 @@ test("loads the source-backed overview without fabricating analytics", async()=>
 test("selects and persists another snapshot detail", async()=>{ const user=userEvent.setup(); const second={...snapshot,snapshot_id:"snapshot-beta",league_name:"Second Sanitized League",teams:[]}; vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,second]); if(url.includes("snapshot-beta"))return response(second); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await openSnapshots(user);await user.selectOptions(screen.getByRole("combobox",{name:"Active snapshot"}),"snapshot-beta");await user.keyboard("{Escape}"); expect(await screen.findByText("Second Sanitized League", {selector: "header strong"})).toBeInTheDocument(); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-beta"); });
 test("latest snapshot response wins a rapid selection race", async()=>{ const beta={...snapshot,snapshot_id:"snapshot-beta",league_name:"Slow Beta"}; const gamma={...snapshot,snapshot_id:"snapshot-gamma",league_name:"Fast Gamma"}; let resolveBeta:(value:Response)=>void=()=>{}; const betaResponse=new Promise<Response>(resolve=>{resolveBeta=resolve;}); vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,beta,gamma]); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("snapshot-beta"))return betaResponse; if(url.includes("snapshot-gamma"))return response(gamma); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await openSnapshots(userEvent.setup());const selector=screen.getByRole("combobox",{name:"Active snapshot"}); fireEvent.change(selector,{target:{value:"snapshot-beta"}}); fireEvent.change(selector,{target:{value:"snapshot-gamma"}}); expect(await screen.findByText("Fast Gamma", {selector: "header strong"})).toBeInTheDocument(); resolveBeta(new Response(JSON.stringify(beta),{headers:{"Content-Type":"application/json"}})); await waitFor(()=>expect(screen.queryByRole("heading",{name:"Slow Beta"})).not.toBeInTheDocument()); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-gamma"); });
 test("unmount aborts effect-owned requests", ()=>{ const signals:AbortSignal[]=[]; vi.spyOn(globalThis,"fetch").mockImplementation((_input,init)=>{ if(init?.signal)signals.push(init.signal); return new Promise(()=>{}); }); const {unmount}=render(<App/>); unmount(); expect(signals.length).toBeGreaterThan(0); expect(signals.every(signal=>signal.aborted)).toBe(true); });
-test("navigates by keyboard to the final-state Trade Lab", async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); const trade=screen.getAllByRole("button",{name:"Trade Lab"})[0]; trade.focus(); await user.keyboard("{Enter}"); expect(screen.getByRole("heading",{name:/Build the exchange/})).toBeInTheDocument(); expect(screen.getByText(/No ESPN execution or trade acceptance/)).toBeInTheDocument(); });
+test("navigates by keyboard to the final-state Trade Lab", async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await user.click(screen.getByRole("button",{name:"Transactions"})); const trade=screen.getByRole("button",{name:"Trade Lab"}); trade.focus(); await user.keyboard("{Enter}"); expect(screen.getByRole("heading",{name:/Build the exchange/})).toBeInTheDocument(); expect(screen.getByText(/No ESPN execution or trade acceptance/)).toBeInTheDocument(); });
 test("navigates to the functional Simulation Center",async()=>{mockApi({runs:[]});const user=userEvent.setup();render(<App/>);await screen.findByRole("heading",{name:"Home"});await user.click(screen.getAllByRole("button",{name:"Simulation Center"})[0]);expect(screen.getByRole("heading",{name:"Simulation Center"})).toBeInTheDocument();expect(screen.getByRole("button",{name:"Submit baseline"})).toBeInTheDocument();expect(screen.queryByText(/intentionally non-operational/)).not.toBeInTheDocument()});
 test("persists theme preference",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await user.click(screen.getByRole("button",{name:"Use light theme"})); expect(document.documentElement).toHaveAttribute("data-theme","light"); expect(localStorage.getItem("war-room-theme")).toBe("light"); });
 test("renders empty snapshot state",async()=>{ mockApi({snapshots:[]}); render(<App/>); expect(await screen.findByRole("heading",{name:"No league data yet"})).toBeInTheDocument(); });
@@ -318,12 +316,12 @@ test("Home automatically prepares one outlook and reuses it in League without st
   const fetch = vi.mocked(globalThis.fetch);
   render(<App/>);
   expect(await screen.findByRole("heading", {name:"Home"})).toBeInTheDocument();
-  expect(await screen.findByText("Projected champion")).toBeInTheDocument();
-  expect(screen.getByRole("button", {name:"Dashboard"})).toHaveAttribute("aria-current", "page");
+  expect(await screen.findByText(/Projected champion:/)).toBeInTheDocument();
+  expect(screen.getByRole("button", {name:"Home"})).toHaveAttribute("aria-current", "page");
   await user.click(screen.getByRole("button", {name:"View projected season details"}));
   expect(await screen.findByText(/Champion in this projected season/)).toBeInTheDocument();
-  await user.click(screen.getByRole("button", {name:"Dashboard"}));
-  expect(screen.getByText("Projected champion")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", {name:"Home"}));
+  expect(screen.getByText(/Projected champion:/)).toBeInTheDocument();
   const submissions = fetch.mock.calls.filter(([,init]) => init?.method === "POST");
   expect(submissions.map(([url])=>String(url))).toEqual(["/api/v1/analyses/projected-baseline"]);
 });
@@ -357,7 +355,7 @@ test.each(["completed", "failed"] as const)("startup observes existing ESPN refr
   });
   render(<App/>);
   expect(await screen.findByText("Sanitized Gridiron League", {selector: "header strong"})).toBeInTheDocument();
-  expect(await screen.findByText("Projected champion")).toBeInTheDocument();
+  expect(await screen.findByText(/Projected champion:/)).toBeInTheDocument();
   expect(await screen.findByText(/Retrieving and validating ESPN league data/)).toBeInTheDocument();
   await waitFor(()=>expect(fetch.mock.calls.some(([url])=>String(url).endsWith("/refreshes/startup-existing"))).toBe(true));
   finish(await response({...record,status,stage:status,publication_committed:status==="completed",
@@ -369,7 +367,7 @@ test.each(["completed", "failed"] as const)("startup observes existing ESPN refr
   }else{
     expect(await screen.findByText(/ESPN retrieval failed/)).toBeInTheDocument();
     expect(screen.getByText("Sanitized Gridiron League", {selector: "header strong"})).toBeInTheDocument();
-    expect(screen.getByText("Projected champion")).toBeInTheDocument();
+    expect(screen.getByText(/Projected champion:/)).toBeInTheDocument();
   }
   expect(fetch.mock.calls.filter(([url,init])=>String(url).endsWith("/refreshes")&&init?.method==="POST")).toHaveLength(0);
 });
@@ -403,8 +401,8 @@ test("run list failure and retry are independent of the saved snapshot and proje
   render(<App/>);
   await screen.findByText("Run list unavailable");
   expect(screen.queryByText("No active runs")).not.toBeInTheDocument();
-  expect(await screen.findByText("Projected champion")).toBeInTheDocument();
-  expect(screen.getByText("Retained Monte Carlo results are unavailable.")).toBeInTheDocument();
+  expect(await screen.findByText(/Projected champion:/)).toBeInTheDocument();
+  expect(screen.getByText(/Retained Monte Carlo results are unavailable\./)).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", {name:"View projected season details"}));
   expect(screen.getByText(/Champion in this projected season/)).toBeInTheDocument();
@@ -434,15 +432,15 @@ test("a failed run-history reload withdraws previously loaded run information", 
     String(input).includes("/runs?") ? (fail ? response({error:{message:"Run store unavailable."}},503) :
       response([completed])) : fallback(input,init));
   render(<App/>);
-  expect(await screen.findByText(/A retained run is listed/)).toBeInTheDocument();
+  expect(await screen.findByText(/retained runs have different or unverified forecast policies/)).toBeInTheDocument();
   await user.click(screen.getByRole("button",{name:"Open Simulation Center"}));
   fail=true;
   await user.click(screen.getByRole("button",{name:"Refresh"}));
   await screen.findByText("Run list unavailable");
-  await user.click(screen.getByRole("button",{name:"Dashboard"}));
-  expect(screen.queryByText(/A retained run is listed/)).not.toBeInTheDocument();
-  expect(screen.getByText("Retained Monte Carlo results are unavailable.")).toBeInTheDocument();
-  expect(screen.getByText("Projected champion")).toBeInTheDocument();
+  await user.click(screen.getByRole("button",{name:"Home"}));
+  expect(screen.queryByText(/retained runs have different or unverified forecast policies/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Retained Monte Carlo results are unavailable\./)).toBeInTheDocument();
+  expect(screen.getByText(/Projected champion:/)).toBeInTheDocument();
 });
 
 test("a late startup run list cannot replace a newer run-history response", async () => {
@@ -458,7 +456,7 @@ test("a late startup run list cannot replace a newer run-history response", asyn
       fallback(input,init));
 
   render(<App/>);
-  await screen.findByText("Projected champion");
+  await screen.findByText(/Projected champion:/);
   await user.click(screen.getByRole("button",{name:"Open Simulation Center"}));
   await user.click(screen.getByRole("button",{name:"Refresh"}));
   await screen.findByText("No active runs");
