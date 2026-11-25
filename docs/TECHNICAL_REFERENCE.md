@@ -509,6 +509,16 @@ nor Monte Carlo weekly distributions. Older responses can omit the field.
 Other projected response paths continue to omit it.
 
 
+The additive projected-baseline `championship_rounds` field binds configured
+rounds to their canonical matchup periods and scoring weeks. Its nodes come
+from the deterministic postseason graph when available. A configured round can
+have no nodes if the simulator could not establish the graph. Realized or
+pending matchups remain in `postseason`, keyed to championship graph nodes
+by `purpose`. Bye status, scoring-week contributions and winners come from
+the existing matchup records. Older responses and other projection routes may
+omit the round field. The retained Monte Carlo contract provides qualification,
+championship and placement probabilities without round-advancement estimates.
+
 Projected scenario comparison adds the existing manual scenario intent to the
 projection request. The response contains both season results, their final
 rosters, the resolved effective timeline, explicit edits and structural roster

@@ -276,3 +276,97 @@ test("Journey keeps deterministic ranks and focus in Monte Carlo and clears them
   expect(screen.getByText("Weekly standings trajectories are unavailable.")).toBeInTheDocument();
   expect(screen.queryByRole("complementary",{name:"Team Focus"})).not.toBeInTheDocument();
 });
+
+function withBracket(pending=false): ProjectedSeasonState {
+  const projection=withJourney();
+  if(projection.state.status!=="available")throw Error("Projection fixture unavailable");
+  const [first,second]=snapshot.teams;
+  const bye={matchup_id:"opening",round_number:1,bracket_type:"championship",purpose:"node-a",status:"bye" as const,
+    home_team_id:first.team_id,away_team_id:null,winner_team_id:first.team_id,home_total:null,away_total:null};
+  const final={matchup_id:"title",round_number:2,bracket_type:"championship",purpose:"node-b",
+    status:"complete" as const,home_team_id:first.team_id,away_team_id:second.team_id,winner_team_id:second.team_id,
+    home_total:200,away_total:202.25,scoring_weeks:[16,17],weekly_scores:[
+      {scoring_week:16,team_id:second.team_id,points:105.5},{scoring_week:17,team_id:second.team_id,points:96.75},
+    ]};
+  return {...projection,state:{status:"available",result:{...projection.state.result,
+    teams:projection.state.result.teams.map((row,i)=>({...row,championship_qualifier:i<2})),
+    postseason:pending?[bye]:[bye,final],
+    championship_rounds:[
+      {round_number:1,matchup_period_id:14,scoring_weeks:[15],
+        nodes:[{node_id:"node-a",position:0,sources:[{seed:1,matchup_id:null,outcome:null}]}]},
+      {round_number:2,matchup_period_id:15,scoring_weeks:[16,17],
+        nodes:[{node_id:"node-b",position:0,sources:[{seed:null,matchup_id:"node-a",outcome:"winner"},
+          {seed:2,matchup_id:null,outcome:null}]}]},
+    ],
+  }}};
+}
+
+test("projected bracket uses supplied seeds, bye, advancement and multiweek scores",async()=>{
+  const user=userEvent.setup();
+  const fetch=vi.spyOn(globalThis,"fetch");
+  const {container}=render(<LeagueOverview snapshot={snapshot} projection={withBracket()}/>);
+  const outlook=within(screen.getByRole("region",{name:"Postseason Outlook"}));
+  const first=within(outlook.getByRole("region",{name:"Round 1"}));
+  expect(first.getByText("Bye / Advances")).toBeInTheDocument();
+  expect(first.getByText("Seed 1")).toBeInTheDocument();
+  const final=within(outlook.getByRole("region",{name:"Championship / Round 2"}));
+  expect(final.getByText("Weeks 16, 17")).toBeInTheDocument();
+  expect(final.getByText("Winner of round 1, match 1")).toBeInTheDocument();
+  expect(final.getByText("202.25")).toBeInTheDocument();
+  await user.click(final.getByText("Weekly scoring"));
+  expect(final.getByText(/Week 17.*96.75/)).toBeVisible();
+
+  const entrant=final.getByRole("button",{name:/North Harbor/});
+  entrant.focus();
+  await user.keyboard("{Enter}");
+  expect(first.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  const race=within(screen.getByRole("region",{name:"Playoff Race"}));
+  expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  const journey=within(screen.getByRole("region",{name:"Season Journey"}));
+  expect(journey.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  const details=within(screen.getByRole("complementary",{name:"Team Focus"}));
+  expect(details.getByText("Qualified / Seed 1")).toBeVisible();
+  await user.click(details.getByText("Projected championship path"));
+  expect(details.getByText("Bye")).toBeVisible();
+  expect(details.getByText("Loss")).toBeVisible();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("complementary",{name:"Team Focus"})).not.toBeInTheDocument();
+  expect(entrant).toHaveFocus();
+  expect(fetch).not.toHaveBeenCalled();
+  expect((await axe.run(container)).violations).toEqual([]);
+});
+
+test("configured pending rounds display source slots without inventing participants or winners",()=>{
+  render(<LeagueOverview snapshot={snapshot} projection={withBracket(true)}/>);
+  const final=within(screen.getByRole("region",{name:"Championship / Round 2"}));
+  expect(final.getByText("Weeks 16, 17")).toBeInTheDocument();
+  expect(final.getByText("Participants unresolved")).toBeInTheDocument();
+  expect(final.getByText("Winner of round 1, match 1")).toBeInTheDocument();
+  expect(final.queryByRole("button")).not.toBeInTheDocument();
+  expect(final.queryByText("Winner",{exact:true})).not.toBeInTheDocument();
+});
+
+test("Monte Carlo postseason uses supplied estimates and keeps a separate deterministic reference",async()=>{
+  const user=userEvent.setup(),record=run("postseason-forecast","2026-10-23T12:00:00Z");
+  const payload=commandResult(record);
+  const teams=payload.result.teams.map((team,i)=>i===0?{...team,
+    championship:{...estimate(.123456),precision_reached:false},final_placements:[{placement:1,estimate:estimate(.123456)}],
+  }:team);
+  vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json({...payload,result:{...payload.result,teams}}));
+  render(<LeagueOverview snapshot={snapshot} projection={withBracket()} runs={[record]}
+    forecastRequests={new Map([[record.run_id,forecastRequest]])}/>);
+  const outlook=within(screen.getByRole("region",{name:"Postseason Outlook"}));
+  const titleRace=within(await outlook.findByRole("region",{name:"Championship probability"}));
+  expect(titleRace.getAllByRole("button")).toHaveLength(snapshot.teams.length);
+  await user.click(titleRace.getByRole("button",{name:/North Harbor.*12.3456%/}));
+  const focus=within(screen.getByRole("complementary",{name:"Team Focus"}));
+  expect(focus.getAllByText("12.3456%")[0]).toBeVisible();
+  expect(focus.getByText(/9.3456%.*15.3456% simultaneous interval.*Precision target not reached/)).toBeVisible();
+  await user.click(focus.getByText("Final placement probabilities"));
+  expect(focus.getByText("1st")).toBeVisible();
+  expect(outlook.getByRole("region",{name:"Championship / Round 2"})).not.toBeVisible();
+  await user.click(outlook.getByText("Deterministic projected bracket reference"));
+  expect(outlook.getByRole("region",{name:"Championship / Round 2"})).toBeVisible();
+  await user.click(screen.getByRole("button",{name:"Projected season"}));
+  expect(screen.getByRole("complementary",{name:"Team Focus"})).toHaveTextContent(/North Harbor/);
+});

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from fantasy_football.canonical.model import RosterEntry
 from fantasy_football.effective_trades import EffectiveTrade
 from fantasy_football.evolving_state import TransactionRecord
-from fantasy_football.postseason import PostseasonMatchup
+from fantasy_football.postseason import BracketGraphNode, PostseasonMatchup
 from fantasy_football.scenario_evaluator import ScenarioRosterAction
 from fantasy_football.season_simulator import FinalTeamSeasonRecord, FrozenTeamWeek
 from fantasy_football.unified_actions import UnifiedAction
@@ -312,7 +312,17 @@ class JourneyStandingsPoint(ContractModel):
     teams: tuple[JourneyTeamRank, ...]
 
 
+class ProjectedChampionshipRound(ContractModel):
+    round_number: PositiveInt
+    matchup_period_id: PositiveInt
+    scoring_weeks: tuple[PositiveInt, ...]
+    nodes: tuple[BracketGraphNode, ...]
+
+
 class ProjectedBaselineResult(ContractModel):
+    championship_rounds: tuple[ProjectedChampionshipRound, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     standings_series: tuple[JourneyStandingsPoint, ...] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

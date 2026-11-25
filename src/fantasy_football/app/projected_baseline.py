@@ -4,6 +4,7 @@ from fantasy_football.app.contracts import (
     JourneyStandingsPoint,
     JourneyTeamRank,
     ProjectedBaselineResult,
+    ProjectedChampionshipRound,
     ProjectedObservedScore,
     ProjectedSeasonWeek,
 )
@@ -49,6 +50,34 @@ def project_baseline(loaded, request) -> ProjectedBaselineResult:
         result,
         observations,
         standings_series=standings_series,
+        championship_rounds=_championship_rounds(inputs.snapshot, result),
+    )
+
+
+def _championship_rounds(
+    snapshot: LeagueSnapshot, result: DeterministicSeasonResult
+) -> tuple[ProjectedChampionshipRound, ...]:
+    championship = snapshot.rules.championship
+    if not championship.enabled:
+        return ()
+    periods = {
+        period.matchup_period_id: period.scoring_weeks
+        for period in snapshot.matchup_periods
+        if period.phase is MatchupPhase.POSTSEASON
+    }
+    postseason = result.final_postseason_state
+    graph = postseason.championship_graph if postseason is not None else None
+    nodes = graph.nodes if graph is not None else ()
+    return tuple(
+        ProjectedChampionshipRound(
+            round_number=round_.round_number,
+            matchup_period_id=round_.matchup_period_id,
+            scoring_weeks=periods.get(round_.matchup_period_id, ()),
+            nodes=tuple(
+                node for node in nodes if node.round_number == round_.round_number
+            ),
+        )
+        for round_ in sorted(championship.rounds, key=lambda row: row.round_number)
     )
 
 
@@ -132,7 +161,13 @@ def _standings_series(
 
 
 def projected_season_result(
-    canonical_sha256, inputs, result, observations, *, standings_series=None
+    canonical_sha256,
+    inputs,
+    result,
+    observations,
+    *,
+    standings_series=None,
+    championship_rounds=None,
 ):
     snapshot = inputs.snapshot
     current = inputs.current
@@ -173,6 +208,7 @@ def projected_season_result(
         and row.scoring_week != observed_week
     )
     return ProjectedBaselineResult(
+        championship_rounds=championship_rounds,
         standings_series=standings_series,
         snapshot_id=result.source_snapshot_id,
         canonical_sha256=canonical_sha256,

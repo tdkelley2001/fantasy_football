@@ -2,6 +2,7 @@ import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } from "lucide-react";
 import { JourneyTeamWeeks, SeasonJourney } from "./SeasonJourney";
+import { ProjectedBracket } from "./ProjectedBracket";
 import { ProjectedBaseline, ProjectionReadiness } from "./ProjectedBaseline";
 import { api, ApiError, projectedBaselinePolicy } from "./lib/api";
 import type { BackgroundBaselineResultSummary, BackgroundRunRecord, BaselineAnalysisRequest, ProjectedBaselineResult, ProbabilityValue, SnapshotSummary, TeamProbabilityResult, TeamSummary } from "./types/api";
@@ -162,14 +163,23 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
   const choice = modePreference ? modePreference.choice : localChoice;
   const setChoice = modePreference?.select ?? setLocalChoice;
   const [focusedId, setFocusedId] = useState<number>();
+  const [postseasonFocus, setPostseasonFocus] = useState(false);
   const modeControl = useRef<HTMLButtonElement>(null);
   const focusTrigger = useRef<HTMLElement|null>(null);
   const team = snapshot.teams.find(item=>item.team_id===focusedId);
   const focus: Focus = {
     selected: team?.team_id,
     onSelect: id=> {
+      setPostseasonFocus(false);
       focusTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setFocusedId(current=>current===id?undefined:id);
+    },
+  };
+  const bracketFocus: Focus = {
+    ...focus,
+    onSelect: id=>{
+      focus.onSelect(id);
+      setPostseasonFocus(true);
     },
   };
   const running = runListStatus==="loaded" && forecast.matching.some(run=>
@@ -196,6 +206,9 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
     (a.standing??Infinity)-(b.standing??Infinity) || a.team_id-b.team_id);
   const teamForecast = team && probabilities.get(team.team_id);
   const teamProjection = team && ranks.get(team.team_id);
+  const teamPath = team && projected?.postseason.filter(match=>
+    match.bracket_type==="championship" &&
+    (match.home_team_id===team.team_id || match.away_team_id===team.team_id));
   const standingsSeries = projected?.standings_series;
   const dismiss = ()=>{
     setFocusedId(undefined);
@@ -236,15 +249,38 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
         {team && !standingsSeries?.length && <p className="command-journey-focus">
           {team.display_name} / Observed rank {team.standing??"unavailable"}
         </p>}
-        {team && <aside className="command-team-focus" aria-label="Team Focus">
+        {team && <aside className={`command-team-focus ${postseasonFocus?"postseason-focus":""}`} aria-label="Team Focus">
           <div className="command-focus-heading"><h3>{team.display_name}</h3>
             <button type="button" onClick={dismiss} aria-label="Dismiss Team Focus">Close</button>
           </div>
           <p role="status">Observed record {team.wins}-{team.losses}-{team.ties} / Rank {team.standing??"unavailable"}</p>
-          {teamForecast ? <Metric label="Playoff qualification" estimate={teamForecast.playoff_qualification}/>:
-            <p>Projected finish {teamProjection?.final_regular_rank??"unavailable"}</p>}
-          {standingsSeries && standingsSeries.length>0 &&
-            <JourneyTeamWeeks series={standingsSeries} teamId={team.team_id}/>}
+          {summary ? <>
+            <Metric label="Playoff qualification" estimate={teamForecast?.playoff_qualification}/>
+            <Metric label="Championship" estimate={teamForecast?.championship}/>
+            {teamForecast && teamForecast.final_placements.length>0 && <details className="journey-weekly">
+              <summary>Final placement probabilities</summary>
+              <ul>{[...teamForecast.final_placements].sort((a,b)=>a.placement-b.placement).map(row=><li key={row.placement}>
+                <Metric label={ordinal(row.placement)} estimate={row.estimate}/>
+              </li>)}</ul>
+            </details>}
+          </> : <>
+            <p>Projected finish {teamProjection?.final_regular_rank??"unavailable"}</p>
+            {teamProjection?.championship_qualifier===true && <p>Qualified / Seed {teamProjection.postseason_seed??"unavailable"}</p>}
+            {teamProjection?.championship_qualifier===false && <p>Outside projected championship field</p>}
+            {teamProjection?.final_placement!=null && <p>Projected final placement {teamProjection.final_placement}</p>}
+            {teamPath && teamPath.length>0 && <details className="journey-weekly">
+              <summary>Projected championship path</summary>
+              <ul>{teamPath.map(match=><li key={match.matchup_id}>
+                Round {match.round_number}
+                <b>{match.status==="bye" ? "Bye" : match.winner_team_id===null ? "Unresolved" :
+                  match.winner_team_id===team.team_id ? "Win" : "Loss"}</b>
+              </li>)}</ul>
+            </details>}
+          </>}
+          {standingsSeries && standingsSeries.length>0 && <>
+            {summary && <p className="bracket-context">Deterministic reference</p>}
+            <JourneyTeamWeeks series={standingsSeries} teamId={team.team_id}/>
+          </>}
         </aside>}
       </section>
     </div>
@@ -252,20 +288,23 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
       <h3 id="command-postseason">Postseason Outlook</h3>
       {summary ? <>
         <PrecisionNotice summary={summary}/>
-        <h4>Championship probability</h4>
-        <ProbabilityPlot teams={ordered} results={probabilities} {...focus}/>
-        <h4>Final placement matrix</h4>
-        <PlacementHeatmap teams={ordered} results={probabilities} {...focus}/>
+        <div className="command-postseason-forecast">
+          <section aria-labelledby="command-title-race">
+            <h4 id="command-title-race">Championship probability</h4>
+            <ProbabilityPlot teams={ordered} results={probabilities} {...bracketFocus}/>
+          </section>
+          <section aria-labelledby="command-placements">
+            <h4 id="command-placements">Final placement matrix</h4>
+            <p className="bracket-context">Simulated finish probabilities; sampling precision is shown separately.</p>
+            <PlacementHeatmap teams={ordered} results={probabilities} {...bracketFocus}/>
+          </section>
+        </div>
         <RunDisclosure summary={summary}/>
-      </> : projected?.postseason.length ? <ul className="command-rounds">{projected.postseason.map(match=><li key={match.matchup_id}>
-        <span>{human(match.bracket_type)} / Round {match.round_number}</span>
-        {[match.home_team_id,match.away_team_id].map((id,index)=>{
-          const participant = snapshot.teams.find(row=>row.team_id===id);
-          return participant ? <button type="button" key={participant.team_id} aria-pressed={focus.selected===id}
-            onClick={()=>focus.onSelect(participant.team_id)}>{participant.display_name}{match.winner_team_id===id?" (Winner)":""}</button>
-            : <span key={index}>Opponent unavailable</span>;
-        })}
-      </li>)}</ul> : <p>Projected postseason matchups are unavailable.</p>}
+        <details className="bracket-secondary">
+          <summary>Deterministic projected bracket reference</summary>
+          <ProjectedBracket snapshot={snapshot} result={projected} {...bracketFocus}/>
+        </details>
+      </> : <ProjectedBracket snapshot={snapshot} result={projected} {...bracketFocus}/>}
     </section>
     {summary && <p>Run {short(summary.run.run_id)} / Configuration {short(summary.result.provenance.simulation_config_sha256)}</p>}
     {runListStatus==="loaded" && forecast.completed.length>0 && <RunContext completed={forecast.completed}
@@ -361,7 +400,7 @@ function TeamMark({team}:{team:TeamSummary|undefined}){const name=team?.display_
 function Metric({label,estimate}:{label:string;estimate:ProbabilityValue|undefined}){return <div className="forecast-metric"><span>{label}</span><strong>{percent(estimate?.probability)}</strong><small>{estimate?.interval?`${percent(estimate.interval.lower_probability)}–${percent(estimate.interval.upper_probability)} simultaneous interval`:"Interval unavailable"}{estimate&&!estimate.precision_reached?" · Precision target not reached":""}</small></div>}
 function validateResult(value:BackgroundBaselineResultSummary,snapshot:SnapshotSummary,runId:string,requestIdentity:string|undefined){if(value.api_schema_version!=="1.0"||value.result.api_schema_version!=="1.0")return "This retained result uses an unsupported schema version.";if(value.run.run_id!==runId||value.run.run_type!=="baseline"||value.run.status!=="completed"||!value.run.result_available||value.run.request_sha256!==requestIdentity)return "The retained result identity does not match the selected baseline run.";if(value.run.snapshot_id!==snapshot.snapshot_id||value.result.provenance.snapshot_id!==snapshot.snapshot_id)return "The retained result belongs to a different snapshot.";if(value.result.provenance.canonical_sha256!==snapshot.canonical_sha256)return "The retained result canonical identity does not match the active snapshot.";if(value.result.teams.some(team=>!snapshot.teams.some(item=>item.team_id===team.team_id)))return "The retained result contains a team outside the active snapshot.";return null}
 function dateKey(run:BackgroundRunRecord){return run.finished_at_utc??run.created_at_utc}
-function percent(value:number|null|undefined){return value===null||value===undefined?"Unavailable":new Intl.NumberFormat(undefined,{style:"percent",maximumFractionDigits:1}).format(value)}
+function percent(value:number|null|undefined){return value===null||value===undefined?"Unavailable":racePercent(value)}
 function metricDescription(estimate:ProbabilityValue|undefined){if(!estimate||estimate.probability===null)return "estimate unavailable";const interval=estimate.interval?`, interval ${percent(estimate.interval.lower_probability)} to ${percent(estimate.interval.upper_probability)}`:", interval unavailable";return `${percent(estimate.probability)}${interval}, precision target ${estimate.precision_reached?"reached":"not reached"}`}
 function pct(value:number){return `${Math.max(0,Math.min(1,value))*100}%`}
 function ordinal(value:number){const mod=value%100;return `${value}${mod>=11&&mod<=13?"th":value%10===1?"st":value%10===2?"nd":value%10===3?"rd":"th"}`}
