@@ -257,12 +257,13 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
           </button>
           <div id="command-focus-detail" className={compactFocusExpanded?"compact-expanded":""}>
           {summary ? <>
-            <Metric label="Playoff qualification" estimate={teamForecast?.playoff_qualification}/>
-            <Metric label="Championship" estimate={teamForecast?.championship}/>
+            <TeamFocusMetric label="Playoff qualification" estimate={teamForecast?.playoff_qualification}/>
+            <TeamFocusMetric label="Championship" estimate={teamForecast?.championship}/>
+            <p className="focus-metric-context">Intervals describe Monte Carlo sampling uncertainty.</p>
             {teamForecast && teamForecast.final_placements.length>0 && <details className="journey-weekly">
               <summary>Final placement probabilities</summary>
               <ul>{[...teamForecast.final_placements].sort((a,b)=>a.placement-b.placement).map(row=><li key={row.placement}>
-                <Metric label={ordinal(row.placement)} estimate={row.estimate}/>
+                <TeamFocusMetric label={ordinal(row.placement)} estimate={row.estimate}/>
               </li>)}</ul>
             </details>}
           </> : <>
@@ -484,6 +485,26 @@ function ObservedSnapshot({snapshot}:{snapshot:SnapshotSummary}){const teams=[..
 function AnalyticsState({icon,title,body}:{icon:React.ReactNode;title:string;body:string}){return <section className="analytics-state">{icon}<div><span className="overline">Analytics status</span><h2>{title}</h2><p>{body}</p></div></section>}
 function PanelTitle({eyebrow,title,id,note}:{eyebrow:string;title:string;id:string;note:string}){return <header className="section-heading"><div><span className="overline">{eyebrow}</span><h2 id={id}>{title}</h2></div><small>{note}</small></header>}
 function TeamMark({team}:{team:TeamSummary|undefined}){const name=team?.display_name??"TBD";return <span className={`team-mark command-team-mark accent-${team?team.team_id%4:0}`} style={team?{"--command-team-color":commandTeamColor(team.team_id)} as React.CSSProperties:undefined} aria-hidden="true"><i/>{name.split(/\s+/).map(part=>part[0]).join("").slice(0,3).toUpperCase()}</span>}
+function TeamFocusMetric({label,estimate}:{label:string;estimate:ProbabilityValue|undefined}) {
+  const probability=estimate?.probability;
+  const interval=estimate?.interval;
+  return <div className="focus-probability">
+    <span>{label}</span>
+    <strong>{probability==null?"Unavailable":overviewPercent.format(probability)}</strong>
+    <p>{interval ? `Sampling interval: ${percent(interval.lower_probability)} to ${percent(interval.upper_probability)}`
+      : "Sampling interval unavailable"}</p>
+    {estimate && !estimate.precision_reached && <p className="focus-precision">Precision target not reached</p>}
+    {probability!=null && <details>
+      <summary>Exact {label.toLowerCase()} values</summary>
+      <dl>
+        <dt>Estimate</dt><dd>{percent(probability)} (probability {String(probability)})</dd>
+        {interval && <><dt>Interval endpoints (probabilities)</dt>
+          <dd>{String(interval.lower_probability)} to {String(interval.upper_probability)}</dd></>}
+      </dl>
+    </details>}
+  </div>;
+}
+
 function Metric({label,estimate}:{label:string;estimate:ProbabilityValue|undefined}){return <div className="forecast-metric"><span>{label}</span><strong>{percent(estimate?.probability)}</strong><small>{estimate?.interval?`${percent(estimate.interval.lower_probability)}–${percent(estimate.interval.upper_probability)} simultaneous interval`:"Interval unavailable"}{estimate&&!estimate.precision_reached?" · Precision target not reached":""}</small></div>}
 function validateResult(value:BackgroundBaselineResultSummary,snapshot:SnapshotSummary,runId:string,requestIdentity:string|undefined){if(value.api_schema_version!=="1.0"||value.result.api_schema_version!=="1.0")return "This retained result uses an unsupported schema version.";if(value.run.run_id!==runId||value.run.run_type!=="baseline"||value.run.status!=="completed"||!value.run.result_available||value.run.request_sha256!==requestIdentity)return "The retained result identity does not match the selected baseline run.";if(value.run.snapshot_id!==snapshot.snapshot_id||value.result.provenance.snapshot_id!==snapshot.snapshot_id)return "The retained result belongs to a different snapshot.";if(value.result.provenance.canonical_sha256!==snapshot.canonical_sha256)return "The retained result canonical identity does not match the active snapshot.";if(value.result.teams.some(team=>!snapshot.teams.some(item=>item.team_id===team.team_id)))return "The retained result contains a team outside the active snapshot.";return null}
 function dateKey(run:BackgroundRunRecord){return run.finished_at_utc??run.created_at_utc}

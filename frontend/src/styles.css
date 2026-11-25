@@ -464,3 +464,12 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
   .postseason-placement .placement-overview-value { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .league-command .command-team-focus.postseason-focus:not(.focus-expanded) { width: min(14rem,calc(100% - 1.4rem)); }
 }
+
+.command-team-focus .focus-probability { min-width: 0; padding: .45rem 0; border-block-start: 1px solid var(--line); overflow-wrap: anywhere; }
+.focus-probability > span, .focus-probability > strong { display: block; }
+.focus-probability > span { font-size: .85rem; }
+.focus-probability > strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.focus-probability p, .focus-probability details, .focus-metric-context { margin: .2rem 0 0; font-size: .8rem; line-height: 1.4; }
+.focus-probability .focus-precision { color: var(--warm); font-weight: 600; }
+.focus-probability dt { font-weight: 600; }
+.focus-probability dd { margin: 0 0 .25rem; }
