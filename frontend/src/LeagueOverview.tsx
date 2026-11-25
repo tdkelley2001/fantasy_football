@@ -235,6 +235,18 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
       {openCompatibleSimulation && <button className="workspace-action" type="button"
         onClick={openCompatibleSimulation}>Configure matching Monte Carlo</button>}
     </div>
+    {projected && projected.unresolved_capabilities.length>0 &&
+      <div className="analysis-warning">
+        <AlertTriangle aria-hidden="true"/>
+        <div>
+          <strong role="status">Projected season available with analytical limitations.</strong>
+          <details>
+            <summary>Unresolved projected-season capabilities</summary>
+            <ul>{[...new Set(projected.unresolved_capabilities)].map(capability=>
+              <li key={capability}>{human(capability)}</li>)}</ul>
+          </details>
+        </div>
+      </div>}
     {running && <p role="status">A baseline simulation is active. The available season outlook remains visible.</p>}
     {runListStatus==="loaded" && forecast.unverified && <p>Some retained runs have different or unverified forecast policies. Inspect them in Playoff Race.</p>}
     {forecast.loading && choice!=="projected" && <p role="status">Checking retained Monte Carlo evidence.</p>}

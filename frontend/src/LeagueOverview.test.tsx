@@ -430,15 +430,58 @@ test("shared team accents and endpoint labels survive forecast sorting changes",
   expect(legend).toHaveFocus();
 });
 
+const projectedWarning = "Projected season available with analytical limitations.";
+
+function limitedProjection(capability: string): ProjectedSeasonState {
+  const projection=withBracket();
+  if(projection.state.status!=="available") throw new Error("Expected an available projection fixture");
+  return {...projection,state:{status:"available",result:{
+    ...projection.state.result, unresolved_capabilities:[capability],
+  }}};
+}
+
+test("Home shows active projection limitations and clears obsolete snapshot evidence",async()=>{
+  const user=userEvent.setup();
+  const limited=limitedProjection("postseason_seeding_unresolved");
+  const {rerender}=render(<CommandCenter layered snapshot={snapshot} projection={limited}/>);
+  expect(screen.getByText(projectedWarning)).toBeVisible();
+  const capability=screen.getByText("Postseason Seeding Unresolved");
+  expect(capability).not.toBeVisible();
+  await user.click(screen.getByText("Unresolved projected-season capabilities"));
+  expect(capability).toBeVisible();
+  expect(screen.queryByText("Precision or coverage qualification")).not.toBeInTheDocument();
+
+  rerender(<CommandCenter layered snapshot={snapshot} projection={withBracket()}/>);
+  expect(screen.queryByText(projectedWarning)).not.toBeInTheDocument();
+
+  const changedDigest={...snapshot,canonical_sha256:"e".repeat(64)};
+  rerender(<CommandCenter layered snapshot={changedDigest} projection={limited}/>);
+  expect(screen.queryByText(projectedWarning)).not.toBeInTheDocument();
+
+  const refreshed={...changedDigest,snapshot_id:"new-home-snapshot"};
+  rerender(<CommandCenter layered snapshot={refreshed} projection={limited}/>);
+  expect(screen.queryByText(projectedWarning)).not.toBeInTheDocument();
+  const next=limitedProjection("postseason_not_in_simulation_horizon");
+  if(next.state.status!=="available") throw new Error("Expected an available projection fixture");
+  rerender(<CommandCenter layered snapshot={refreshed} projection={{...next,state:{status:"available",result:{
+    ...next.state.result,snapshot_id:refreshed.snapshot_id,canonical_sha256:refreshed.canonical_sha256,
+  }}}}/>);
+  expect(screen.getByText(projectedWarning)).toBeVisible();
+  expect(screen.queryByText("Postseason Seeding Unresolved")).not.toBeInTheDocument();
+  expect(screen.getByText("Postseason Not In Simulation Horizon")).toBeInTheDocument();
+});
+
 test("Home layers compatible probabilities without changing projected ordering, weeks, or bracket",async()=>{
   const user=userEvent.setup(),record=run("home-enrichment","2026-10-23T12:00:00Z");
   const payload=commandResult(record);
   vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json({...payload,result:{...payload.result,
+    league_wide_precision_reached:false,
     teams:payload.result.teams.map((row,i)=>({...row,playoff_qualification:estimate(i*.3)})),
   }}));
   const request=new Map([[record.run_id,forecastRequest]]);
-  const projection=withBracket();
+  const projection=limitedProjection("postseason_seeding_unresolved");
   const {rerender}=render(<CommandCenter layered snapshot={snapshot} projection={projection} runs={[]} forecastRequests={request}/>);
+  expect(screen.getByText(projectedWarning)).toBeVisible();
   const race=within(screen.getByRole("region",{name:"Playoff Race"}));
   const order=()=>race.getAllByRole("button").map(row=>row.querySelector(".race-identity")?.textContent);
   const initial=order();
@@ -446,6 +489,8 @@ test("Home layers compatible probabilities without changing projected ordering, 
   await user.click(race.getByRole("button",{name:/North Harbor/}));
   rerender(<CommandCenter layered snapshot={snapshot} projection={projection} runs={[record]} forecastRequests={request}/>);
   expect(await screen.findByText("Showing the projected season with Monte Carlo evidence.")).toBeInTheDocument();
+  expect(screen.getByText(projectedWarning)).toBeVisible();
+  expect(screen.getByText("Precision or coverage qualification")).toBeVisible();
   expect(order()).toEqual(initial);
   expect(final).toBeVisible();
   expect(race.getByText("MC qualification: 0%")).toBeVisible();
