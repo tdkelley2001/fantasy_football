@@ -12,6 +12,7 @@ from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snap
 from fantasy_football.canonical.model import LeagueSnapshot, MatchupPhase
 from fantasy_football.canonical.validation import validated_snapshot
 from fantasy_football.evolving_state import IRPolicy
+from fantasy_football.postseason import PostseasonState
 from fantasy_football.projected_season import prepare_projected_season
 from fantasy_football.season_simulator import DeterministicSeasonResult
 from fantasy_football.weekly_engine import WeeklyEngineError, rank_standings
@@ -44,30 +45,49 @@ def project_baseline(loaded, request) -> ProjectedBaselineResult:
         standings_series = _standings_series(
             inputs.snapshot, result, request.standings_fallback_seed
         )
+    postseason = result.final_postseason_state
     return projected_season_result(
         loaded.metadata.canonical_sha256,
         inputs,
         result,
         observations,
         standings_series=standings_series,
-        championship_rounds=_championship_rounds(inputs.snapshot, result),
+        championship_rounds=_projected_rounds(inputs.snapshot, postseason),
+        consolation_rounds=_projected_rounds(
+            inputs.snapshot, postseason, consolation=True
+        ),
     )
 
 
-def _championship_rounds(
-    snapshot: LeagueSnapshot, result: DeterministicSeasonResult
+def _projected_rounds(
+    snapshot: LeagueSnapshot,
+    postseason: PostseasonState | None,
+    *,
+    consolation: bool = False,
 ) -> tuple[ProjectedChampionshipRound, ...]:
-    championship = snapshot.rules.championship
-    if not championship.enabled:
+    rules = snapshot.rules.consolation if consolation else snapshot.rules.championship
+    if rules.enabled is not True:
         return ()
     periods = {
         period.matchup_period_id: period.scoring_weeks
         for period in snapshot.matchup_periods
         if period.phase is MatchupPhase.POSTSEASON
     }
-    postseason = result.final_postseason_state
-    graph = postseason.championship_graph if postseason is not None else None
+    graph = None
+    if postseason is not None:
+        graph = (
+            postseason.consolation_graph
+            if consolation
+            else postseason.championship_graph
+        )
     nodes = graph.nodes if graph is not None else ()
+    if (
+        consolation
+        and postseason is not None
+        and postseason.consolation_configuration is not None
+    ):
+        # Explicit ladder transitions replace the generic graph after opening pairings.
+        nodes = tuple(node for node in nodes if node.round_number == 1)
     return tuple(
         ProjectedChampionshipRound(
             round_number=round_.round_number,
@@ -77,7 +97,7 @@ def _championship_rounds(
                 node for node in nodes if node.round_number == round_.round_number
             ),
         )
-        for round_ in sorted(championship.rounds, key=lambda row: row.round_number)
+        for round_ in sorted(rules.rounds, key=lambda row: row.round_number)
     )
 
 
@@ -168,6 +188,7 @@ def projected_season_result(
     *,
     standings_series=None,
     championship_rounds=None,
+    consolation_rounds=None,
 ):
     snapshot = inputs.snapshot
     current = inputs.current
@@ -209,6 +230,7 @@ def projected_season_result(
     )
     return ProjectedBaselineResult(
         championship_rounds=championship_rounds,
+        consolation_rounds=consolation_rounds,
         standings_series=standings_series,
         snapshot_id=result.source_snapshot_id,
         canonical_sha256=canonical_sha256,

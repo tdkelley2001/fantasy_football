@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
 from fantasy_football.app.http import create_app
-from fantasy_football.app.projected_baseline import _standings_series
+from fantasy_football.app.projected_baseline import _projected_rounds, _standings_series
 from fantasy_football.app.service import ApplicationDependencies, ApplicationService
 from fantasy_football.automatic_rosters import automatic_policy_from_loaded_snapshot
 from fantasy_football.espn_adapter import translate_bundle
@@ -21,6 +21,11 @@ from fantasy_football.player_outcomes import (
     PreparedNormalOutcomes,
     ProvisionalNormalModel,
 )
+from fantasy_football.postseason import (
+    ConsolationLadderConfiguration,
+    LadderTransition,
+    initialize_postseason,
+)
 from fantasy_football.score_resolution import projected_scores, resolve_observed_score
 from fantasy_football.season_simulator import (
     DeterministicScoreScenario,
@@ -33,10 +38,50 @@ from fantasy_football.weekly_transactions import (
 )
 from tests.adapter_fixtures import source_bundle
 from tests.test_app_service import FixtureStore
+from tests.test_postseason import _snapshot as _postseason_snapshot
+from tests.test_postseason import _standings as _postseason_standings
 from tests.test_scenario_evaluator import _scenario_snapshot
 from tests.test_weekly_engine import _supported_snapshot
 
 ROUTE = "/api/v1/analyses/projected-baseline"
+
+
+@pytest.mark.parametrize("qualifiers, explicit", [(6, False), (5, False), (6, True)])
+def test_consolation_rounds_expose_only_the_authoritative_graph(qualifiers, explicit):
+    snapshot = _postseason_snapshot(qualifier_count=qualifiers)
+    config = (
+        ConsolationLadderConfiguration(
+            tuple(
+                LadderTransition(round_number, upper, upper + 1, upper, upper + 1)
+                for round_number in (1, 2, 3)
+                for upper in (7, 9, 11, 13)
+            ),
+            tuple((position, position) for position in range(7, 15)),
+        )
+        if explicit
+        else None
+    )
+    state = initialize_postseason(
+        snapshot, _postseason_standings(snapshot), consolation_configuration=config
+    )
+    rounds = _projected_rounds(snapshot, state, consolation=True)
+
+    assert [round_.scoring_weeks for round_ in rounds] == [(15,), (16,), (17, 18)]
+    assert rounds[0].nodes
+    assert state.consolation_graph is not None
+    if explicit or qualifiers == 5:
+        assert len(rounds[0].nodes) == (4 if explicit else 5)
+        assert all(not round_.nodes for round_ in rounds[1:])
+    else:
+        assert tuple(node for round_ in rounds for node in round_.nodes) == (
+            state.consolation_graph.nodes
+        )
+        assert {
+            source.outcome for node in rounds[1].nodes for source in node.sources
+        } == {
+            "winner",
+            "loser",
+        }
 
 
 @pytest.mark.parametrize(
@@ -187,6 +232,26 @@ def test_projected_baseline_http_matches_direct_and_identical_monte_carlo_scores
             ),
         }
         for round_ in snapshot.rules.championship.rounds
+    ]
+    consolation_nodes = (
+        postseason.consolation_graph.nodes if postseason.consolation_graph else ()
+    )
+    assert payload["consolation_rounds"] == [
+        {
+            "round_number": round_.round_number,
+            "matchup_period_id": round_.matchup_period_id,
+            "scoring_weeks": list(periods[round_.matchup_period_id]),
+            "nodes": TypeAdapter(tuple).dump_python(
+                tuple(
+                    node
+                    for node in consolation_nodes
+                    if node.round_number == round_.round_number
+                ),
+                mode="json",
+            ),
+        }
+        for round_ in snapshot.rules.consolation.rounds
+        if snapshot.rules.consolation.enabled is True
     ]
     assert payload["transactions"] == TypeAdapter(tuple).dump_python(
         direct.final_evolving_state.ledger, mode="json"

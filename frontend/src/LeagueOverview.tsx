@@ -212,7 +212,7 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
   const teamForecast = team && probabilities.get(team.team_id);
   const teamProjection = team && ranks.get(team.team_id);
   const teamPath = team && projected?.postseason.filter(match=>
-    match.bracket_type==="championship" &&
+    (match.bracket_type==="championship" || match.bracket_type==="consolation") &&
     (match.home_team_id===team.team_id || match.away_team_id===team.team_id));
   const standingsSeries = projected?.standings_series;
   const dismiss = ()=>{
@@ -289,7 +289,7 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
             {teamProjection?.championship_qualifier===false && <p>Outside projected championship field</p>}
             {teamProjection?.final_placement!=null && <p>Projected final placement {teamProjection.final_placement}</p>}
             {teamPath && teamPath.length>0 && <details className="journey-weekly">
-              <summary>Projected championship path</summary>
+              <summary>{teamPath[0].bracket_type==="consolation"?"Projected consolation rounds":"Projected championship path"}</summary>
               <ul>{teamPath.map(match=><li key={match.matchup_id}>
                 Round {match.round_number}
                 <b>{match.status==="bye" ? "Bye" : match.winner_team_id===null ? "Unresolved" :

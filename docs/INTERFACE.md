@@ -153,6 +153,13 @@ confirmed path. Narrow layouts stack rounds and keep the same textual source
 references. Unresolved participants and outcomes stay explicit, and team
 buttons provide the same Team Focus interaction by keyboard and touch.
 
+Home shows the projected championship and consolation brackets in the same
+Postseason Outlook when consolation is configured or matchups are supplied.
+Consolation uses dashed loser routes alongside solid winner routes, with text
+identifying the source of each connection. A bye is shown even when re-entry
+is unresolved. Matchups with unavailable routing remain visible. Final places
+are shown when supplied by the projected season.
+
 Monte Carlo presents championship and placement probabilities, with the
 projected bracket available as a separately labeled reference. The probability
 display uses supplied estimates, intervals, and precision flags. Overview
