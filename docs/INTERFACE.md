@@ -114,9 +114,16 @@ and sampling controls remain available. Submission is explicit.
 Team selections use canonical IDs across the race and postseason views. Team
 Focus highlights the same team across regions and opens a nonmodal overlay.
 Select the team again, dismiss the overlay, or press Escape to clear focus.
-Selection does not change the analysis. Season Journey currently states that
-weekly trajectories are unavailable. The focused team's observed rank and
-deterministic finish can be shown as individually labeled values.
+Selection does not change the analysis.
+
+Season Journey plots every available team rank by regular-season scoring
+week. The snapshot rank is a distinct starting observation, and earlier
+weekly ranks require reconciled standings evidence the current endpoint
+does not supply. Unresolved ties share a rank, and missing ranks leave gaps.
+The playoff field line is a field-size reference. Use the paths, their points,
+or the keyboard-accessible team list to focus a team and inspect its exact weekly
+ranks. In Monte Carlo mode the same trajectories are labeled as the deterministic
+reference. [Projected baseline response](TECHNICAL_REFERENCE.md#route-and-success-schema-inventory)
 
 The observed section shows standings and the known team pairings for the snapshot's current scoring period. Recent results shows the latest prior regular-season period only when the captured ESPN schedule reconciles to that snapshot's standings. Results are as of the snapshot and can change with later stat corrections. Incomplete or conflicting evidence has an explicit unavailable state. A configured archive for the same league supplies the latest completed championship before the active snapshot's season. The bracket shortcut opens that year in Season Archive and leaves the active snapshot unchanged. Detailed projected results remain separately labeled below the observed and historical sections.
 

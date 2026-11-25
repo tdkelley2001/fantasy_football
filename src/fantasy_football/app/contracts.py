@@ -298,7 +298,24 @@ class ProjectedObservedScore(ContractModel):
     projection_source_id: str | None
 
 
+class JourneyTeamRank(ContractModel):
+    team_id: int
+    rank: PositiveInt | None
+    unresolved_tie: bool = False
+
+
+class JourneyStandingsPoint(ContractModel):
+    scoring_week: PositiveInt
+    matchup_period_id: PositiveInt
+    basis: Literal["snapshot_start", "projected"]
+    status: Literal["complete", "unresolved", "unavailable"]
+    teams: tuple[JourneyTeamRank, ...]
+
+
 class ProjectedBaselineResult(ContractModel):
+    standings_series: tuple[JourneyStandingsPoint, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     api_schema_version: Literal["1.0"] = API_SCHEMA_VERSION
     snapshot_id: str
     canonical_sha256: str

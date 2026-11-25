@@ -5,7 +5,7 @@ import { LeagueOverview, PlayoffRace, type ForecastRequest } from "./LeagueOverv
 import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { api } from "./lib/api";
 import { snapshot } from "./test/fixtures";
-import type { BackgroundBaselineResultSummary, BackgroundRunRecord, ProbabilityValue } from "./types/api";
+import type { BackgroundBaselineResultSummary, BackgroundRunRecord, JourneyStandingsPoint, ProbabilityValue } from "./types/api";
 
 beforeEach(()=>{vi.spyOn(api,"recentLeagueResults").mockResolvedValue(null)});
 
@@ -205,4 +205,74 @@ test("probability race uses 0?100% fills, keeps unavailable teams, and adds prec
   expect(rows[1].querySelector(".race-interval")).toBeInTheDocument();
   expect(race.getAllByRole("button")).toHaveLength(4);
   expect(screen.getByRole("complementary",{name:"Team Focus"})).toHaveTextContent(snapshot.teams[1].display_name);
+});
+
+const journeySeries: readonly JourneyStandingsPoint[] = [
+  {basis:"snapshot_start",scoring_week:8,matchup_period_id:40,status:"complete",
+    teams:snapshot.teams.map((team,index)=>({team_id:team.team_id,rank:index+1,unresolved_tie:false}))},
+  {basis:"projected",scoring_week:8,matchup_period_id:40,status:"unresolved",
+    teams:snapshot.teams.map((team,index)=>({team_id:team.team_id,rank:index<2?2:index===2?1:4,unresolved_tie:index<2}))},
+  {basis:"projected",scoring_week:9,matchup_period_id:41,status:"unavailable",
+    teams:snapshot.teams.map(team=>({team_id:team.team_id,rank:null,unresolved_tie:false}))},
+  {basis:"projected",scoring_week:10,matchup_period_id:42,status:"complete",
+    teams:snapshot.teams.map((team,index)=>({team_id:team.team_id,rank:4-index,unresolved_tie:false}))},
+];
+
+function withJourney(): ProjectedSeasonState {
+  if(projected.state.status!=="available")throw Error("Projection fixture unavailable");
+  return {...projected,state:{status:"available",result:{...projected.state.result,standings_series:journeySeries}}};
+}
+
+test("Journey plots real weekly positions, leaves gaps, and shares keyboard and chart focus",async()=>{
+  const user=userEvent.setup();
+  const {container}=render(<LeagueOverview snapshot={snapshot} projection={withJourney()}/>);
+  const journey=within(screen.getByRole("region",{name:"Season Journey"}));
+  expect(journey.getByText(/Historical weekly ranks are unavailable/)).toBeInTheDocument();
+  expect(journey.getByText(/shared ranks with unresolved tiebreakers/)).toBeInTheDocument();
+  const id=snapshot.teams[0].team_id;
+  const trajectory=container.querySelector(`.journey-team[data-team-id="${id}"]`)!;
+  expect(container.querySelectorAll(".journey-team")).toHaveLength(snapshot.teams.length);
+  expect(trajectory.querySelectorAll(".journey-line")).toHaveLength(1);
+  expect(trajectory.querySelector(".journey-line")).toHaveClass("from-observed");
+  expect(trajectory.querySelectorAll(".journey-point")).toHaveLength(3);
+  const tied = container.querySelectorAll(".journey-point.tied");
+  expect(tied).toHaveLength(2);
+  expect(tied[0]).toHaveAttribute("cy",tied[1].getAttribute("cy"));
+  expect(trajectory.querySelector("circle.tied")).toBeInTheDocument();
+  await user.click(trajectory.querySelector(".journey-hit")!);
+  expect(trajectory).toHaveClass("focused");
+  expect(container.querySelectorAll(".journey-team.muted")).toHaveLength(snapshot.teams.length-1);
+  const race=within(screen.getByRole("region",{name:"Playoff Race"}));
+  expect(race.getByRole("button",{name:/North Harbor/})).toHaveAttribute("aria-pressed","true");
+  const focus=within(journey.getByRole("complementary",{name:"Team Focus"}));
+  await user.click(focus.getByText("Weekly standings"));
+  expect(focus.getByText("Rank 2 (unresolved tie)")).toBeVisible();
+  expect(focus.getByText("Unavailable")).toBeVisible();
+
+  const next=journey.getByRole("button",{name:snapshot.teams[1].display_name});
+  next.focus();
+  await user.keyboard("{Enter}");
+  expect(next).toHaveAttribute("aria-pressed","true");
+  expect(journey.getByRole("complementary",{name:"Team Focus"})).toHaveTextContent(snapshot.teams[1].display_name);
+  expect((await axe.run(container)).violations).toEqual([]);
+});
+
+test("Journey keeps deterministic ranks and focus in Monte Carlo and clears them on a snapshot change",async()=>{
+  const user=userEvent.setup(), record=run("journey-forecast","2026-10-23T12:00:00Z");
+  vi.spyOn(globalThis,"fetch").mockImplementation(async()=>Response.json(commandResult(record)));
+  const projection=withJourney();
+  const {rerender}=render(<LeagueOverview snapshot={snapshot} projection={projection} runs={[record]}
+    forecastRequests={new Map([[record.run_id,forecastRequest]])}/>);
+  const journey=within(screen.getByRole("region",{name:"Season Journey"}));
+  await journey.findByText("Deterministic reference for the Monte Carlo forecast");
+  const team=journey.getByRole("button",{name:snapshot.teams[0].display_name});
+  await user.click(team);
+  await user.click(screen.getByRole("button",{name:"Projected season"}));
+  expect(journey.getByText("Observed starting rank and projected weekly finishes")).toBeInTheDocument();
+  expect(team).toHaveAttribute("aria-pressed","true");
+
+  rerender(<LeagueOverview snapshot={{...snapshot,canonical_sha256:"f".repeat(64)}}
+    projection={projection} runs={[record]}/>);
+  expect(screen.getByText("Weekly standings trajectories are unavailable.")).toBeInTheDocument();
+  expect(screen.queryByRole("complementary",{name:"Team Focus"})).not.toBeInTheDocument();
 });

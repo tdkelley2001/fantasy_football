@@ -1,6 +1,7 @@
 import type {ProjectedSeasonState} from "./useProjectedSeason";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } from "lucide-react";
+import { JourneyTeamWeeks, SeasonJourney } from "./SeasonJourney";
 import { ProjectedBaseline, ProjectionReadiness } from "./ProjectedBaseline";
 import { api, ApiError, projectedBaselinePolicy } from "./lib/api";
 import type { BackgroundBaselineResultSummary, BackgroundRunRecord, BaselineAnalysisRequest, ProjectedBaselineResult, ProbabilityValue, SnapshotSummary, TeamProbabilityResult, TeamSummary } from "./types/api";
@@ -195,6 +196,7 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
     (a.standing??Infinity)-(b.standing??Infinity) || a.team_id-b.team_id);
   const teamForecast = team && probabilities.get(team.team_id);
   const teamProjection = team && ranks.get(team.team_id);
+  const standingsSeries = projected?.standings_series;
   const dismiss = ()=>{
     setFocusedId(undefined);
     if(focusTrigger.current?.isConnected)focusTrigger.current.focus();
@@ -229,10 +231,10 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
       </section>
       <section className="command-journey" aria-labelledby="command-journey">
         <h3 id="command-journey">Season Journey</h3>
-        <p>Weekly standings trajectories are unavailable.</p>
-        {team && <p className="command-journey-focus">
+        <SeasonJourney snapshot={snapshot} series={standingsSeries}
+          monteCarlo={Boolean(summary)} {...focus}/>
+        {team && !standingsSeries?.length && <p className="command-journey-focus">
           {team.display_name} / Observed rank {team.standing??"unavailable"}
-          {teamProjection?.final_regular_rank != null && ` / Projected finish ${teamProjection.final_regular_rank} (deterministic)`}
         </p>}
         {team && <aside className="command-team-focus" aria-label="Team Focus">
           <div className="command-focus-heading"><h3>{team.display_name}</h3>
@@ -241,6 +243,8 @@ function CommandCenter({snapshot, projection, runs=noRuns, runListStatus="loaded
           <p role="status">Observed record {team.wins}-{team.losses}-{team.ties} / Rank {team.standing??"unavailable"}</p>
           {teamForecast ? <Metric label="Playoff qualification" estimate={teamForecast.playoff_qualification}/>:
             <p>Projected finish {teamProjection?.final_regular_rank??"unavailable"}</p>}
+          {standingsSeries && standingsSeries.length>0 &&
+            <JourneyTeamWeeks series={standingsSeries} teamId={team.team_id}/>}
         </aside>}
       </section>
     </div>

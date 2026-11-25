@@ -304,3 +304,33 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 
 .command-evidence { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; }
 .command-evidence p { margin: 0; }
+
+/* Weekly standings */
+.command-journey:has(.journey-scroll) h3 { margin: 0; font-size: clamp(1.25rem, 2vw, 1.6rem); }
+.journey-context { margin: .35rem 0 .6rem; color: var(--muted); font-size: .8rem; }
+.journey-scroll-hint { display: none; }
+.journey-scroll { overflow-x: auto; border-block: 1px solid var(--line); }
+.journey-scroll:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.journey-scroll svg { display: block; width: 100%; height: auto; }
+.journey-axis { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.journey-grid { stroke: var(--line); stroke-width: 1; }
+.journey-cutoff { stroke: var(--warm); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.journey-line, .journey-hit { fill: none; vector-effect: non-scaling-stroke; }
+.journey-line { pointer-events: none; stroke: currentColor; stroke-width: 2; }
+.journey-line.from-observed { stroke-dasharray: 4 3; }
+.journey-hit { stroke: transparent; stroke-width: 14; cursor: pointer; }
+.journey-point { fill: currentColor; cursor: pointer; }
+.journey-point.observed, .journey-point.tied { fill: var(--panel); stroke: currentColor; stroke-width: 2; }
+.journey-team.focused .journey-line { stroke-width: 3.5; }
+.journey-team.muted { opacity: .4; }
+.journey-legend { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(9rem,100%),1fr)); gap: .25rem .4rem; list-style: none; margin: 0; padding: 0; }
+.journey-legend button { display: flex; align-items: center; gap: .4rem; min-height: 2.25rem; width: 100%; text-align: start; font-size: .8rem; overflow-wrap: anywhere; }
+.journey-legend button[aria-pressed=true] { background: var(--panel-2); font-weight: 700; }
+.journey-swatch { width: .65rem; height: .65rem; border-radius: 50%; flex: none; }
+.journey-weekly ul { list-style: none; margin: .3rem 0 0; padding: 0; max-height: 11rem; overflow: auto; }
+.journey-weekly li { display: flex; justify-content: space-between; gap: .4rem; font-size: .8rem; padding-block: .15rem; }
+.command-journey:has(.journey-scroll) .command-team-focus { inset-block: 2.75rem auto; }
+@media (max-width: 840px) {
+  .journey-scroll-hint { display: block; color: var(--muted); font-size: .75rem; margin: .25rem 0; }
+  .command-journey:has(.journey-scroll) .command-team-focus { inset-block-start: 5rem; }
+}
