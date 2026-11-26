@@ -3,6 +3,7 @@ const paths = {
   transactions: "/transactions",
   team: "/my-team/overview",
   opportunities: "/transactions/discover",
+  priorAnalyses: "/transactions/prior-analyses",
   trades: "/transactions/evaluate",
   league: "/league/overview",
   playoffs: "/league/playoff-race",

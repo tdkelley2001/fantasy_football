@@ -143,3 +143,15 @@ test.each([false, true])("refines the same evaluated trade with matched probabil
   await user.click(screen.getByRole("button",{name:"Protect Bailey Receiver"}));
   expect(screen.queryByText(/Champion in each projection/)).not.toBeInTheDocument();
 });
+
+test("explicitly reopening the same retained run restores evidence after Reset",async()=>{
+  const fetch=vi.spyOn(globalThis,"fetch").mockImplementation(()=>json(result));
+  const user=userEvent.setup();
+  const view=render(<TradeLab snapshot={snapshot} preferredRunId={run.run_id} reopenVersion={1}/>);
+  await screen.findByText("Retained evaluation loaded");
+  await user.click(screen.getByRole("button",{name:"Reset"}));
+  expect(screen.queryByRole("heading",{name:"League-wide paired impact"})).not.toBeInTheDocument();
+  view.rerender(<TradeLab snapshot={snapshot} preferredRunId={run.run_id} reopenVersion={2}/>);
+  expect(await screen.findByRole("heading",{name:"League-wide paired impact"})).toBeVisible();
+  expect(fetch.mock.calls.filter(([url])=>String(url).endsWith("/result"))).toHaveLength(2);
+});

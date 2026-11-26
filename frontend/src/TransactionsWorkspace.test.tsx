@@ -1,4 +1,4 @@
-import {act, render, screen, within} from "@testing-library/react";
+import {act, render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {App} from "./App";
 import {discoveryDraft} from "./ProjectedOpportunities";
@@ -74,11 +74,7 @@ test("legacy Discover route hands off the exact timed exchange, preserves the dr
   await user.click(screen.getByRole("button",{name:"Open in Evaluate"}));
   expect(window.location.pathname).toBe("/transactions/evaluate");
   const nav=within(screen.getByRole("navigation",{name:"Transactions views"}));
-  expect(nav.getByRole("button",{name:"Evaluate"})).toHaveFocus();
-  const offer=within(screen.getByRole("region",{name:"Discovered exchange"}));
-  expect(offer.getByText("North Harbor to Sunday Union")).toBeVisible();
-  expect(offer.getByText("Harbor Receiver")).toBeVisible();
-  await user.click(screen.getByRole("button",{name:"Load exchange"}));
+  expect(screen.queryByRole("region",{name:"Discovered exchange"})).not.toBeInTheDocument();
   expect(screen.getByRole("heading",{name:"Build the exchange"})).toHaveFocus();
   expect(screen.getByText("Effective week 9")).toBeVisible();
   expect(screen.queryByRole("region",{name:"Two-team trade builder"})).not.toBeInTheDocument();
@@ -87,7 +83,6 @@ test("legacy Discover route hands off the exact timed exchange, preserves the dr
   expect(screen.getByRole("region",{name:"Two-team trade builder"})).toBeVisible();
   await user.click(nav.getByRole("button",{name:"Discover"}));
   await user.click(screen.getByRole("button",{name:"Open in Evaluate"}));
-  await user.click(screen.getByRole("button",{name:"Load exchange"}));
   await user.click(nav.getByRole("button",{name:"Discover"}));
   expect(screen.getByRole("button",{name:"Open in Evaluate"})).toHaveFocus();
   await act(async()=>window.history.back());
@@ -119,7 +114,9 @@ test("legacy Discover route hands off the exact timed exchange, preserves the dr
 test("advanced discovery opens the existing form with manager context and returns to a retained search",async()=>{
   const fetch=mockServer(),fallback=fetch.getMockImplementation()!;
   const run={...activeRun,run_type:"action_search",status:"completed",result_available:true};
+  const older={...run,run_id:"older-search",finished_at_utc:"2020-01-01T00:00:00Z"};
   let submitted=false;
+  let finished=false;
   fetch.mockImplementation((input,init)=>{
     const path=String(input);
     if(path.endsWith("/managers"))return reply({snapshot_id:live.snapshot_id,default_team_id:2,
@@ -128,31 +125,43 @@ test("advanced discovery opens the existing form with manager context and return
       submitted=true;
       return reply(run);
     }
-    if(path.endsWith("/result"))return reply({api_schema_version:"1.0",run,result:{
+    if(path.endsWith("/result"))return reply({api_schema_version:"1.0",run:path.includes(older.run_id)?older:run,result:{
       api_schema_version:"1.0",provenance:{snapshot_id:live.snapshot_id,canonical_sha256:live.canonical_sha256},
       stop_reason:"candidate_limit",coverage:{retained_candidates:0,unique_completed_states:0,
         candidate_coverage_complete:false,evaluation_coverage_complete:false,statistical_precision_complete:false,ranking_resolved:false},
     }});
     if(path.includes("/candidates?"))return reply({run_id:run.run_id,candidates:[],total:0});
-    if(path.includes("/runs"))return reply(submitted?[run]:[]);
+    if(path.endsWith("/progress"))return reply({run_id:run.run_id,stage:"evaluating"});
+    if(path.includes("/runs"))return reply(submitted?[finished?run:{...run,status:"running",result_available:false},older]:[]);
     return fallback(input,init);
   });
   window.history.replaceState(null,"","/transactions");
   const user=userEvent.setup();
   render(<App/>);
-  await user.click(await screen.findByRole("button",{name:"Find more types of moves"}));
-  expect(window.location.pathname).toBe("/tools/simulation/action-search");
-  expect(screen.getByRole("main")).toHaveFocus();
-  expect(screen.getByLabelText("Requesting team")).toHaveValue("2");
+  await user.click(await screen.findByText("Find more types of moves",{selector:"summary"}));
+  expect(window.location.pathname).toBe("/transactions");
+  expect(screen.queryByRole("heading",{name:"Simulation Center"})).not.toBeInTheDocument();
+  expect(within(document.getElementById("configure")!).getByLabelText("Requesting team")).toHaveValue("2");
   expect(submitted).toBe(false);
   await user.click(screen.getByRole("button",{name:"Submit action search"}));
   const request=fetch.mock.calls.find(([url])=>String(url).endsWith("/runs/action-search"));
   expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
     snapshot:{snapshot_id:live.snapshot_id},candidate_search:{requesting_team_id:2},
   });
-  await user.click((await screen.findAllByRole("button",{name:"Open results"}))[0]);
+  expect(await screen.findByText(/Search running/i)).toBeVisible();
+  finished=true;
+  const selector=await screen.findByRole("combobox",{name:"Completed action search"},{timeout:4000});
+  await waitFor(()=>expect(selector).toHaveValue(run.run_id));
+  expect(await screen.findByText("Ranking unresolved",{exact:true},{timeout:4000})).toBeVisible();
+  await user.selectOptions(selector,older.run_id);
   expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
-  expect(screen.getByRole("main")).toHaveFocus();
+  expect(selector).toHaveValue(older.run_id);
+  await user.click(screen.getByRole("button",{name:"Prior analyses"}));
+  const reopen = (await screen.findAllByRole("button",{name:"Open opportunity search"}))[0];
+  expect(selector).toHaveValue(older.run_id);
+  await user.click(reopen);
+  await waitFor(()=>expect(selector).toHaveValue(run.run_id));
+  expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
 });
 
 test.each([

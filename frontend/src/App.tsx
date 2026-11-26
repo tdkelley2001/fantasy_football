@@ -43,6 +43,7 @@ export function App() {
   const [refreshOpen,setRefreshOpen]=useState(false);
   const [automaticRefresh,setAutomaticRefresh]=useState(false);
   const [profileUnavailable,setProfileUnavailable]=useState(false);
+  const [reopenVersion,setReopenVersion]=useState(0);
   const [preferredRun,setPreferredRun]=useState<string|null>(null);
   const requestVersion=useRef(0);
   const runRequestVersion=useRef(0);
@@ -150,7 +151,7 @@ export function App() {
     const target = returnFocus.current ??
       (destination === "league" ? "home-standings" : destination === "playoffs" ? "command-race" : undefined);
     returnFocus.current = undefined;
-    const transactionRoutes = ["transactions", "opportunities", "trades"];
+    const transactionRoutes = ["transactions", "opportunities", "trades", "priorAnalyses", ...(actionSearch ? ["simulation"] : [])];
     if (!target && !previous && destination==="home") return;
     if (!target && previous && transactionRoutes.includes(previous.destination) && transactionRoutes.includes(destination)) return;
     const element = target ? document.getElementById(target) : null;
@@ -173,7 +174,7 @@ export function App() {
   }
   const [matchProjectionInitially,setMatchProjectionInitially]=useState(false);
   const navigate=(id:Destination)=>{setMatchProjectionInitially(false);go({destination:id});if(id!=="baselineEvidence"&&id!=="opportunities")setPreferredRun(null);};
-  const openRun=(run:BackgroundRunRecord)=>{if(run.snapshot_id!==selected?.snapshot_id)return;setPreferredRun(run.run_id);go({destination:run.run_type==="baseline"?"baselineEvidence":run.run_type==="action_search"?"opportunities":"trades"});};
+  const openRun=(run:BackgroundRunRecord)=>{if(run.snapshot_id!==selected?.snapshot_id)return;setPreferredRun(run.run_id);setReopenVersion(version=>version+1);go({destination:run.run_type==="baseline"?"baselineEvidence":run.run_type==="action_search"?"opportunities":"trades"});};
   const retry=()=>{retryRuns();activeController.current?.abort();const controller=new AbortController();activeController.current=controller;void load(controller.signal);};
   const [forecastRequests,setForecastRequests] = useState<ReadonlyMap<string,ForecastRequest>>(()=>new Map());
   const submitForecastBaseline: typeof api.submitBaseline = async (request, signal) => {
@@ -209,7 +210,7 @@ export function App() {
       <ManagerSelector state={managerState}/>
     </header>
     <div className="workspace-layout">
-      <div className="workspace-sidebar"><NavButtons destination={destination} navigate={navigate}/></div>
+      <div className="workspace-sidebar"><NavButtons destination={actionSearch?"opportunities":destination} navigate={navigate}/></div>
       <div className="workspace-content">
     <LeagueRefresh open={refreshOpen} onClose={()=>setRefreshOpen(false)} onPublished={acceptPublication} automaticStart={automaticRefresh} leagueName={selected?.league_name} onOpen={()=>setRefreshOpen(true)}/>
     {profileUnavailable&&(!homeRoute||!selected)&&<p role="status" className="runtime-caveat">Configured ESPN connection is unavailable. Displayed saved data has not been verified as the current configured league; open Refresh details to check configuration.</p>}<main id="main-content" tabIndex={-1}>{runListStatus==="unavailable"&&<p role="status" className="runtime-caveat">The run list could not be loaded. <button onClick={retryRuns}>Retry run list</button></p>}{error&&selected&&<p role="alert" className="runtime-caveat">{error.message} <button onClick={retry}>Try again</button></p>}{destination==="history"?<SeasonArchive manager={selected && managerState.perspective ? { leagueId: selected.league_id, id: managerState.perspective.manager_id, name: managerState.perspective.display_name } : undefined} initialYear={archiveYear} focusBracket={focusArchiveBracket} onYearChange={year=>go({destination:"history",year})}/>:loading&&!selected?<LoadingState connected={Boolean(health)}/>:error&&!selected?<FailureState error={error} retry={retry} refresh={()=>setRefreshOpen(true)}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)} openArchive={()=>navigate("history")}/>:homeRoute?<HomeDashboard snapshot={selected} profileUnavailable={profileUnavailable} projected={projection.state.status==="available"?projection.state.result:undefined} managerState={managerState}
@@ -228,19 +229,19 @@ export function App() {
       <details><summary>Projected season details</summary>
         {projection.state.status==="available" && <ProjectedBaseline snapshot={selected} projection={projection}/>}
       </details>
-    </HomeDashboard>:["transactions","opportunities","trades"].includes(destination)?managerState.loading?
+    </HomeDashboard>:(["transactions","opportunities","trades","priorAnalyses"].includes(destination)||actionSearch)?managerState.loading?
       <p role="status" className="runtime-caveat">Loading Transactions context...</p>:<TransactionsWorkspace
       key={`${forecastSnapshotKey}:${managerState.selected}`} snapshot={selected}
-      managerTeamId={managerState.team?.team_id} view={destination==="trades"?"evaluate":"discover"}
-      runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}
-      navigate={view=>go({destination:view==="evaluate"?"trades":"transactions"})}
-      openSimulation={()=>{setMatchProjectionInitially(false);go({destination:"simulation",actionSearch:true});}}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="baselineEvidence"?<PlayoffRace contextual key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}/>:destination==="simulation"?actionSearch&&managerState.loading?<p role="status" className="runtime-caveat">Loading action search context...</p>:<SimulationCenter key={String(actionSearch)} actionSearchInitially={actionSearch} initialRequestingTeam={actionSearch?managerState.team?.team_id:undefined} returnToDiscover={actionSearch?()=>go({destination:"transactions"}):undefined} matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:null}</main>
+      managerTeamId={managerState.team?.team_id} view={destination==="trades"?"evaluate":destination==="priorAnalyses"?"prior":"discover"} advancedInitially={actionSearch}
+      runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun} reopenVersion={reopenVersion}
+      navigate={view=>go({destination:view==="evaluate"?"trades":view==="prior"?"priorAnalyses":"transactions"})}
+      loadRuns={readRuns} openResult={openRun}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="baselineEvidence"?<PlayoffRace contextual key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:null}</main>
       </div>
     </div>
     {(menuOpen||contextOpen)&&<div className="scrim" aria-hidden="true" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}
     {menuOpen&&<aside ref={menuPanel} className="mobile-menu open" role="dialog" aria-modal="true" aria-label="Mobile primary navigation">
       <div className="drawer-head"><div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Navigation</span></div></div><button ref={menuClose} disabled={!menuOpen} className="icon-button" aria-label="Close navigation" onClick={()=>{setMenuOpen(false);restoreDrawerTrigger(menuTrigger.current);}}><X/></button></div>
-      <NavButtons destination={destination} navigate={navigate}/>
+      <NavButtons destination={actionSearch?"opportunities":destination} navigate={navigate}/>
     </aside>}
     <aside ref={contextPanel} className={`context-panel ${contextOpen?"context-open":""}`} role="dialog" aria-modal={contextOpen||undefined} aria-label="League context" aria-hidden={!contextOpen}>
       <div className="context-head"><div><span className="eyebrow">Decision context</span><h2>Source & build</h2></div><button ref={contextClose} disabled={!contextOpen} className="icon-button" aria-label="Close league context" onClick={()=>{setContextOpen(false);restoreDrawerTrigger(contextTrigger.current);}}><X/></button></div>
@@ -254,7 +255,7 @@ export function App() {
 function NavButtons({
   destination, navigate,
 }: { destination: Destination; navigate: (id: Destination) => void }) {
-  const section = destination==="trades" || destination==="opportunities" ? "transactions" :
+  const section = destination==="trades" || destination==="opportunities" || destination==="priorAnalyses" ? "transactions" :
     ["league","playoffs","team","matchups","history","baselineEvidence"].includes(destination) ? "home" : destination;
   return (
     <nav className="product-primary" aria-label="Primary navigation">
