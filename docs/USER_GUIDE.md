@@ -176,14 +176,21 @@ validated publication becomes active automatically. A failed refresh leaves
 saved data selected and offers refresh details for recovery.
 
 War Room automatically prepares a projected season for the selected snapshot.
-**Home** summarizes the outlook and shows preparation status. If preparation
-fails, retry from the outlook. When evidence is unsupported, review the
-reason and refresh or select a different saved snapshot. Expand **Projected
-season details** to inspect weekly scores, lineups, and modeled transactions.
-A projected champion is the winner of this single scenario. Choose
-**Configure matching Monte Carlo** for probability estimates or **Retained
-forecast evidence** to inspect completed baseline runs. The header's
-**Open run operations** control opens monitoring and run history.
+**Home** distinguishes observed standings from the projected regular-season
+outlook. If preparation fails, retry from the outlook. When evidence is
+unsupported, review the reason and refresh or select a different saved snapshot.
+On mobile, use the Journey's week buttons to jump to the first week, the snapshot
+boundary when available, or the last displayed week. In Postseason Outlook,
+choose **Championship** or **Consolation** when both are supported. Open **Your
+team** for personal matchup context when a manager is mapped, or select any team
+for its observed roster and season detail.
+
+Expand **Projected season details** to inspect weekly scores, lineups, and modeled
+transactions. A projected champion is the winner of this single scenario. Choose
+**Monte Carlo** to show compatible probability estimates or configure a matching
+run while keeping the projection in view. Open **Forecast details** to change the
+compatible completed run or inspect retained forecast evidence. **Open run
+operations** in the header opens monitoring and run history.
 
 ### Evaluate a specific exchange
 

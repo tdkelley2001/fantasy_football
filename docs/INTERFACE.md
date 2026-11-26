@@ -89,8 +89,20 @@ Confidence intervals measure Monte Carlo sampling uncertainty, not model error. 
 
 ## Dashboard
 
-The header manager selector supplies Home and Team Overview. It restores a valid remembered choice first, then uses the configured local default if that manager resolves to one primary team. The browser stores the preference per league and season. It shows the selected team's observed record, standing, points for and known matchup in the snapshot's current scoring period. The snapshot timestamp identifies the evidence. The roster and league matchup shortcuts open contextual details. The league forecast and run operations are available without a manager selection. Home is the default destination. Startup shows local service, saved data and ESPN refresh status. An authorized refresh is observed in the background, and existing saved data remains usable while it runs or if it fails. A validated publication activates the new snapshot. Home uses one automatically prepared projected baseline for the selected snapshot and policy during the session. The outlook distinguishes preparation, unsupported evidence and retryable failures. Home summarizes the single projected season and provides an exact results disclosure. Monte Carlo and opportunity searches require explicit user actions.
+Home opens with the active league, season, current scoring week when supplied,
+and snapshot freshness. The editorial lead distinguishes the observed standings
+leader from the modeled regular-season leader. The Command Center shows
+preparation, unsupported evidence, retryable failures, and analytical limitations
+alongside the outlook. The projected season is prepared once for the selected
+snapshot and policy during the session.
 
+The optional header manager selector restores a valid remembered choice, then
+uses the configured local default when it resolves to one primary team. The
+selection is stored by league and season. **Your team** below the league
+outlook discloses the observed record, standings, points, and known matchup
+and links to roster and matchup details. Home remains usable without a manager
+mapping. Existing saved data remains available during refresh and after failed
+refreshes. A validated publication activates the new snapshot.
 
 Home uses the Command Center with a projection-led presentation. Compatible
 Monte Carlo evidence adds qualification estimates to the existing projected
@@ -115,8 +127,8 @@ match the retained run and request identity, canonical digest, supported Normal
 model and its parameters, seed, and requested path range. Monte Carlo budgets
 and confidence settings can vary by run and remain part of its provenance.
 
-Retained results without verifiable request policies remain inspectable in
-Playoff Race. The public retained result exposes configuration hashes without
+Retained results without verifiable request policies remain inspectable under
+**Forecast details** in **Retained forecast evidence**. The public retained result exposes configuration hashes without
 the underlying roster and scoring policies. When compatible Monte Carlo
 evidence is unavailable, the mode control preserves the requested mode and the
 canvas identifies the displayed evidence separately. A compatible completed
@@ -125,8 +137,7 @@ remains independently available and an explicit mode choice is tied to the
 snapshot during the session.
 
 Playoff Race orders the projected view by regular-season finish and labels the
-supplied championship qualification and postseason seed separately. Monte Carlo
-orders teams by supplied qualification probability on a shared 0?100% scale.
+supplied championship qualification and postseason seed separately. Home layers Monte Carlo qualification probabilities onto the projected rank order. The retained forecast evidence viewer also supplies detailed probability comparisons.
 Team Focus exposes the supplied sampling interval, qualifying path counts, and
 precision status. Missing probabilities and intervals remain unavailable. The
 configured championship field size is shown as a reference. League seeding
@@ -160,7 +171,10 @@ The shared forecast canvas uses the same canonical team accent across
 qualification, standings, and postseason selections. Names and explicit
 selection states accompany the colors. On narrow screens, Season Journey
 precedes Playoff Race, and the rank axis stays visible when scrolling weeks.
-The selected trajectory has a direct endpoint label. Narrow screens start
+When a ranked snapshot boundary is available, mobile opens the Journey near
+that boundary. Week buttons provide keyboard-accessible jumps to the earliest
+week, snapshot boundary, and latest week in the supplied series. The selected
+trajectory has a direct endpoint label. Narrow screens start
 Team Focus in a compact state with an explicit control for its analytical detail.
 
 Postseason Outlook shows the projected championship bracket in configured round
@@ -172,8 +186,10 @@ confirmed path. Narrow layouts stack rounds and keep the same textual source
 references. Unresolved participants and outcomes stay explicit, and team
 buttons provide the same Team Focus interaction by keyboard and touch.
 
-Home shows the projected championship and consolation brackets in the same
-Postseason Outlook when consolation is configured or matchups are supplied.
+Postseason Outlook leads with the supplied projected champion. Home shows
+the championship and consolation brackets when consolation is configured or
+matchups are supplied. Mobile shows one at a time through a local selector.
+The selector preserves Team Focus and expanded matchup evidence.
 Consolation uses dashed loser routes alongside solid winner routes, with text
 identifying the source of each connection. A bye is shown even when re-entry
 is unresolved. Matchups with unavailable routing remain visible. Final places

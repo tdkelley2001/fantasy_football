@@ -412,6 +412,12 @@ test("Home presents supplied consolation routes, final places and shared keyboar
   expect(within(screen.getByRole("region",{name:"Playoff Race"}))
     .getByRole("button",{name:new RegExp(loser.display_name)})).toHaveAttribute("aria-pressed","true");
   expect(screen.getByText("Projected consolation rounds")).toBeVisible();
+  const selector=within(screen.getByRole("group",{name:"Postseason bracket"}));
+  await user.click(selector.getByRole("button",{name:"Consolation"}));
+  expect(selector.getByRole("button",{name:"Consolation"})).toHaveAttribute("aria-pressed","true");
+  expect(bracket).not.toHaveAttribute("data-inactive");
+  expect(button).toHaveAttribute("aria-pressed","true");
+  expect(rounds.getByText(/Week 17.*102.00/)).toBeVisible();
   await user.keyboard("{Escape}");
   expect(button).toHaveFocus();
   expect((await axe.run(container)).violations).toEqual([]);
@@ -595,4 +601,15 @@ test("Home layers compatible probabilities without changing projected ordering, 
   expect(race.queryByText(/MC qualification/)).not.toBeInTheDocument();
   expect(order()).toEqual(initial);
   expect(final).toBeVisible();
+});
+
+
+test("keeps Journey week controls available without inventing a snapshot boundary", () => {
+  const projected = withJourney();
+  if (projected.state.status!=="available") throw Error("Journey fixture unavailable");
+  render(<CommandCenter layered snapshot={snapshot} projection={{...projected,state:{status:"available",
+    result:{...projected.state.result,standings_series:journeySeries.filter(point=>point.basis!=="snapshot_start")}}}}/>);
+  const shortcuts=within(screen.getByRole("group",{name:"Journey week shortcuts"}));
+  expect(shortcuts.queryByRole("button",{name:"Snapshot boundary"})).not.toBeInTheDocument();
+  expect(shortcuts.getAllByRole("button")).toHaveLength(2);
 });

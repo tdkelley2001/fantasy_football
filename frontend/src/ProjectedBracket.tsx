@@ -7,6 +7,7 @@ type Props = {
   result: ProjectedBaselineResult | null;
   selected: number | undefined;
   onSelect: (id: number) => void;
+  mobileSelector?: boolean;
 };
 
 type Advancement = {from: string; to: string; outcome: "winner" | "loser"; focused: boolean};
@@ -46,24 +47,33 @@ function BracketLinks({edges}: {edges: readonly Advancement[]}) {
   </svg>;
 }
 
-export function ProjectedBracket({snapshot, result, selected, onSelect}: Props) {
+export function ProjectedBracket({snapshot, result, selected, onSelect, mobileSelector}: Props) {
+  const [view, setView] = useState<"championship" | "consolation">("championship");
   if (!result) return <p>Projected postseason matchups are unavailable.</p>;
   const championship = result.postseason.filter(match=>match.bracket_type==="championship");
   const consolation = result.postseason.filter(match=>match.bracket_type==="consolation");
   const placements = result.postseason.filter(match=>match.bracket_type==="placement");
-  return <>
-    <BracketRounds {...{snapshot,result,selected,onSelect}} matches={championship}
-      configured={result.championship_rounds} kind="Championship"/>
-    {(consolation.length>0 || Boolean(result.consolation_rounds?.length)) &&
-      <section className="consolation-bracket" aria-label="Projected consolation bracket">
-        <BracketRounds {...{snapshot,result,selected,onSelect}} matches={consolation}
-          configured={result.consolation_rounds} kind="Consolation"/>
-      </section>}
-    {placements.length>0 && <details className="bracket-secondary">
-      <summary>Projected championship placement matchups</summary>
-      <BracketRounds {...{snapshot,result,selected,onSelect}} matches={placements} kind="Placement"/>
-    </details>}
-  </>;
+  const hasConsolation = consolation.length>0 || Boolean(result.consolation_rounds?.length);
+  const selectOnMobile = mobileSelector && hasConsolation;
+  return <div className={selectOnMobile?"home-bracket-views":undefined}>
+    {selectOnMobile && <div className="home-bracket-selector command-modes" role="group" aria-label="Postseason bracket">
+      <button type="button" aria-pressed={view==="championship"} onClick={()=>setView("championship")}>Championship</button>
+      <button type="button" aria-pressed={view==="consolation"} onClick={()=>setView("consolation")}>Consolation</button>
+    </div>}
+    <div className="home-bracket-pane" data-inactive={selectOnMobile && view!=="championship" || undefined}>
+      <BracketRounds {...{snapshot,result,selected,onSelect}} matches={championship}
+        configured={result.championship_rounds} kind="Championship"/>
+      {placements.length>0 && <details className="bracket-secondary">
+        <summary>Projected championship placement matchups</summary>
+        <BracketRounds {...{snapshot,result,selected,onSelect}} matches={placements} kind="Placement"/>
+      </details>}
+    </div>
+    {hasConsolation && <section className="consolation-bracket home-bracket-pane" aria-label="Projected consolation bracket"
+      data-inactive={selectOnMobile && view!=="consolation" || undefined}>
+      <BracketRounds {...{snapshot,result,selected,onSelect}} matches={consolation}
+        configured={result.consolation_rounds} kind="Consolation"/>
+    </section>}
+  </div>;
 }
 
 type BracketProps = Omit<Props,"result"> & {
