@@ -5,17 +5,12 @@ import type { SnapshotSummary } from "./types/api";
 
 const snapshotTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-export function HomeDashboard({snapshot, managerState, children, openTeam, openMatchups,
-  openLeague, openPlayoffRace, openSimulation, openTransactions}: {
+export function HomeDashboard({snapshot, managerState, children, openTeam, openMatchups}: {
   snapshot: SnapshotSummary;
   managerState: ReturnType<typeof useManagerPerspective>;
   children: ReactNode;
   openTeam: () => void;
   openMatchups: () => void;
-  openLeague: () => void;
-  openPlayoffRace: () => void;
-  openSimulation: () => void;
-  openTransactions: () => void;
 }) {
   const state = managerState;
   const period = currentMatchupPeriod(snapshot);
@@ -40,7 +35,7 @@ export function HomeDashboard({snapshot, managerState, children, openTeam, openM
           <div><dt>Standing</dt><dd>{team.standing ?? "Unavailable"}</dd></div>
           <div><dt>Points for</dt><dd>{team.points_for.toFixed(1)}</dd></div>
         </dl>
-        <button className="workspace-action" type="button" onClick={openTeam}>View team roster</button>
+        <button id="home-roster" className="workspace-action" type="button" onClick={openTeam}>View team roster</button>
       </section>
       <section className="home-summary">
         <h2>Current matchup</h2>
@@ -57,15 +52,9 @@ export function HomeDashboard({snapshot, managerState, children, openTeam, openM
             </li>;
           })}</ul>
         </> : <p>No confirmed pairing for this team in the current scoring period.</p>}
-        <button className="workspace-action" type="button" onClick={openMatchups}>View league matchups</button>
+        <button id="home-current-matchup" className="workspace-action" type="button" onClick={openMatchups}>View league matchups</button>
       </section>
     </div> : <ManagerSelectionStatus state={state}/>}
     {children}
-    <nav className="home-shortcuts" aria-label="League and analysis shortcuts">
-      <button className="workspace-action" type="button" onClick={openLeague}>View projected season details</button>
-      <button className="workspace-action" type="button" onClick={openPlayoffRace}>Open Playoff Race</button>
-      <button className="workspace-action" type="button" onClick={openSimulation}>Open Simulation Center</button>
-      <button className="workspace-action" type="button" onClick={openTransactions}>Explore transactions</button>
-    </nav>
   </div>;
 }

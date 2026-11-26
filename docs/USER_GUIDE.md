@@ -134,7 +134,7 @@ If refresh reports a late error, inspect any publication identity/committed indi
 
 Missing projections are not confirmed actual zeros or proof a player will not participate. Policy-imputed zeros and explicit ESPN zeros remain distinct. A snapshot passing preservation validation can still lack an analytical capability. Inspect the finding; do not edit the snapshot or supply guessed evidence. Startup selects the newest saved snapshot for the configured league/season; saved snapshots remain in league context. Set `WAR_ROOM_AUTO_REFRESH=true` in local configuration to opt into read-only retrieval on startup; the default displays cached data and offers **Refresh now**. The header shows the actual league name and retrieval time; cached data is not a claim of a fresh ESPN observation.
 
-League Overview shows **Recent results** for the latest completed regular-season matchup period that reconciles with the active snapshot's standings. The panel uses the saved snapshot's scores and can be unavailable if evidence is incomplete. Open **League → League Matchups** and select a period to browse completed scores or scheduled pairings. Refresh and choose the latest validated snapshot to see newer results.
+Home shows **Recent results** in **Standings & scores** for the latest completed regular-season matchup period that reconciles with the active snapshot's standings. The panel uses the saved snapshot's scores and can be unavailable if evidence is incomplete. Open **Home → Standings & scores → All matchups** and select a period to browse completed scores or scheduled pairings. Refresh and choose the latest validated snapshot to see newer results.
 
 ## Browse the local Season Archive
 
@@ -178,11 +178,12 @@ saved data selected and offers refresh details for recovery.
 War Room automatically prepares a projected season for the selected snapshot.
 **Home** summarizes the outlook and shows preparation status. If preparation
 fails, retry from the outlook. When evidence is unsupported, review the
-reason and refresh or select a different saved snapshot. **League Overview**
-uses the same session result and shows weekly results, the postseason bracket
-and transactions. A projected champion is the winner of this single scenario.
-Choose **Open Monte Carlo** for probability estimates. Monte Carlo is optional
-and compatible retained results are displayed in Playoff Race.
+reason and refresh or select a different saved snapshot. Expand **Projected
+season details** to inspect weekly scores, lineups, and modeled transactions.
+A projected champion is the winner of this single scenario. Choose
+**Configure matching Monte Carlo** for probability estimates or **Retained
+forecast evidence** to inspect completed baseline runs. The header's
+**Open run operations** control opens monitoring and run history.
 
 ### Evaluate a specific exchange
 
@@ -195,7 +196,7 @@ and compatible retained results are displayed in Playoff Race.
    imported exchange, or open the result details for league-wide and weekly effects.
 3. If you need probability estimates, choose **Explore probabilities**.
    Review the matched baseline, path coverage, precision and limitations.
-   League Overview does not need a separate simulation for this comparison.
+   The paired comparison uses its own matched baseline.
 4. Evaluate again after committing draft or policy changes. Reopening a retained
    Monte Carlo result does not reconstruct its editable draft.
 

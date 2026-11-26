@@ -106,7 +106,7 @@ export function PreviousChampionship({ leagueId, season, openArchive }: {
     <h2>Latest completed championship</h2>
     {previous && champion ? <>
       <p>{previous.season} · {champion.team_name}</p>
-      <button className="primary-button" type="button" onClick={() => openArchive(previous.season)}>
+      <button className="primary-button" type="button" id="home-previous-championship" onClick={() => openArchive(previous.season)}>
         View {previous.season} championship bracket
       </button>
     </> : <p>{error ? "Season history could not be loaded."

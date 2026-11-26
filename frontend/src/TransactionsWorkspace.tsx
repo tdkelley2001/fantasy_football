@@ -56,7 +56,7 @@ export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runL
           <p>Quick projected trades compare two teams. Advanced search evaluates selected trade chains, acquisitions, and supported combinations.</p>
           <p>Advanced search requires a supported full-week start. Search limits can leave candidates unevaluated and rankings unresolved.</p>
         </div>
-        <button type="button" className="workspace-action" onClick={openSimulation}>Find more types of moves</button>
+        <button id="transactions-advanced-search" type="button" className="workspace-action" onClick={openSimulation}>Find more types of moves</button>
       </section>
       <OpportunityExplorer snapshot={snapshot} runs={runs} runListStatus={runListStatus} embedded
         preferredRunId={retained?.run_type==="action_search"?preferredRunId:undefined} managerTeamId={managerTeamId} onHandoff={handoff}/>
