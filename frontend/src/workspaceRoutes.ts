@@ -7,7 +7,7 @@ const paths = {
   league: "/league/overview",
   playoffs: "/league/playoff-race",
   matchups: "/league/matchups",
-  insights: "/league/insights",
+  baselineEvidence: "/league/baseline-evidence",
   history: "/history/seasons",
   simulation: "/tools/simulation",
 } as const;

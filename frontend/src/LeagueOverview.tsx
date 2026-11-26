@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Database, ShieldCheck, Trophy } from "lucide-react";
 import { JourneyTeamWeeks, SeasonJourney } from "./SeasonJourney";
 import { commandTeamColor } from "./commandTeamIdentity";
+import { ObservedTeam } from "./TeamOverview";
 import { ProjectedBracket } from "./ProjectedBracket";
 import { ProjectedBaseline, ProjectionReadiness } from "./ProjectedBaseline";
 import { api, ApiError, projectedBaselinePolicy } from "./lib/api";
@@ -18,6 +19,7 @@ type OverviewProps = {
   snapshot: SnapshotSummary; projection?: ProjectedSeasonState; openSimulation?: () => void;
   openArchive?: (year: number) => void; openPlayoffRace?: () => void;
   openCompatibleSimulation?: () => void;
+  openBaselineEvidence?: () => void;
   runs?: readonly BackgroundRunRecord[];
   runListStatus?: "loading" | "loaded" | "unavailable";
   loadRuns?: typeof api.runs;
@@ -29,23 +31,31 @@ export function LeagueOverview({snapshot, projection, openSimulation, openArchiv
     <CommandCenter key={JSON.stringify([snapshot.snapshot_id,snapshot.canonical_sha256])}
       snapshot={snapshot} projection={projection} runs={runs} runListStatus={runListStatus}
       loadRuns={loadRuns} forecastRequests={forecastRequests} modePreference={modePreference} openCompatibleSimulation={openCompatibleSimulation}/>
-    <div className="overview-source-grid"><div className="overview-source-stack"><ObservedSnapshot snapshot={snapshot}/><RecentResults key={snapshot.snapshot_id} snapshot={snapshot}/></div><div className="overview-source-stack"><CurrentMatchups snapshot={snapshot}/>{openArchive&&<PreviousChampionship leagueId={snapshot.league_id} season={snapshot.season} openArchive={openArchive}/>}</div></div>{projection&&<details className="run-disclosure" open={!runs?.some(run=>run.run_type==="baseline"&&run.status==="completed"&&run.snapshot_id===snapshot.snapshot_id)}><summary>Projected season details</summary><ProjectedBaseline snapshot={snapshot} projection={projection} openSimulation={openSimulation}/></details>}{openPlayoffRace && <section className="analytics-panel workspace-panel">
+    <LeagueSnapshotDetails snapshot={snapshot} openArchive={openArchive}/>{projection&&<details className="run-disclosure" open={!runs?.some(run=>run.run_type==="baseline"&&run.status==="completed"&&run.snapshot_id===snapshot.snapshot_id)}><summary>Projected season details</summary><ProjectedBaseline snapshot={snapshot} projection={projection} openSimulation={openSimulation}/></details>}{openPlayoffRace && <section className="analytics-panel workspace-panel">
     <h2>Playoff outlook</h2>
     <p>See retained War Room probabilities, placement distributions and run details.</p>
     <button className="workspace-action" type="button" onClick={openPlayoffRace}>Open Playoff Race</button>
   </section>}</div>;
 }
 
+export function LeagueSnapshotDetails({snapshot, openArchive}: Pick<OverviewProps, "snapshot" | "openArchive">) {
+  return <div className="overview-source-grid">
+    <div className="overview-source-stack"><ObservedSnapshot snapshot={snapshot}/><RecentResults key={snapshot.snapshot_id} snapshot={snapshot}/></div>
+    <div className="overview-source-stack"><CurrentMatchups snapshot={snapshot}/>{openArchive&&<PreviousChampionship leagueId={snapshot.league_id} season={snapshot.season} openArchive={openArchive}/>}</div>
+  </div>;
+}
+
 type PlayoffRaceProps = {
   snapshot: SnapshotSummary; runs: readonly BackgroundRunRecord[];
   runListStatus?: "loading" | "loaded" | "unavailable"; preferredRunId?: string | null;
   openSimulation?: () => void;
+  contextual?: boolean;
 };
-export function PlayoffRace({snapshot, runs, runListStatus="loaded", preferredRunId, openSimulation}: PlayoffRaceProps) {
+export function PlayoffRace({snapshot, runs, runListStatus="loaded", preferredRunId, openSimulation, contextual}: PlayoffRaceProps) {
   const {completed, selectedRun, setSelectedRun, loading, error, activeSummary, matching} =
     useBaselineForecast(snapshot, runs, runListStatus, preferredRunId);
   return <div className="overview analytics-overview playoff-race-page"><header className="overview-masthead">
-    <div><h1>Playoff Race</h1><p>{snapshot.league_name ?? `League ${snapshot.league_id}`} / {snapshot.season}</p></div>
+    <div><h1>{contextual?"Retained forecast evidence":"Playoff Race"}</h1><p>{snapshot.league_name ?? `League ${snapshot.league_id}`} / {snapshot.season}</p></div>
     <div className="snapshot-stamp"><Database/><span><strong>Canonical snapshot</strong>{formatDate(snapshot.published_at_utc)}</span></div>
   </header>
   {openSimulation && <div className="playoff-actions">
@@ -156,7 +166,7 @@ type Focus = { selected: number | undefined; onSelect: (id: number) => void };
 
 const noRequests: ReadonlyMap<string,ForecastRequest> = new Map();
 
-export function CommandCenter({layered=false, snapshot, projection, runs=noRuns, runListStatus="loaded", loadRuns, openCompatibleSimulation, modePreference, forecastRequests=noRequests}: OverviewProps) {
+export function CommandCenter({layered=false, snapshot, projection, runs=noRuns, runListStatus="loaded", loadRuns, openCompatibleSimulation, openBaselineEvidence, modePreference, forecastRequests=noRequests}: OverviewProps) {
   const forecast = useBaselineForecast(snapshot, runs, runListStatus, undefined, forecastRequests);
   const projected = projection?.state.status==="available" &&
     projection.state.result.snapshot_id===snapshot.snapshot_id &&
@@ -225,15 +235,16 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
     onKeyDown={event=>{if(event.key==="Escape" && team){event.stopPropagation();dismiss();}}}>
     <div className="command-heading">
       <h2 id="league-command-title" ref={layered?homeHeading:undefined} tabIndex={layered?-1:undefined}>League Command Center</h2>
-      {!layered && <div className="command-modes" role="group" aria-label="Forecast mode">
-        <button ref={modeControl} type="button" aria-pressed={(choice??mode)==="projected"} onClick={()=>setChoice("projected")}>Projected season</button>
-        <button type="button" aria-pressed={(choice??mode)==="monte_carlo"} onClick={()=>setChoice("monte_carlo")}>Monte Carlo</button>
+      {(!layered || modePreference) && <div className="command-modes" role="group" aria-label="Forecast mode">
+        <button ref={modeControl} type="button" aria-pressed={(choice??(summary?"monte_carlo":"projected"))==="projected"} onClick={()=>setChoice("projected")}>Projected season</button>
+        <button type="button" aria-pressed={(choice??(summary?"monte_carlo":"projected"))==="monte_carlo"} onClick={()=>setChoice("monte_carlo")}>Monte Carlo</button>
       </div>}
     </div>
     <div className="command-evidence">
       <p role="status">Showing {summary ? layered && projected ? "the projected season with Monte Carlo evidence" : "Monte Carlo" : projected ? "the projected season" : "no forecast"}.</p>
       {openCompatibleSimulation && <button className="workspace-action" type="button"
-        onClick={openCompatibleSimulation}>Configure matching Monte Carlo</button>}
+        id="home-forecast-configure" onClick={openCompatibleSimulation}>Configure matching Monte Carlo</button>}
+      {openBaselineEvidence && <button id="home-baseline-evidence" className="workspace-action" type="button" onClick={openBaselineEvidence}>Retained forecast evidence</button>}
     </div>
     {projected && projected.unresolved_capabilities.length>0 &&
       <div className="analysis-warning">
@@ -270,6 +281,10 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
             {compactFocusExpanded?"Hide team details":"Show team details"}
           </button>
           <div id="command-focus-detail" className={compactFocusExpanded?"compact-expanded":""}>
+          {layered && <details className="journey-weekly">
+            <summary>Observed roster</summary>
+            <ObservedTeam snapshot={snapshot} team={team}/>
+          </details>}
           {summary && <>
             {layered && <h4>Monte Carlo estimates</h4>}
             <TeamFocusMetric label="Playoff qualification" estimate={teamForecast?.playoff_qualification}/>
@@ -305,7 +320,7 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
         </aside>}
       </section>
       <section className="command-race" aria-labelledby="command-race">
-        <h3 id="command-race">Playoff Race</h3>
+        <h3 id="command-race" tabIndex={-1}>Playoff Race</h3>
         {(!summary || layered) && projection && !projected && <ProjectionReadiness projection={projection}/>}
         <CommandPlayoffRace snapshot={snapshot} teams={ordered} ranks={ranks}
           probabilities={summary && !layered ? probabilities : null} enrichment={summary && layered ? probabilities : null} {...focus}/>

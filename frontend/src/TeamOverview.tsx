@@ -12,7 +12,7 @@ export function TeamOverview({ snapshot, managerState }: { snapshot: SnapshotSum
   </div>;
 }
 
-function ObservedTeam({ snapshot, team }: {
+export function ObservedTeam({ snapshot, team }: {
   snapshot: SnapshotSummary;
   team: SnapshotSummary["teams"][number];
 }) {

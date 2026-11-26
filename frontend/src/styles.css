@@ -200,7 +200,6 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .home-summary dl { display: flex; flex-wrap: wrap; gap: 16px; }
 .home-summary dt { color: var(--muted); font-size: 12px; }
 .home-summary dd { margin: 2px 0 0; font-weight: 700; }
-.home-shortcuts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 
 .header-manager-control select { width: min(230px, 30vw); }
 @media (max-width: 850px) {
@@ -494,9 +493,6 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .workspace-sidebar .product-primary button, .mobile-menu .product-primary button { display:flex; align-items:center; gap:.65rem; color:var(--text); padding:.65rem .55rem; text-align:start; width:100%; font-weight:700; }
 .workspace-sidebar .product-primary button.active, .mobile-menu .product-primary button.active { background:var(--panel-2); border-inline-start:2px solid var(--warm); box-shadow:none; }
 .product-primary svg { width:1rem; height:1rem; }
-.product-secondary { display:grid; gap:.15rem; border-block-start:1px solid var(--line); padding-block-start:.7rem; }
-.workspace-sidebar .product-secondary button, .mobile-menu .product-secondary button { display:block; text-align:start; padding:.45rem .55rem; color:var(--muted); font-size:.83rem; }
-.product-secondary button[aria-current=page] { font-weight:700; color:var(--text); }
 .product-home .workspace-page-heading h1 { font-family: Georgia,serif; letter-spacing:-.025em; }
 .product-home .workspace-page-heading h2 { color:var(--text); font-weight:650; }
 .home-briefing { display:grid; grid-template-columns:1fr 1fr; gap:.5rem 1.5rem; border-block:1px solid var(--line); padding-block:.65rem; }
@@ -511,7 +507,7 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .transaction-entry section { padding:.6rem 0; border-block-start:1px solid var(--line); }
 @media(max-width:650px) {
  .home-briefing { grid-template-columns:1fr; gap:.9rem; }
- .product-primary button, .product-secondary button { min-height:2.75rem; }
+ .product-primary button { min-height:2.75rem; }
 }
 
 /* Transactions shares the editorial masthead and one working surface. */
@@ -565,3 +561,6 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 @media(max-width:620px) {
   .participant-comparisons { grid-template-columns:1fr; }
 }
+
+/* Run operations remain reachable from the header on narrow screens. */
+.app-header button.run-indicator { display:flex; cursor:pointer; min-width:34px; min-height:34px; justify-content:center; }

@@ -32,13 +32,20 @@ Mandatory tactical fields, constellations, spatial maps and the immersive room m
 Follow [USER_GUIDE first use](USER_GUIDE.md#install-and-launch-safely), then deliberately select the intended canonical snapshot. The shell unifies snapshot selection, connection, observed active-run count, refresh, theme and source/build context. Desktop and narrow-screen navigation prioritize Home and Transactions. Home
 shows the league briefing and Command Center. Transactions brings projected
 discovery, retained action searches and manual evaluation into one workspace.
-Supporting views include Team
-Overview, League Overview, League Matchups, Playoff Race, Season Archive and
-Simulation Center. Existing direct routes remain available. Choosing a destination from the narrow-screen menu closes it and moves keyboard focus to the main content. On narrow screens, wide tables in Team Overview, League Matchups, League Overview results and Season Archive scroll within a labeled, keyboard-focusable region.
+Home and Transactions are the only persistent destinations. Home's **Standings & scores**
+disclosure provides observed standings, recent results, **All matchups**, and
+**Past seasons**. Team Focus includes the selected team's observed roster.
+**Retained forecast evidence** opens detailed baseline inspection from the Home
+forecast. **Open run operations** in the header provides monitoring and run
+history. The old League Overview and Playoff Race URLs open the relevant Home
+section. Team Overview, Matchups, Archive, and operational URLs remain usable
+as detail links. The deferred Insights URL opens Home. The mobile menu closes
+on navigation and moves focus to the destination. Browser Back restores a
+contextual entry control when it is still available.
 
 | Task | Workspace |
 |---|---|
-| Understand league outlook | Open League Overview for the projected season. Request a baseline in Simulation Center for Monte Carlo forecasts. Playoff Race remains available for retained run inspection. |
+| Understand league outlook | Open Home for the projected season. Configure a matching Monte Carlo forecast or inspect retained forecast evidence from the Command Center. |
 | Explore hypothetical actions | Configure a finite universe in Simulation Center; inspect retained paths/effects in Opportunity Explorer. |
 | Test a specific exchange | Commit a Trade Lab draft, review pins/settings and intentionally evaluate aggregate final ownership. |
 | Follow or reopen work | Monitor/cancel/select retained runs in Simulation Center and navigate to their matching result workspace. |
@@ -82,22 +89,22 @@ Confidence intervals measure Monte Carlo sampling uncertainty, not model error. 
 
 ## Dashboard
 
-The header manager selector supplies Home and Team Overview. It restores a valid remembered choice first, then uses the configured local default if that manager resolves to one primary team. The browser stores the preference per league and season. It shows the selected team's observed record, standing, points for and known matchup in the snapshot's current scoring period. The snapshot timestamp identifies the evidence. The roster and league matchup shortcuts open the full views. League Overview and Simulation Center remain reachable before a manager is selected. Home is the default destination. Startup shows local service, saved data and ESPN refresh status. An authorized refresh is observed in the background, and existing saved data remains usable while it runs or if it fails. A validated publication activates the new snapshot. Home and League Overview share the automatically prepared projected baseline for the selected snapshot and policy during the session. The outlook distinguishes preparation, unsupported evidence and retryable failures. Home summarizes the single projected season and links to League Overview for details. Monte Carlo and opportunity searches require explicit user actions.
+The header manager selector supplies Home and Team Overview. It restores a valid remembered choice first, then uses the configured local default if that manager resolves to one primary team. The browser stores the preference per league and season. It shows the selected team's observed record, standing, points for and known matchup in the snapshot's current scoring period. The snapshot timestamp identifies the evidence. The roster and league matchup shortcuts open contextual details. The league forecast and run operations are available without a manager selection. Home is the default destination. Startup shows local service, saved data and ESPN refresh status. An authorized refresh is observed in the background, and existing saved data remains usable while it runs or if it fails. A validated publication activates the new snapshot. Home uses one automatically prepared projected baseline for the selected snapshot and policy during the session. The outlook distinguishes preparation, unsupported evidence and retryable failures. Home summarizes the single projected season and provides an exact results disclosure. Monte Carlo and opportunity searches require explicit user actions.
 
 
 Home uses the Command Center with a projection-led presentation. Compatible
 Monte Carlo evidence adds qualification estimates to the existing projected
 rank order and championship and placement context below the projected bracket.
-Team Focus labels evidence by source. The separate League Overview and Playoff
-Race routes retain their inspection controls. Transactions opens the existing
+Team Focus labels evidence by source. The legacy League Overview and Playoff
+Race routes open the same Home canvas. Transactions opens the existing
 analysis workspaces and leaves their individual links available.
 
 ## League Overview
 
-League Overview opens with the **League Command Center**. Playoff Race and Season
+Home contains the **League Command Center**. Playoff Race and Season
 Journey share a canvas that stacks on narrow screens. Postseason Outlook sits
 below. Observed standings, matchups, archive links, and detailed projected results
-remain available. The separate Playoff Race entry continues to inspect retained runs.
+remain available. Retained forecast evidence remains available for detailed inspection.
 
 The Command Center starts with the automatically prepared projected season.
 Automatic promotion uses the newest compatible completed baseline requested in
@@ -186,7 +193,7 @@ The observed section shows standings and the known team pairings for the snapsho
 
 ## Playoff Race
 
-Open Playoff Race from Home, League Overview, or an applicable retained baseline in Simulation Center. Select a retained completed baseline with available result for the active snapshot. The newest usable matching run is the deterministic default (finish/creation time, then run ID); explicit selection or a preferred run from Simulation Center changes the complete evidence context. The viewer never submits work.
+Open **Retained forecast evidence** from Home or open an applicable baseline result from run operations. Select a retained completed baseline with available result for the active snapshot. The newest usable matching run is the deterministic default (finish/creation time, then run ID); explicit selection or a preferred run from Simulation Center changes the complete evidence context. The viewer never submits work.
 
 | Implemented form | Meaning |
 |---|---|
