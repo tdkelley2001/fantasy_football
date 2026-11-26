@@ -43,6 +43,7 @@ export function App() {
   const [refreshOpen,setRefreshOpen]=useState(false);
   const [automaticRefresh,setAutomaticRefresh]=useState(false);
   const [profileUnavailable,setProfileUnavailable]=useState(false);
+  const [reopenVersion,setReopenVersion]=useState(0);
   const [preferredRun,setPreferredRun]=useState<string|null>(null);
   const requestVersion=useRef(0);
   const runRequestVersion=useRef(0);
@@ -173,7 +174,7 @@ export function App() {
   }
   const [matchProjectionInitially,setMatchProjectionInitially]=useState(false);
   const navigate=(id:Destination)=>{setMatchProjectionInitially(false);go({destination:id});if(id!=="baselineEvidence"&&id!=="opportunities")setPreferredRun(null);};
-  const openRun=(run:BackgroundRunRecord)=>{if(run.snapshot_id!==selected?.snapshot_id)return;setPreferredRun(run.run_id);go({destination:run.run_type==="baseline"?"baselineEvidence":run.run_type==="action_search"?"opportunities":"trades"});};
+  const openRun=(run:BackgroundRunRecord)=>{if(run.snapshot_id!==selected?.snapshot_id)return;setPreferredRun(run.run_id);setReopenVersion(version=>version+1);go({destination:run.run_type==="baseline"?"baselineEvidence":run.run_type==="action_search"?"opportunities":"trades"});};
   const retry=()=>{retryRuns();activeController.current?.abort();const controller=new AbortController();activeController.current=controller;void load(controller.signal);};
   const [forecastRequests,setForecastRequests] = useState<ReadonlyMap<string,ForecastRequest>>(()=>new Map());
   const submitForecastBaseline: typeof api.submitBaseline = async (request, signal) => {
@@ -232,8 +233,8 @@ export function App() {
       <p role="status" className="runtime-caveat">Loading Transactions context...</p>:<TransactionsWorkspace
       key={`${forecastSnapshotKey}:${managerState.selected}`} snapshot={selected}
       managerTeamId={managerState.team?.team_id} view={destination==="trades"?"evaluate":destination==="priorAnalyses"?"prior":"discover"} advancedInitially={actionSearch}
-      runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}
-      navigate={view=>{if(view==="prior")setPreferredRun(null);go({destination:view==="evaluate"?"trades":view==="prior"?"priorAnalyses":"transactions"});}}
+      runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun} reopenVersion={reopenVersion}
+      navigate={view=>go({destination:view==="evaluate"?"trades":view==="prior"?"priorAnalyses":"transactions"})}
       loadRuns={readRuns} openResult={openRun}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="baselineEvidence"?<PlayoffRace contextual key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:null}</main>
       </div>
     </div>

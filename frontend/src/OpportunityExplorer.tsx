@@ -6,16 +6,23 @@ import {AlertTriangle,ArrowDown,ArrowRight,GitCompare,RefreshCw,Search,ShieldAle
 import {api,ApiError} from "./lib/api";
 import type {ActionOrdering,BackgroundActionSearchResultSummary,BackgroundRunRecord,CandidateDetail,CandidateQueryPage,CandidateSummary,CompletedStateDetail,SnapshotSummary} from "./types/api";
 
-type Props={readonly advancedSearch?:React.ReactNode;readonly snapshot:SnapshotSummary;readonly runs:readonly BackgroundRunRecord[];readonly runListStatus?:"loading"|"loaded"|"unavailable";readonly preferredRunId?:string|null;readonly embedded?:boolean;readonly managerTeamId?:number;readonly onHandoff?:(draft:DiscoveryDraft,trigger:HTMLButtonElement)=>void};
+type Props={readonly reopenVersion?:number;readonly advancedSearch?:React.ReactNode;readonly snapshot:SnapshotSummary;readonly runs:readonly BackgroundRunRecord[];readonly runListStatus?:"loading"|"loaded"|"unavailable";readonly preferredRunId?:string|null;readonly embedded?:boolean;readonly managerTeamId?:number;readonly onHandoff?:(draft:DiscoveryDraft,trigger:HTMLButtonElement)=>void};
 const PAGE_SIZE=25;
 
-export function OpportunityExplorer({snapshot,runs,preferredRunId,runListStatus="loaded",embedded,managerTeamId,onHandoff,advancedSearch}:Props){
+export function OpportunityExplorer({snapshot,runs,preferredRunId,reopenVersion,runListStatus="loaded",embedded,managerTeamId,onHandoff,advancedSearch}:Props){
   const usable=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="action_search"&&run.status==="completed"&&run.result_available).sort((a,b)=>(b.finished_at_utc??b.created_at_utc).localeCompare(a.finished_at_utc??a.created_at_utc)||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
   const [runId,setRunId]=useState<string|null>(usable[0]?.run_id??null),[summary,setSummary]=useState<BackgroundActionSearchResultSummary|null>(null),[summaryError,setSummaryError]=useState<string|null>(null);const summaryRequest=useRef(0);
   useEffect(()=>setRunId(current=>usable.some(run=>run.run_id===current)?current:usable[0]?.run_id??null),[usable]);
   const preferred = usable.some(run=>run.run_id===preferredRunId) ? preferredRunId : undefined;
-  useEffect(()=>{if(preferred)setRunId(preferred)},[preferred]);
-  useEffect(()=>{const version=++summaryRequest.current,controller=new AbortController();setSummary(null);setSummaryError(null);if(runListStatus!=="loaded"||!runId||!usable.some(run=>run.run_id===runId))return()=>controller.abort();api.actionResult(runId,controller.signal).then(value=>{if(controller.signal.aborted||version!==summaryRequest.current)return;const issue=validateSummary(value,snapshot,runId);issue?setSummaryError(issue):setSummary(value)}).catch(reason=>{if(!controller.signal.aborted&&version===summaryRequest.current&&!aborted(reason))setSummaryError(message(reason,"Search result unavailable."))});return()=>controller.abort()},[runId,snapshot,usable,runListStatus]);
+  const handledReopen = useRef<string | undefined>(undefined);
+  useEffect(()=>{
+    if (!preferred) return;
+    const intent = JSON.stringify([preferred,reopenVersion]);
+    if (handledReopen.current===intent) return;
+    handledReopen.current=intent;
+    setRunId(preferred);
+  },[preferred,reopenVersion]);
+  useEffect(()=>{const version=++summaryRequest.current,controller=new AbortController();setSummary(null);setSummaryError(null);if(runListStatus!=="loaded"||!runId||!usable.some(run=>run.run_id===runId))return()=>controller.abort();api.actionResult(runId,controller.signal).then(value=>{if(controller.signal.aborted||version!==summaryRequest.current)return;const issue=validateSummary(value,snapshot,runId);issue?setSummaryError(issue):setSummary(value)}).catch(reason=>{if(!controller.signal.aborted&&version===summaryRequest.current&&!aborted(reason))setSummaryError(message(reason,"Search result unavailable."))});return()=>controller.abort()},[runId,snapshot,usable,runListStatus,reopenVersion]);
   const matching=runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="action_search");
   const chooser=<div className="retained-search-control">{runListStatus==="loaded"&&usable.length>0&&<label><span>Completed search</span><select aria-label="Completed action search" value={runId??""} onChange={event=>setRunId(event.target.value)}>{usable.map(run=><option key={run.run_id} value={run.run_id}>{formatDate(run.finished_at_utc??run.created_at_utc)} · {short(run.run_id)}</option>)}</select></label>}</div>;
   const retained=runListStatus!=="loaded"?<ExplorerState title={runListStatus==="loading"?"Checking retained searches":"Retained searches unavailable"} body={runListStatus==="loading"?"Loading the run list.":"Use Retry run list to check for retained searches."}/>:summaryError?<ExplorerState title="Search result unavailable" body={summaryError}/>:summary?<Explorer key={`${snapshot.snapshot_id}:${snapshot.canonical_sha256}:${summary.run.run_id}`} snapshot={snapshot} summary={summary}/>:runId?<section className="explorer-state" aria-live="polite"><RefreshCw/><div><span className="overline">Opportunity status</span><h2>Loading retained search</h2></div></section>:<NoSearch runs={matching}/>;

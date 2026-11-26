@@ -6,13 +6,14 @@ import {OpportunityExplorer} from "./OpportunityExplorer";
 import {TradeLab, type DiscoveryDraft} from "./TradeLab";
 import type {BackgroundRunRecord, BackgroundManualScenarioResultSummary, SnapshotSummary} from "./types/api";
 
-export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runListStatus, preferredRunId, navigate, advancedInitially, loadRuns, openResult}: {
+export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runListStatus, preferredRunId, reopenVersion, navigate, advancedInitially, loadRuns, openResult}: {
   snapshot: SnapshotSummary;
   view: "discover" | "evaluate" | "prior";
   managerTeamId?: number;
   runs: readonly BackgroundRunRecord[];
   runListStatus: "loading" | "loaded" | "unavailable";
   preferredRunId?: string | null;
+  reopenVersion: number;
   navigate: (view: "discover" | "evaluate" | "prior") => void;
   advancedInitially?: boolean;
   loadRuns: typeof api.runs;
@@ -69,7 +70,7 @@ export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runL
     </nav>
     <div hidden={view!=="discover"}>
       <OpportunityExplorer snapshot={snapshot} runs={runs} runListStatus={runListStatus} embedded
-        preferredRunId={retained?.run_type==="action_search"?preferredRunId:undefined} managerTeamId={managerTeamId} onHandoff={handoff}
+        reopenVersion={retained?.run_type==="action_search"?reopenVersion:undefined} preferredRunId={retained?.run_type==="action_search"?preferredRunId:undefined} managerTeamId={managerTeamId} onHandoff={handoff}
         advancedSearch={<details className="transaction-search-disclosure" ref={advanced} open={advancedInitially || undefined}>
           <summary>Find more types of moves</summary>
           <p>Search selected trades, acquisitions, and supported sequences. A supported full-week start is required.</p>
@@ -101,7 +102,7 @@ export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runL
     </section>}
     <div hidden={view!=="evaluate"}>
       <TradeLab onValidatedResult={rememberTrade} snapshot={snapshot} embedded managerTeamId={managerTeamId}
-        preferredRunId={retained?.run_type==="manual_scenario"?preferredRunId:undefined} discoveryDraft={offer}
+        reopenVersion={retained?.run_type==="manual_scenario"?reopenVersion:undefined} preferredRunId={retained?.run_type==="manual_scenario"?preferredRunId:undefined} discoveryDraft={offer}
         clearDiscoveryDraft={()=>setOffer(undefined)}/>
     </div>
   </article>;

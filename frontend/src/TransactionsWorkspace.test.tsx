@@ -157,7 +157,10 @@ test("advanced discovery opens the existing form with manager context and return
   expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
   expect(selector).toHaveValue(older.run_id);
   await user.click(screen.getByRole("button",{name:"Prior analyses"}));
-  await user.click(await screen.findAllByRole("button",{name:"Open opportunity search"}).then(buttons=>buttons[0]));
+  const reopen = (await screen.findAllByRole("button",{name:"Open opportunity search"}))[0];
+  expect(selector).toHaveValue(older.run_id);
+  await user.click(reopen);
+  await waitFor(()=>expect(selector).toHaveValue(run.run_id));
   expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
 });
 
