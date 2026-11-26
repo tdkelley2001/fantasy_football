@@ -151,6 +151,7 @@ export function App() {
       (destination === "league" ? "home-standings" : destination === "playoffs" ? "command-race" : undefined);
     returnFocus.current = undefined;
     const transactionRoutes = ["transactions", "opportunities", "trades"];
+    if (!target && !previous && destination==="home") return;
     if (!target && previous && transactionRoutes.includes(previous.destination) && transactionRoutes.includes(destination)) return;
     const element = target ? document.getElementById(target) : null;
     const disclosure = element?.parentElement?.closest("details");
@@ -188,15 +189,16 @@ export function App() {
   const projection=useProjectedSeason(selected);
   const [forecastMode,setForecastMode] = useState<{snapshotKey:string;mode:ForecastMode}>();
   const forecastSnapshotKey = selected ? JSON.stringify([selected.snapshot_id,selected.canonical_sha256]) : "";
+  const homeRoute = ["home", "league", "playoffs"].includes(destination);
   const activeRuns=runs.filter(run=>["queued","running","cancel_requested"].includes(run.status));
   const acceptPublication=useCallback((publication:SnapshotRefreshResult)=>{const snapshot=publication.snapshot;requestVersion.current++;activeController.current?.abort();setLoading(false);setSnapshots(current=>[snapshot,...current.filter(item=>item.snapshot_id!==snapshot.snapshot_id)]);setSelected(snapshot);setError(undefined);setPreferredRun(null);localStorage.setItem("war-room-snapshot",snapshot.snapshot_id);},[]);
 
-  return <div className="app-shell">
+  return <div className={homeRoute?"app-shell home-route":"app-shell"}>
     <a className="skip-link" href="#main-content">Skip to analytical content</a>
     <header className="app-header" aria-label="War Room">
       <div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Fantasy intelligence</span></div></div>
       <div className="header-tools">
-        <div className="snapshot-control"><strong>{selected?.league_name??"Current league"}</strong>{selected&&<small>Retrieved {formatDate(selected.retrieval_finished_at_utc)}</small>}</div>
+        <div className="snapshot-control header-snapshot-stamp"><strong>{selected?.league_name??"Current league"}</strong>{selected&&<small>Retrieved {formatDate(selected.retrieval_finished_at_utc)}</small>}</div>
         <button className="icon-button" aria-label="Refresh ESPN league" onClick={()=>setRefreshOpen(true)}><RefreshCw/></button>
         <div className="connection-state" title={health?"Local analytical service connected":loading?"Connecting to local analytical service":"Local analytical service offline"}><span className={`status-dot ${health?"online":""}`}/><span>{health?"Connected":loading?"Connecting":"Offline"}</span></div>
         <button id="run-operations" type="button" className="run-indicator" aria-label="Open run operations" onClick={()=>navigate("simulation")}><Activity aria-hidden="true"/><span aria-live="polite"><span>{runListStatus==="loading"?"Loading run list":runListStatus==="unavailable"?"Run list unavailable":activeRuns.length?`${activeRuns.length} active`:"No active runs"}</span></span></button>
@@ -210,7 +212,7 @@ export function App() {
       <div className="workspace-sidebar"><NavButtons destination={destination} navigate={navigate}/></div>
       <div className="workspace-content">
     <LeagueRefresh open={refreshOpen} onClose={()=>setRefreshOpen(false)} onPublished={acceptPublication} automaticStart={automaticRefresh} leagueName={selected?.league_name} onOpen={()=>setRefreshOpen(true)}/>
-    {profileUnavailable&&<p role="status" className="runtime-caveat">Configured ESPN connection is unavailable. Displayed saved data has not been verified as the current configured league; open Refresh details to check configuration.</p>}<main id="main-content" tabIndex={-1}>{runListStatus==="unavailable"&&<p role="status" className="runtime-caveat">The run list could not be loaded. <button onClick={retryRuns}>Retry run list</button></p>}{error&&selected&&<p role="alert" className="runtime-caveat">{error.message} <button onClick={retry}>Try again</button></p>}{destination==="history"?<SeasonArchive manager={selected && managerState.perspective ? { leagueId: selected.league_id, id: managerState.perspective.manager_id, name: managerState.perspective.display_name } : undefined} initialYear={archiveYear} focusBracket={focusArchiveBracket} onYearChange={year=>go({destination:"history",year})}/>:loading&&!selected?<LoadingState connected={Boolean(health)}/>:error&&!selected?<FailureState error={error} retry={retry} refresh={()=>setRefreshOpen(true)}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)} openArchive={()=>navigate("history")}/>:["home","league","playoffs"].includes(destination)?<HomeDashboard snapshot={selected} managerState={managerState}
+    {profileUnavailable&&(!homeRoute||!selected)&&<p role="status" className="runtime-caveat">Configured ESPN connection is unavailable. Displayed saved data has not been verified as the current configured league; open Refresh details to check configuration.</p>}<main id="main-content" tabIndex={-1}>{runListStatus==="unavailable"&&<p role="status" className="runtime-caveat">The run list could not be loaded. <button onClick={retryRuns}>Retry run list</button></p>}{error&&selected&&<p role="alert" className="runtime-caveat">{error.message} <button onClick={retry}>Try again</button></p>}{destination==="history"?<SeasonArchive manager={selected && managerState.perspective ? { leagueId: selected.league_id, id: managerState.perspective.manager_id, name: managerState.perspective.display_name } : undefined} initialYear={archiveYear} focusBracket={focusArchiveBracket} onYearChange={year=>go({destination:"history",year})}/>:loading&&!selected?<LoadingState connected={Boolean(health)}/>:error&&!selected?<FailureState error={error} retry={retry} refresh={()=>setRefreshOpen(true)}/>:!selected?<EmptyState refresh={()=>setRefreshOpen(true)} openArchive={()=>navigate("history")}/>:homeRoute?<HomeDashboard snapshot={selected} profileUnavailable={profileUnavailable} projected={projection.state.status==="available"?projection.state.result:undefined} managerState={managerState}
       openTeam={()=>navigate("team")} openMatchups={()=>navigate("matchups")}>
       <CommandCenter key={forecastSnapshotKey} snapshot={selected} projection={projection} runs={runs}
         runListStatus={runListStatus} loadRuns={readRuns} forecastRequests={forecastRequests} layered

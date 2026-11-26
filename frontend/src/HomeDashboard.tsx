@@ -1,12 +1,14 @@
 import type {ReactNode} from "react";
 import { currentMatchupPeriod } from "./LeagueOverviewContext";
-import { ManagerSelectionStatus, type useManagerPerspective } from "./ManagerPerspective";
-import type { SnapshotSummary } from "./types/api";
+import type { useManagerPerspective } from "./ManagerPerspective";
+import type { ProjectedBaselineResult, SnapshotSummary } from "./types/api";
 
 const snapshotTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-export function HomeDashboard({snapshot, managerState, children, openTeam, openMatchups}: {
+export function HomeDashboard({snapshot, projected, profileUnavailable, managerState, children, openTeam, openMatchups}: {
   snapshot: SnapshotSummary;
+  projected?: ProjectedBaselineResult;
+  profileUnavailable: boolean;
   managerState: ReturnType<typeof useManagerPerspective>;
   children: ReactNode;
   openTeam: () => void;
@@ -20,13 +22,44 @@ export function HomeDashboard({snapshot, managerState, children, openTeam, openM
     (item.home_team_id === team.team_id || item.away_team_id === team.team_id),
   ) : [];
 
+  const observedLeaders = snapshot.teams.filter(item=>item.standing===1);
+  const projectedLeaders = projected?.teams.filter(item=>item.final_regular_rank===1);
+  const scoringWeek = snapshot.live_scoring?.current_scoring_period;
+  const freshness = new Date(snapshot.retrieval_finished_at_utc);
+
   return <div className="surface workspace-page product-home">
-    <section className="hero workspace-page-heading">
-      <div><h1>Home</h1><h2>{snapshot.league_name ?? "Current league"} / {snapshot.season}</h2>
-        <p>Snapshot · {snapshotTime.format(new Date(snapshot.retrieval_finished_at_utc))}</p>
+    <section className="home-season-lead" aria-label="League season">
+      <div className="home-edition">
+        <p className="home-kicker">{snapshot.season} season{scoringWeek!=null && ` / Week ${scoringWeek}`}</p>
+        <h1>{snapshot.league_name ?? "Current league"}</h1>
+        {Number.isFinite(freshness.getTime()) && <p className="home-freshness">
+          Snapshot <time dateTime={freshness.toISOString()}>{snapshotTime.format(freshness)}</time>
+        </p>}
+        {profileUnavailable && <p className="home-freshness" role="status">ESPN connection unavailable. This snapshot has not been verified against the configured league.</p>}
       </div>
+      <dl className="home-season-story">
+        <div>
+          <dt>Observed</dt>
+          <dd>{observedLeaders.length
+            ? observedLeaders.map(item=>item.display_name).join(", ")
+            : "League leader unavailable"}</dd>
+          {observedLeaders.length>0 && <dd className="home-story-caption">
+            {observedLeaders.length===1 ? "Leads the standings" : "Share first in the standings"}
+          </dd>}
+        </div>
+        <div>
+          <dt>Projected season</dt>
+          <dd>{projectedLeaders?.length
+            ? projectedLeaders.map(item=>snapshot.teams.find(candidate=>candidate.team_id===item.team_id)?.display_name).filter(Boolean).join(", ") || "Projected leader unavailable"
+            : projected ? "Projected leader unavailable" : "See season outlook below"}</dd>
+          {Boolean(projectedLeaders?.length) && <dd className="home-story-caption">Projected regular-season first place</dd>}
+        </div>
+      </dl>
     </section>
-    {team ? <div className="home-briefing">
+    {children}
+    {team && <details className="home-personal">
+      <summary>Your team / {team.display_name}</summary>
+      <div className="home-briefing">
       <section className="home-summary">
         <h2>{team.display_name}</h2>
         <p>{state.perspective?.display_name}</p>
@@ -54,7 +87,7 @@ export function HomeDashboard({snapshot, managerState, children, openTeam, openM
         </> : <p>No confirmed pairing for this team in the current scoring period.</p>}
         <button id="home-current-matchup" className="workspace-action" type="button" onClick={openMatchups}>View league matchups</button>
       </section>
-    </div> : <ManagerSelectionStatus state={state}/>}
-    {children}
+      </div>
+    </details>}
   </div>;
 }

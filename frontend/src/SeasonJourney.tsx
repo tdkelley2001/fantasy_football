@@ -1,15 +1,29 @@
+import {useLayoutEffect, useRef} from "react";
 import {commandTeamColor} from "./commandTeamIdentity";
 import type {JourneyStandingsPoint, SnapshotSummary} from "./types/api";
 
-export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}: {
+export function SeasonJourney({snapshot, series, monteCarlo, focusBoundaryOnMobile, selected, onSelect}: {
   snapshot: SnapshotSummary;
   series?: readonly JourneyStandingsPoint[] | null;
   monteCarlo: boolean;
+  focusBoundaryOnMobile?: boolean;
   selected: number | undefined;
   onSelect: (id: number) => void;
 }) {
+  return series?.length ? <JourneyChart {...{snapshot, series, monteCarlo, focusBoundaryOnMobile, selected, onSelect}}/>
+    : <p>Weekly standings trajectories are unavailable.</p>;
+}
+
+function JourneyChart({snapshot, series, monteCarlo, focusBoundaryOnMobile, selected, onSelect}: {
+  snapshot: SnapshotSummary;
+  series: readonly JourneyStandingsPoint[];
+  monteCarlo: boolean;
+  focusBoundaryOnMobile?: boolean;
+  selected: number | undefined;
+  onSelect: (id: number) => void;
+}) {
+  const scroll = useRef<HTMLDivElement>(null);
   const teams = [...snapshot.teams].sort((a,b)=>a.team_id-b.team_id);
-  if (!series?.length) return <p>Weekly standings trajectories are unavailable.</p>;
   const projected = series.filter(point=>point.basis==="projected");
   const start = series.find(point=>point.basis==="snapshot_start");
   const historical = series.some(point=>point.basis==="historical_replay");
@@ -22,6 +36,17 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
   const step = (width-56)/steps;
   const x = (point: JourneyStandingsPoint) =>
     28 + (point.scoring_week-first+Number(Boolean(start) && point.basis==="projected"))*step;
+  const boundaryX = start && start.status!=="unavailable" && start.teams.some(row=>row.rank!=null) ? x(start) : null;
+  useLayoutEffect(()=>{
+    if (!focusBoundaryOnMobile || boundaryX===null || typeof window.matchMedia!=="function") return;
+    const narrow = window.matchMedia("(max-width: 650px)");
+    const showBoundary = () => {
+      if (narrow.matches) scrollToJourneyPoint(scroll.current, width, boundaryX);
+    };
+    showBoundary();
+    narrow.addEventListener("change", showBoundary);
+    return ()=>narrow.removeEventListener("change", showBoundary);
+  },[focusBoundaryOnMobile,boundaryX,width,snapshot.snapshot_id,snapshot.canonical_sha256]);
   const retrieval = new Date(snapshot.retrieval_finished_at_utc);
   const dateKnown = Number.isFinite(retrieval.getTime());
   const today = dateKnown && retrieval.toDateString()===new Date().toDateString();
@@ -48,14 +73,18 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
       {" · "}{dateKnown && <>{retrieval.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"})}{" · "}</>}
       Entering Week {start.scoring_week}</p>}
     {hasReplayedRanks && <p className="journey-context">Dashed paths show reconciled historical ranks. Solid paths show projected ranks.</p>}
-    <p className="journey-scroll-hint">Scroll the chart to see more weeks.</p>
+    {focusBoundaryOnMobile ? <div className="home-journey-navigation" role="group" aria-label="Journey week shortcuts">
+      <button type="button" onClick={()=>{if(scroll.current)scroll.current.scrollLeft=0;}}>Week {first}</button>
+      {boundaryX!==null && <button type="button" onClick={()=>scrollToJourneyPoint(scroll.current,width,boundaryX)}>Snapshot boundary</button>}
+      {last!==first && <button type="button" onClick={()=>{if(scroll.current)scroll.current.scrollLeft=scroll.current.scrollWidth;}}>Week {last}</button>}
+    </div> : <p className="journey-scroll-hint">Scroll the chart to see more weeks.</p>}
     <div className="journey-frame" style={{height}}>
       <svg className="journey-ranks" viewBox={`0 0 36 ${height}`} aria-hidden="true">
         <text x="4" y="12" className="journey-axis">Rank</text>
         {teams.map((_,index)=><text key={index} x="28" y={y(index+1)+3}
           textAnchor="end" className="journey-axis">{index+1}</text>)}
       </svg>
-      <div className="journey-scroll" role="region" aria-label="Weekly standings chart (scroll for more weeks)" tabIndex={0}>
+      <div ref={scroll} className="journey-scroll" role="region" aria-label="Weekly standings chart (scroll for more weeks)" tabIndex={0}>
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{minWidth:historical?width:Math.min(680,width)}} aria-hidden="true">
         {teams.map((_,index)=><line key={index} x1="0" x2={width-14}
           y1={y(index+1)} y2={y(index+1)} className="journey-grid"/>)}
@@ -119,6 +148,14 @@ export function SeasonJourney({snapshot, series, monteCarlo, selected, onSelect}
       </li>)}
     </ul>
   </>;
+}
+
+function scrollToJourneyPoint(scroll: HTMLDivElement | null, width: number, x: number) {
+  const drawing = scroll?.querySelector("svg");
+  if (scroll && drawing) {
+    const scale = drawing.getBoundingClientRect().width / width;
+    scroll.scrollLeft = Math.max(0, x * scale - scroll.clientWidth * 0.42);
+  }
 }
 
 function journeyPointLabel(point: JourneyStandingsPoint) {

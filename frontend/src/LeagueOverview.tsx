@@ -227,14 +227,19 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
   const standingsSeries = projected?.standings_series;
   const dismiss = ()=>{
     setFocusedId(undefined);
-    if(focusTrigger.current?.isConnected)focusTrigger.current.focus();
-    else (modeControl.current??homeHeading.current)?.focus();
+    focusTrigger.current?.focus();
+    if (document.activeElement!==focusTrigger.current) (modeControl.current??homeHeading.current)?.focus();
   };
 
-  return <section className="league-command" aria-labelledby="league-command-title"
+  const champion = snapshot.teams.find(item=>item.team_id===projected?.champion_team_id);
+  const selectRun = (id: string) => { forecast.setSelectedRun(id); setChoice("monte_carlo"); };
+  const runPicker = runListStatus==="loaded" && forecast.completed.length>0 && <RunContext completed={forecast.completed}
+    selected={forecast.selectedRun} onChange={selectRun}/>;
+
+  return <section className={layered?"league-command home-command":"league-command"} aria-labelledby="league-command-title"
     onKeyDown={event=>{if(event.key==="Escape" && team){event.stopPropagation();dismiss();}}}>
     <div className="command-heading">
-      <h2 id="league-command-title" ref={layered?homeHeading:undefined} tabIndex={layered?-1:undefined}>League Command Center</h2>
+      <h2 className={layered?"home-command-heading":undefined} id="league-command-title" ref={layered?homeHeading:undefined} tabIndex={layered?-1:undefined}>League Command Center</h2>
       {(!layered || modePreference) && <div className="command-modes" role="group" aria-label="Forecast mode">
         <button ref={modeControl} type="button" aria-pressed={(choice??(summary?"monte_carlo":"projected"))==="projected"} onClick={()=>setChoice("projected")}>Projected season</button>
         <button type="button" aria-pressed={(choice??(summary?"monte_carlo":"projected"))==="monte_carlo"} onClick={()=>setChoice("monte_carlo")}>Monte Carlo</button>
@@ -242,9 +247,17 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
     </div>
     <div className="command-evidence">
       <p role="status">Showing {summary ? layered && projected ? "the projected season with Monte Carlo evidence" : "Monte Carlo" : projected ? "the projected season" : "no forecast"}.</p>
-      {openCompatibleSimulation && <button className="workspace-action" type="button"
-        id="home-forecast-configure" onClick={openCompatibleSimulation}>Configure matching Monte Carlo</button>}
-      {openBaselineEvidence && <button id="home-baseline-evidence" className="workspace-action" type="button" onClick={openBaselineEvidence}>Retained forecast evidence</button>}
+      {openCompatibleSimulation && (!layered || (choice==="monte_carlo" && !summary && !running && !forecast.loading)) &&
+        <button className="workspace-action" type="button" id="home-forecast-configure"
+          onClick={openCompatibleSimulation}>Configure matching Monte Carlo</button>}
+      {layered && <details className="home-forecast-details">
+        <summary>Forecast details</summary>
+        {runPicker}
+        {openBaselineEvidence && <button id="home-baseline-evidence" className="workspace-action" type="button"
+          onClick={openBaselineEvidence}>Retained forecast evidence</button>}
+        {openCompatibleSimulation && summary && <button className="workspace-action" type="button"
+          id="home-forecast-configure" onClick={openCompatibleSimulation}>Configure matching Monte Carlo</button>}
+      </details>}
     </div>
     {projected && projected.unresolved_capabilities.length>0 &&
       <div className="analysis-warning">
@@ -259,7 +272,7 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
         </div>
       </div>}
     {running && <p role="status">A baseline simulation is active. The available season outlook remains visible.</p>}
-    {runListStatus==="loaded" && forecast.unverified && <p>Some retained runs have different or unverified forecast policies. Inspect them in Playoff Race.</p>}
+    {runListStatus==="loaded" && forecast.unverified && <p>Some retained runs have different or unverified forecast policies. Inspect them in retained forecast evidence.</p>}
     {forecast.loading && choice!=="projected" && <p role="status">Checking retained Monte Carlo evidence.</p>}
     {(forecast.error || (choice==="monte_carlo" && !summary && !forecast.loading)) &&
       <p role="status">{summary ? "Retained run issue." : "Monte Carlo forecast unavailable."} {forecast.error??"Select or request a compatible baseline."}</p>}
@@ -267,7 +280,7 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
       <section className="command-journey" aria-labelledby="command-journey">
         <h3 id="command-journey">Season Journey</h3>
         <SeasonJourney snapshot={snapshot} series={standingsSeries}
-          monteCarlo={Boolean(summary)} {...focus}/>
+          monteCarlo={Boolean(summary)} focusBoundaryOnMobile={layered} {...focus}/>
         {team && !standingsSeries?.length && <p className="command-journey-focus">
           {team.display_name} / Observed rank {team.standing??"unavailable"}
         </p>}
@@ -328,10 +341,11 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
     </div>
     <section className="command-postseason" aria-labelledby="command-postseason">
       <h3 id="command-postseason">Postseason Outlook</h3>
-      {(!summary || layered) && <ProjectedBracket snapshot={snapshot} result={projected} {...bracketFocus}/>}
-      {layered && projected?.champion_team_id!=null && <p className="bracket-context">
-        Projected champion: {snapshot.teams.find(team=>team.team_id===projected.champion_team_id)?.display_name??"Unavailable"}
+      {layered && projected && <p className="home-postseason-result">
+        {champion ? <>Projected champion: <strong>{champion.display_name}</strong></> : "Projected champion unavailable"}
       </p>}
+      {(!summary || layered) && <ProjectedBracket snapshot={snapshot} result={projected}
+        mobileSelector={layered} {...bracketFocus}/>}
       {summary && <>
         <PrecisionNotice summary={summary}/>
         <div className="command-postseason-forecast">
@@ -356,8 +370,7 @@ export function CommandCenter({layered=false, snapshot, projection, runs=noRuns,
       </>}
     </section>
     {summary && <p>Run {short(summary.run.run_id)} / Configuration {short(summary.result.provenance.simulation_config_sha256)}</p>}
-    {runListStatus==="loaded" && forecast.completed.length>0 && <RunContext completed={forecast.completed}
-      selected={forecast.selectedRun} onChange={id=>{forecast.setSelectedRun(id);if(!layered)setChoice("monte_carlo");}}/>}
+    {!layered && runPicker}
     {runListStatus==="unavailable" && <p>Retained Monte Carlo results are unavailable. Use Retry run list to check again.</p>}
   </section>;
 }

@@ -58,7 +58,7 @@ test("moves keyboard focus to the destination after mobile navigation", async ()
   mockApi();
   const user = userEvent.setup();
   render(<App />);
-  await screen.findByRole("heading", { name: "Home" });
+  await screen.findByRole("heading", {name:snapshot.league_name! });
   await user.click(screen.getByRole("button", { name: "Open navigation" }));
   const navigation = screen.getByLabelText("Mobile primary navigation");
   await user.click(within(navigation).getByRole("button", { name: "Transactions" }));
@@ -113,7 +113,7 @@ test("browses verified results and scheduled pairings without mixing their score
   });
   const user = userEvent.setup();
   render(<App />);
-  await screen.findByRole("heading", { name: "Home" });
+  await screen.findByRole("heading", {name:snapshot.league_name! });
   await user.click(screen.getByText("Standings & scores", {selector:"summary"}));
   await user.click(screen.getByRole("button", { name: "All matchups" }));
   const picker = await screen.findByRole("combobox", { name: "Matchup period" });
@@ -136,12 +136,15 @@ test("remembers a manager perspective without changing the active snapshot", asy
     ] } });
   const user = userEvent.setup();
   const app = render(<App />);
-  await screen.findByRole("heading", { name: "Home" });
+  await screen.findByRole("heading", {name:snapshot.league_name! });
   const selector = await screen.findByRole("combobox", { name: "Manager perspective" });
   const value = JSON.stringify(["manager-a", 1]);
   expect(within(screen.getByRole("banner",{name:"War Room"})).getByRole("combobox",{ name: "Manager perspective" })).toBe(selector);
   expect(selector).toHaveValue(JSON.stringify(["manager-b", 2]));
   await user.selectOptions(selector, value);
+  const personal = screen.getByText("Your team / North Harbor", {selector:"summary"});
+  expect(personal.closest("details")).not.toHaveAttribute("open");
+  await user.click(personal);
   expect(screen.getByRole("heading", { name: "North Harbor" })).toBeInTheDocument();
   expect(screen.getByText("Home vs. Red Zone Club")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "View team roster" }));
@@ -149,6 +152,7 @@ test("remembers a manager perspective without changing the active snapshot", asy
   expect(await screen.findByRole("combobox", { name: "Manager perspective" })).toHaveValue(value);
   await user.click(screen.getByRole("button", { name: "Home" }));
   expect(await screen.findByRole("combobox", { name: "Manager perspective" })).toHaveValue(value);
+  await user.click(screen.getByText("Your team / North Harbor", {selector:"summary"}));
   await user.click(screen.getByRole("button", { name: "View league matchups" }));
   expect(screen.getByRole("heading", { name: "League Matchups" })).toBeInTheDocument();
   expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id);
@@ -177,7 +181,7 @@ test("opens the matching historical bracket without changing the active snapshot
   });
   const user = userEvent.setup();
   render(<App />);
-  await screen.findByRole("heading", {name:"Home"});
+  await screen.findByRole("heading", {name:snapshot.league_name!});
   await user.click(screen.getByText("Standings & scores", {selector:"summary"}));
   expect(await screen.findByText("Red Zone Club at North Harbor")).toBeInTheDocument();
   const resultsTable = within(await screen.findByRole("table", { name: "Recent results" }));
@@ -192,7 +196,7 @@ test("opens the matching historical bracket without changing the active snapshot
 test("keeps history for a different league out of the current league overview", async () => {
   mockApi({ history: { league_id: 99, seasons: [] } });
   render(<App />);
-  await screen.findByRole("heading", {name:"Home"});
+  await screen.findByRole("heading", {name:snapshot.league_name!});
   await userEvent.setup().click(screen.getByText("Standings & scores", {selector:"summary"}));
   expect(await screen.findByText("No earlier completed season is available for this league.")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /championship bracket/i })).not.toBeInTheDocument();
@@ -209,25 +213,25 @@ test("groups existing workspaces and keeps the archive reachable without snapsho
   expect(await screen.findByText("CGL history is not configured.")).toBeInTheDocument();
 });
 
-test("loads the source-backed overview without fabricating analytics", async()=>{ mockApi(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await userEvent.setup().click(screen.getByText("Standings & scores", {selector:"summary"})); expect(await screen.findByRole("heading",{name:/Sanitized Gridiron League/})).toBeInTheDocument(); expect(screen.getByRole("region",{name:"Playoff Race"})).toBeInTheDocument(); expect(screen.getByRole("heading",{name:"Current league standings"})).toBeInTheDocument(); expect(screen.queryByText("Championship probability")).not.toBeInTheDocument(); expect(screen.getByText("1 active")).toBeInTheDocument(); });
-test("selects and persists another snapshot detail", async()=>{ const user=userEvent.setup(); const second={...snapshot,snapshot_id:"snapshot-beta",league_name:"Second Sanitized League",teams:[]}; vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,second]); if(url.includes("snapshot-beta"))return response(second); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await openSnapshots(user);await user.selectOptions(screen.getByRole("combobox",{name:"Active snapshot"}),"snapshot-beta");await user.keyboard("{Escape}"); expect(await screen.findByText("Second Sanitized League", {selector: "header strong"})).toBeInTheDocument(); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-beta"); });
-test("latest snapshot response wins a rapid selection race", async()=>{ const beta={...snapshot,snapshot_id:"snapshot-beta",league_name:"Slow Beta"}; const gamma={...snapshot,snapshot_id:"snapshot-gamma",league_name:"Fast Gamma"}; let resolveBeta:(value:Response)=>void=()=>{}; const betaResponse=new Promise<Response>(resolve=>{resolveBeta=resolve;}); vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,beta,gamma]); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("snapshot-beta"))return betaResponse; if(url.includes("snapshot-gamma"))return response(gamma); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await openSnapshots(userEvent.setup());const selector=screen.getByRole("combobox",{name:"Active snapshot"}); fireEvent.change(selector,{target:{value:"snapshot-beta"}}); fireEvent.change(selector,{target:{value:"snapshot-gamma"}}); expect(await screen.findByText("Fast Gamma", {selector: "header strong"})).toBeInTheDocument(); resolveBeta(new Response(JSON.stringify(beta),{headers:{"Content-Type":"application/json"}})); await waitFor(()=>expect(screen.queryByRole("heading",{name:"Slow Beta"})).not.toBeInTheDocument()); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-gamma"); });
+test("loads the source-backed overview without fabricating analytics", async()=>{ mockApi(); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); await userEvent.setup().click(screen.getByText("Standings & scores", {selector:"summary"})); expect(await screen.findByRole("heading",{name:/Sanitized Gridiron League/})).toBeInTheDocument(); expect(screen.getByRole("region",{name:"Playoff Race"})).toBeInTheDocument(); expect(screen.getByRole("heading",{name:"Current league standings"})).toBeInTheDocument(); expect(screen.queryByText("Championship probability")).not.toBeInTheDocument(); expect(screen.getByText("1 active")).toBeInTheDocument(); });
+test("selects and persists another snapshot detail", async()=>{ const user=userEvent.setup(); const second={...snapshot,snapshot_id:"snapshot-beta",league_name:"Second Sanitized League",teams:[]}; vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,second]); if(url.includes("snapshot-beta"))return response(second); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); await openSnapshots(user);await user.selectOptions(screen.getByRole("combobox",{name:"Active snapshot"}),"snapshot-beta");await user.keyboard("{Escape}"); expect(await screen.findByText("Second Sanitized League", {selector: "header strong"})).toBeInTheDocument(); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-beta"); });
+test("latest snapshot response wins a rapid selection race", async()=>{ const beta={...snapshot,snapshot_id:"snapshot-beta",league_name:"Slow Beta"}; const gamma={...snapshot,snapshot_id:"snapshot-gamma",league_name:"Fast Gamma"}; let resolveBeta:(value:Response)=>void=()=>{}; const betaResponse=new Promise<Response>(resolve=>{resolveBeta=resolve;}); vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{ const url=String(input); if(url.includes("/health"))return response(health); if(url.endsWith("/snapshots"))return response([snapshot,beta,gamma]); if(url.includes("snapshot-alpha"))return response(snapshot); if(url.includes("snapshot-beta"))return betaResponse; if(url.includes("snapshot-gamma"))return response(gamma); if(url.includes("/runs"))return response([]); throw new Error(url); }); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); await openSnapshots(userEvent.setup());const selector=screen.getByRole("combobox",{name:"Active snapshot"}); fireEvent.change(selector,{target:{value:"snapshot-beta"}}); fireEvent.change(selector,{target:{value:"snapshot-gamma"}}); expect(await screen.findByText("Fast Gamma", {selector: "header strong"})).toBeInTheDocument(); resolveBeta(new Response(JSON.stringify(beta),{headers:{"Content-Type":"application/json"}})); await waitFor(()=>expect(screen.queryByRole("heading",{name:"Slow Beta"})).not.toBeInTheDocument()); expect(localStorage.getItem("war-room-snapshot")).toBe("snapshot-gamma"); });
 test("unmount aborts effect-owned requests", ()=>{ const signals:AbortSignal[]=[]; vi.spyOn(globalThis,"fetch").mockImplementation((_input,init)=>{ if(init?.signal)signals.push(init.signal); return new Promise(()=>{}); }); const {unmount}=render(<App/>); unmount(); expect(signals.length).toBeGreaterThan(0); expect(signals.every(signal=>signal.aborted)).toBe(true); });
-test("navigates by keyboard to the final-state Trade Lab", async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await user.click(screen.getByRole("button",{name:"Transactions"})); const trade=screen.getByRole("button",{name:"Evaluate"}); trade.focus(); await user.keyboard("{Enter}"); expect(screen.getByRole("heading",{name:/Build the exchange/})).toBeInTheDocument(); expect(screen.getByText(/War Room never submits a move to ESPN/)).toBeInTheDocument(); });
-test("navigates to the functional Simulation Center",async()=>{mockApi({runs:[]});const user=userEvent.setup();render(<App/>);await screen.findByRole("heading",{name:"Home"});await user.click(screen.getByRole("button",{name:"Open run operations"}));expect(screen.getByRole("heading",{name:"Simulation Center"})).toBeInTheDocument();expect(screen.getByRole("button",{name:"Submit baseline"})).toBeInTheDocument();expect(screen.queryByText(/intentionally non-operational/)).not.toBeInTheDocument()});
-test("persists theme preference",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); await user.click(screen.getByRole("button",{name:"Use light theme"})); expect(document.documentElement).toHaveAttribute("data-theme","light"); expect(localStorage.getItem("war-room-theme")).toBe("light"); });
+test("navigates by keyboard to the final-state Trade Lab", async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); await user.click(screen.getByRole("button",{name:"Transactions"})); const trade=screen.getByRole("button",{name:"Evaluate"}); trade.focus(); await user.keyboard("{Enter}"); expect(screen.getByRole("heading",{name:/Build the exchange/})).toBeInTheDocument(); expect(screen.getByText(/War Room never submits a move to ESPN/)).toBeInTheDocument(); });
+test("navigates to the functional Simulation Center",async()=>{mockApi({runs:[]});const user=userEvent.setup();render(<App/>);await screen.findByRole("heading", {name:snapshot.league_name!});await user.click(screen.getByRole("button",{name:"Open run operations"}));expect(screen.getByRole("heading",{name:"Simulation Center"})).toBeInTheDocument();expect(screen.getByRole("button",{name:"Submit baseline"})).toBeInTheDocument();expect(screen.queryByText(/intentionally non-operational/)).not.toBeInTheDocument()});
+test("persists theme preference",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); await user.click(screen.getByRole("button",{name:"Use light theme"})); expect(document.documentElement).toHaveAttribute("data-theme","light"); expect(localStorage.getItem("war-room-theme")).toBe("light"); });
 test("renders empty snapshot state",async()=>{ mockApi({snapshots:[]}); render(<App/>); expect(await screen.findByRole("heading",{name:"No league data yet"})).toBeInTheDocument(); });
-test("publishes a configured ESPN profile without exposing credentials",async()=>{const user=userEvent.setup();let statusCalls=0;vi.spyOn(globalThis,"fetch").mockImplementation((input,init)=>{const url=String(input);if(url.includes("/health"))return response(health);if(url.endsWith("/snapshots"))return response([]);if(url.includes("/runs"))return response([]);if(url.endsWith("/refresh/profile"))return response({profile_id:"configured_local_league",league_id:42,season:2026,credential_mode:"private_credentials_configured",manual_rule_configuration_available:false});if(url.endsWith("/refreshes/current"))return response(null);if(url.endsWith("/refreshes")&&init?.method==="POST")return response({api_schema_version:"1.0",refresh_id:"refresh-1",status:"queued",created_at_utc:"2026-10-31T12:00:00Z"},202);if(url.endsWith("/refreshes/refresh-1")){statusCalls++;return response({api_schema_version:"1.0",refresh_id:"refresh-1",status:"completed",stage:"completed",league_id:42,season:2026,first_simulation_week:8,created_at_utc:"2026-10-31T12:00:00Z",started_at_utc:"2026-10-31T12:00:01Z",finished_at_utc:"2026-10-31T12:00:02Z",snapshot_id:snapshot.snapshot_id,publication_committed:true,error_code:null,error_message:null})}if(url.endsWith("/refreshes/refresh-1/result"))return response({api_schema_version:"1.0",refresh:{api_schema_version:"1.0",refresh_id:"refresh-1",status:"completed",stage:"completed",league_id:42,season:2026,first_simulation_week:8,created_at_utc:"2026-10-31T12:00:00Z",started_at_utc:"2026-10-31T12:00:01Z",finished_at_utc:"2026-10-31T12:00:02Z",snapshot_id:snapshot.snapshot_id,publication_committed:true,error_code:null,error_message:null},snapshot,validation_findings:["Teams reconciled: 8"],unresolved_capabilities:[]});throw new Error(url)});render(<App/>);await screen.findByRole("heading",{name:"No league data yet"});await user.click(screen.getAllByRole("button",{name:"Refresh ESPN league"})[0]);expect(await screen.findByText("War Room retrieves your latest ESPN league information and automatically determines the current simulation period.")).toBeInTheDocument();expect(screen.queryByText(/cookie|token/i)).not.toBeInTheDocument();await user.click(screen.getByRole("button",{name:"Refresh now"}));expect(await screen.findByRole("heading",{name:"Home"},{timeout:2500})).toBeInTheDocument();expect(statusCalls).toBeGreaterThan(0);expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id)});
+test("publishes a configured ESPN profile without exposing credentials",async()=>{const user=userEvent.setup();let statusCalls=0;vi.spyOn(globalThis,"fetch").mockImplementation((input,init)=>{const url=String(input);if(url.includes("/health"))return response(health);if(url.endsWith("/snapshots"))return response([]);if(url.includes("/runs"))return response([]);if(url.endsWith("/refresh/profile"))return response({profile_id:"configured_local_league",league_id:42,season:2026,credential_mode:"private_credentials_configured",manual_rule_configuration_available:false});if(url.endsWith("/refreshes/current"))return response(null);if(url.endsWith("/refreshes")&&init?.method==="POST")return response({api_schema_version:"1.0",refresh_id:"refresh-1",status:"queued",created_at_utc:"2026-10-31T12:00:00Z"},202);if(url.endsWith("/refreshes/refresh-1")){statusCalls++;return response({api_schema_version:"1.0",refresh_id:"refresh-1",status:"completed",stage:"completed",league_id:42,season:2026,first_simulation_week:8,created_at_utc:"2026-10-31T12:00:00Z",started_at_utc:"2026-10-31T12:00:01Z",finished_at_utc:"2026-10-31T12:00:02Z",snapshot_id:snapshot.snapshot_id,publication_committed:true,error_code:null,error_message:null})}if(url.endsWith("/refreshes/refresh-1/result"))return response({api_schema_version:"1.0",refresh:{api_schema_version:"1.0",refresh_id:"refresh-1",status:"completed",stage:"completed",league_id:42,season:2026,first_simulation_week:8,created_at_utc:"2026-10-31T12:00:00Z",started_at_utc:"2026-10-31T12:00:01Z",finished_at_utc:"2026-10-31T12:00:02Z",snapshot_id:snapshot.snapshot_id,publication_committed:true,error_code:null,error_message:null},snapshot,validation_findings:["Teams reconciled: 8"],unresolved_capabilities:[]});throw new Error(url)});render(<App/>);await screen.findByRole("heading",{name:"No league data yet"});await user.click(screen.getAllByRole("button",{name:"Refresh ESPN league"})[0]);expect(await screen.findByText("War Room retrieves your latest ESPN league information and automatically determines the current simulation period.")).toBeInTheDocument();expect(screen.queryByText(/cookie|token/i)).not.toBeInTheDocument();await user.click(screen.getByRole("button",{name:"Refresh now"}));expect(await screen.findByRole("heading", {name:snapshot.league_name!},{timeout:2500})).toBeInTheDocument();expect(statusCalls).toBeGreaterThan(0);expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id)});
 test("requests automatic boundary detection unless the advanced override is enabled",async()=>{const user=userEvent.setup();let submitted:unknown;vi.spyOn(globalThis,"fetch").mockImplementation((input,init)=>{const url=String(input);if(url.includes("/health"))return response(health);if(url.endsWith("/snapshots"))return response([]);if(url.includes("/runs"))return response([]);if(url.endsWith("/refresh/profile"))return response({profile_id:"configured_local_league",league_id:42,season:2026,credential_mode:"public",manual_rule_configuration_available:false});if(url.endsWith("/refreshes/current"))return response(null);if(url.endsWith("/refreshes")&&init?.method==="POST"){submitted=JSON.parse(String(init.body));return response({api_schema_version:"1.0",refresh_id:"refresh-auto",status:"queued",created_at_utc:"2026-10-31T12:00:00Z"},202)}if(url.endsWith("/refreshes/refresh-auto"))return new Promise(()=>{});throw new Error(url)});render(<App/>);await screen.findByRole("heading",{name:"No league data yet"});await user.click(screen.getAllByRole("button",{name:"Refresh ESPN league"})[0]);await screen.findByText("War Room retrieves your latest ESPN league information and automatically determines the current simulation period.");expect(screen.queryByRole("spinbutton",{name:"Manual first unstarted scoring week"})).not.toBeInTheDocument();await user.click(screen.getByRole("button",{name:"Refresh now"}));await waitFor(()=>expect(submitted).toMatchObject({first_simulation_week:null}));});
 test("closes and rediscovers an active server refresh without cancelling it",async()=>{const user=userEvent.setup();const active={api_schema_version:"1.0",refresh_id:"active-refresh",status:"running",stage:"retrieving_and_validating",league_id:42,season:2026,first_simulation_week:8,created_at_utc:"2026-10-31T12:00:00Z",started_at_utc:"2026-10-31T12:00:01Z",finished_at_utc:null,snapshot_id:null,publication_committed:false,error_code:null,error_message:null};let discovery=0,cancelled=false;vi.spyOn(globalThis,"fetch").mockImplementation((input,init)=>{const url=String(input);if(url.includes("/health"))return response(health);if(url.endsWith("/snapshots"))return response([]);if(url.includes("/runs"))return response([]);if(url.endsWith("/refresh/profile"))return response({profile_id:"configured_local_league",league_id:42,season:2026,credential_mode:"public",manual_rule_configuration_available:false});if(url.endsWith("/refreshes/current")){discovery++;return response(active)}if(url.endsWith("/refreshes/active-refresh/cancel")&&init?.method==="POST"){cancelled=true;return response({...active,status:"cancel_requested"})}if(url.endsWith("/refreshes/active-refresh"))return new Promise(()=>{});throw new Error(url)});render(<App/>);await screen.findByRole("heading",{name:"No league data yet"});await user.click(screen.getAllByRole("button",{name:"Refresh ESPN league"})[0]);expect(await screen.findByText("running")).toBeInTheDocument();await user.click(screen.getByRole("button",{name:"Close refresh"}));expect(screen.queryByRole("dialog",{name:"Refresh ESPN league"})).not.toBeInTheDocument();expect(cancelled).toBe(false);await user.click(screen.getAllByRole("button",{name:"Refresh ESPN league"})[0]);expect(await screen.findByText("running")).toBeInTheDocument();expect(discovery).toBeGreaterThanOrEqual(2)});
 test("renders a disconnected state and retries",async()=>{ vi.spyOn(globalThis,"fetch").mockRejectedValue(new TypeError("offline")); render(<App/>); expect(await screen.findByRole("heading",{name:"Reconnect the decision engine"})).toBeInTheDocument(); expect(screen.getByRole("button",{name:/try again/i})).toBeInTheDocument(); });
 test("renders typed API errors without fabricated data",async()=>{ vi.spyOn(globalThis,"fetch").mockImplementation((input)=>String(input).includes("health") ? response(health) : response({api_schema_version:"1.0",error:{code:"snapshot_store_error",message:"Snapshot store unavailable.",category:"storage",context:{}}},503)); render(<App/>); expect(await screen.findByText("Snapshot store unavailable.")).toBeInTheDocument(); expect(screen.queryByText("North Harbor")).not.toBeInTheDocument(); });
-test("falls back from a deleted persisted snapshot",async()=>{ localStorage.setItem("war-room-snapshot","deleted"); mockApi(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id); });
-test("core shell has no detectable accessibility violations",async()=>{ mockApi(); const {container}=render(<App/>); await screen.findByRole("heading",{name:"Home"}); const result=await axe.run(container); expect(result.violations).toEqual([]); });
-test("context drawer receives focus and restores it on escape",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); const trigger=screen.getByRole("button",{name:"Open league context"}); await user.click(trigger); expect(screen.getByRole("button",{name:"Close league context"})).toHaveFocus(); await user.keyboard("{Escape}"); expect(trigger).toHaveFocus(); });
-test("context drawer traps focus, makes the background inert, and restores focus",async()=>{mockApi();const user=userEvent.setup();const{container}=render(<App/>);await screen.findByRole("heading",{name:"Home"});const trigger=screen.getByRole("button",{name:"Open league context"});await user.click(trigger);const close=screen.getByRole("button",{name:"Close league context"});expect(document.querySelector("#main-content")).toHaveProperty("inert",true);await user.tab();expect(screen.getByText("Saved snapshots")).toHaveFocus();await user.keyboard("{Shift>}{Tab}{/Shift}");expect(close).toHaveFocus();fireEvent.click(container.querySelector(".scrim")!);expect(document.querySelector("#main-content")).toHaveProperty("inert",false);expect(trigger).toHaveFocus()});
-test("responsive menu exposes reconciled navigation and restores focus",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading",{name:"Home"}); const trigger=screen.getByRole("button",{name:"Open navigation"}); await user.click(trigger); expect(screen.getByLabelText("Mobile primary navigation")).toBeInTheDocument(); expect(within(screen.getByRole("dialog",{name:"Mobile primary navigation"})).getByRole("navigation",{name:"Primary navigation"}).textContent).toBe("HomeTransactions"); expect(screen.getByRole("button",{name:"Close navigation"})).toHaveFocus(); await user.keyboard("{Escape}"); expect(trigger).toHaveFocus(); });
-test("snapshot changes isolate observed league records",async()=>{ const user=userEvent.setup(); const other={...snapshot,snapshot_id:"snapshot-other",league_id:99,league_name:"Other League",teams:[{...snapshot.teams[2],team_id:3,display_name:"Other Default",standing:1},{...snapshot.teams[1],team_id:2,display_name:"Unrelated Two",standing:2}]}; vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{const url=String(input);if(url.includes("/health"))return response(health);if(url.endsWith("/snapshots"))return response([snapshot,other]);if(url.includes("snapshot-other"))return response(other);if(url.includes("snapshot-alpha"))return response(snapshot);if(url.includes("/runs"))return response([]);throw new Error(url);});render(<App/>);await screen.findByRole("heading",{name:"Home"});await openSnapshots(user);await user.selectOptions(screen.getByRole("combobox",{name:"Active snapshot"}),"snapshot-other");await user.keyboard("{Escape}");expect(await screen.findByText("Other League", {selector: "header strong"})).toBeInTheDocument();await user.click(screen.getByText("Standings & scores", {selector:"summary"}));const observed=within(await screen.findByRole("region",{name:"Current league standings"}));expect(observed.getByText("Other Default")).toBeInTheDocument();expect(screen.queryByText("North Harbor")).not.toBeInTheDocument();});
+test("falls back from a deleted persisted snapshot",async()=>{ localStorage.setItem("war-room-snapshot","deleted"); mockApi(); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id); });
+test("core shell has no detectable accessibility violations",async()=>{ mockApi(); const {container}=render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); const result=await axe.run(container); expect(result.violations).toEqual([]); });
+test("context drawer receives focus and restores it on escape",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); const trigger=screen.getByRole("button",{name:"Open league context"}); await user.click(trigger); expect(screen.getByRole("button",{name:"Close league context"})).toHaveFocus(); await user.keyboard("{Escape}"); expect(trigger).toHaveFocus(); });
+test("context drawer traps focus, makes the background inert, and restores focus",async()=>{mockApi();const user=userEvent.setup();const{container}=render(<App/>);await screen.findByRole("heading", {name:snapshot.league_name!});const trigger=screen.getByRole("button",{name:"Open league context"});await user.click(trigger);const close=screen.getByRole("button",{name:"Close league context"});expect(document.querySelector("#main-content")).toHaveProperty("inert",true);await user.tab();expect(screen.getByText("Saved snapshots")).toHaveFocus();await user.keyboard("{Shift>}{Tab}{/Shift}");expect(close).toHaveFocus();fireEvent.click(container.querySelector(".scrim")!);expect(document.querySelector("#main-content")).toHaveProperty("inert",false);expect(trigger).toHaveFocus()});
+test("responsive menu exposes reconciled navigation and restores focus",async()=>{ mockApi(); const user=userEvent.setup(); render(<App/>); await screen.findByRole("heading", {name:snapshot.league_name!}); const trigger=screen.getByRole("button",{name:"Open navigation"}); await user.click(trigger); expect(screen.getByLabelText("Mobile primary navigation")).toBeInTheDocument(); expect(within(screen.getByRole("dialog",{name:"Mobile primary navigation"})).getByRole("navigation",{name:"Primary navigation"}).textContent).toBe("HomeTransactions"); expect(screen.getByRole("button",{name:"Close navigation"})).toHaveFocus(); await user.keyboard("{Escape}"); expect(trigger).toHaveFocus(); });
+test("snapshot changes isolate observed league records",async()=>{ const user=userEvent.setup(); const other={...snapshot,snapshot_id:"snapshot-other",league_id:99,league_name:"Other League",teams:[{...snapshot.teams[2],team_id:3,display_name:"Other Default",standing:1},{...snapshot.teams[1],team_id:2,display_name:"Unrelated Two",standing:2}]}; vi.spyOn(globalThis,"fetch").mockImplementation((input)=>{const url=String(input);if(url.includes("/health"))return response(health);if(url.endsWith("/snapshots"))return response([snapshot,other]);if(url.includes("snapshot-other"))return response(other);if(url.includes("snapshot-alpha"))return response(snapshot);if(url.includes("/runs"))return response([]);throw new Error(url);});render(<App/>);await screen.findByRole("heading", {name:snapshot.league_name!});await openSnapshots(user);await user.selectOptions(screen.getByRole("combobox",{name:"Active snapshot"}),"snapshot-other");await user.keyboard("{Escape}");expect(await screen.findByText("Other League", {selector: "header strong"})).toBeInTheDocument();await user.click(screen.getByText("Standings & scores", {selector:"summary"}));const observed=within(await screen.findByRole("region",{name:"Current league standings"}));expect(observed.getByText("Other Default")).toBeInTheDocument();expect(screen.queryByText("North Harbor")).not.toBeInTheDocument();});
 
 
 test("startup prefers latest configured-league evidence over saved selection and publication order",async()=>{
@@ -312,7 +316,7 @@ test("Home automatically prepares one outlook and reuses it in League without st
   mockApi({runs: []});
   const fetch = vi.mocked(globalThis.fetch);
   render(<App/>);
-  expect(await screen.findByRole("heading", {name:"Home"})).toBeInTheDocument();
+  expect(await screen.findByRole("heading", {name:snapshot.league_name!})).toBeInTheDocument();
   expect(await screen.findByText(/Projected champion:/)).toBeInTheDocument();
   expect(screen.getByRole("button", {name:"Home"})).toHaveAttribute("aria-current", "page");
   await user.click(screen.getByText("Projected season details",{selector:"summary"}));
@@ -381,7 +385,7 @@ test("unsupported projected scoring leaves saved Home information available", as
   });
   render(<App/>);
   expect(await screen.findByText(/Projected season unsupported.*Current scoring evidence is unresolved/)).toBeInTheDocument();
-  expect(screen.getByRole("heading", {name:"Home"})).toBeInTheDocument();
+  expect(screen.getByRole("heading", {name:snapshot.league_name!})).toBeInTheDocument();
   expect(screen.getByText(snapshot.league_name!, {selector:"header strong"})).toBeInTheDocument();
   expect(screen.getByRole("button", {name:"Refresh ESPN league"})).toBeEnabled();
 });
@@ -403,6 +407,7 @@ test("run list failure and retry are independent of the saved snapshot and proje
 
   await user.click(screen.getByText("Projected season details",{selector:"summary"}));
   expect(screen.getByText(/Champion in this projected season/)).toBeInTheDocument();
+  await user.click(screen.getByText("Forecast details",{selector:"summary"}));
   await user.click(screen.getByRole("button", {name:"Retained forecast evidence"}));
   expect(window.location.pathname).toBe("/league/baseline-evidence");
   expect(screen.getByRole("heading", {name:"Retained forecast evidence"})).toBeInTheDocument();
@@ -475,7 +480,10 @@ test("League opens existing baseline setup with matching policies and waits for 
     return fallback(input,init);
   });
   render(<App/>);
-  await screen.findByRole("heading",{name:"Home"});
+  await screen.findByRole("heading", {name:snapshot.league_name!});
+  await user.click(screen.getByRole("button",{name:"Monte Carlo"}));
+  expect(screen.getByRole("button",{name:"Monte Carlo"})).toHaveAttribute("aria-pressed","true");
+  expect(screen.getByText("Showing the projected season.")).toBeVisible();
   await user.click(screen.getByRole("button",{name:"Configure matching Monte Carlo"}));
   expect(screen.getByRole("checkbox",{name:"Match projected season policies"})).toBeChecked();
   expect(screen.getByLabelText("Waiver boundary")).toHaveValue("modeled_weekly_v1");
@@ -507,7 +515,7 @@ test("Back restores the contextual matchup trigger and active snapshot", async (
   const user = userEvent.setup();
   mockApi({runs: []});
   render(<App/>);
-  await screen.findByRole("heading",{name:"Home"});
+  await screen.findByRole("heading", {name:snapshot.league_name!});
   await user.click(screen.getByText("Standings & scores",{selector:"summary"}));
   await user.click(screen.getByRole("button",{name:"All matchups"}));
   expect(await screen.findByRole("heading",{name:"League Matchups"})).toBeInTheDocument();
@@ -515,3 +523,45 @@ test("Back restores the contextual matchup trigger and active snapshot", async (
   await waitFor(()=>expect(screen.getByRole("button",{name:"All matchups"})).toHaveFocus());
   expect(localStorage.getItem("war-room-snapshot")).toBe(snapshot.snapshot_id);
 });
+
+
+test("opens with observed and projected league evidence independently of a manager mapping", async () => {
+  mockApi({runs:[]});
+  const fetch = vi.mocked(globalThis.fetch);
+  const original = fetch.getMockImplementation()!;
+  const leader = snapshot.teams[1];
+  fetch.mockImplementation((input,init)=>String(input).endsWith("/analyses/projected-baseline")
+    ? response({...outlook(snapshot),teams:[{team_id:leader.team_id,final_regular_rank:1,
+        final_regular_standing:leader,championship_qualifier:true,postseason_seed:1,final_placement:2}]})
+    : original(input,init));
+  render(<App/>);
+  const lead = within(await screen.findByRole("region",{name:"League season"}));
+  expect(lead.getByRole("heading",{name:snapshot.league_name!,level:1})).toBeVisible();
+  expect(lead.getByText("Observed")).toBeVisible();
+  expect(await lead.findByText("Projected regular-season first place")).toBeVisible();
+  expect(lead.getByText(leader.display_name)).toBeVisible();
+  expect(screen.queryByText(/Your team \/ /)).not.toBeInTheDocument();
+  expect(screen.getAllByRole("group",{name:"Forecast mode"})).toHaveLength(1);
+  expect(screen.queryByRole("button",{name:"Configure matching Monte Carlo"})).not.toBeInTheDocument();
+});
+
+test.each(["/home", "/league/overview", "/league/playoff-race"])(
+  "supports changing perspective without a default at %s", async path => {
+    window.history.replaceState(null, "", path);
+    mockApi({managers:{snapshot_id:snapshot.snapshot_id, default_team_id:null, unresolved_owner_count:0,
+      choices:[
+        {manager_id:"avery",display_name:"Avery",team_id:1,is_primary:true},
+        {manager_id:"blair",display_name:"Blair",team_id:2,is_primary:true},
+      ]}});
+    const user = userEvent.setup();
+    render(<App/>);
+    const header = screen.getByRole("banner",{name:"War Room"});
+    const selector = await within(header).findByRole("combobox",{name:"Manager perspective"});
+    expect(selector).toHaveValue("");
+    await user.selectOptions(selector, JSON.stringify(["avery",1]));
+    expect(screen.getByText("Your team / North Harbor",{selector:"summary"})).toBeVisible();
+    await user.selectOptions(selector, JSON.stringify(["blair",2]));
+    expect(selector).toHaveValue(JSON.stringify(["blair",2]));
+    expect(screen.queryByText("Your team / North Harbor",{selector:"summary"})).not.toBeInTheDocument();
+  },
+);
