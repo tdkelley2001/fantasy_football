@@ -204,6 +204,11 @@ The League Matchups scoreboard groups the active snapshot's schedule and verifie
 
 ## Opportunity Explorer
 
+Discover links directly to Simulation Center's action-search configuration with
+the active snapshot and manager team selected. Submission is explicit.
+Opening a completed action-search run returns to Discover's retained results.
+Quick projections and broader searches show their own scope and coverage.
+
 Discover presents bounded projected exchanges first, with retained action
 searches in a disclosure. An evaluated exchange can open in Evaluate when its
 single ordered trade, explicit ownership changes and effective timeline agree
@@ -224,6 +229,13 @@ Candidate identity differs from `completed_state_sha256`: distinct ordered paths
 Keep available evaluated evidence inspectable when ranking is unresolved, including one evaluated state. Competitive/imprecise/unevaluated remain separate states. A top displayed path or local comparison is not global optimality or ESPN executability.
 
 ## Trade Lab
+
+Evaluate presents the proposed transfers by direction and the committed timing
+before the comparison. An imported exchange starts as an unloaded preview.
+Loading commits the exact exchange and collapses the roster editor. Editing
+reopens the existing roster controls. Deterministic results lead with the
+participating teams' baseline and scenario outcomes. Matched Monte Carlo shows
+affected teams first, with sampling uncertainty and path coverage visible.
 
 Choose canonical teams/players, search/filter using canonical slot labels and commit exchanges as chronological steps. Multiple teams can participate across uneven/multi-player steps. Protected pins prevent automatic capacity drops by completion; they are not ESPN locks or execution permissions.
 

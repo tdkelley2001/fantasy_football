@@ -32,6 +32,7 @@ export function App() {
   const [route, setRoute] = useState(() => readWorkspaceRoute(window.location.pathname));
   const [focusArchiveBracket, setFocusArchiveBracket] = useState(false);
   const { destination } = route;
+  const actionSearch = route.destination==="simulation" && route.actionSearch===true;
   const archiveYear = route.destination === "history" ? route.year : undefined;
   const [health, setHealth] = useState<HealthResponse>();
   const [snapshots, setSnapshots] = useState<readonly SnapshotSummary[]>([]);
@@ -123,7 +124,7 @@ export function App() {
       focusAfterMenuNavigation.current = false;
       document.getElementById("main-content")?.focus();
     }
-  }, [menuOpen]);
+  }, [menuOpen, route]);
 
   const chooseSnapshot=async(id:string)=>{
     activeController.current?.abort();const controller=new AbortController();activeController.current=controller;const version=++requestVersion.current;
@@ -142,6 +143,12 @@ export function App() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  const wasActionSearch = useRef(actionSearch);
+  useEffect(()=>{
+    if (actionSearch || wasActionSearch.current) document.getElementById("main-content")?.focus();
+    wasActionSearch.current = actionSearch;
+  },[actionSearch]);
 
   function go(next: WorkspaceRoute, focusBracket = false) {
     const path = workspacePath(next);
@@ -203,7 +210,7 @@ export function App() {
       managerTeamId={managerState.team?.team_id} view={destination==="trades"?"evaluate":"discover"}
       runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}
       navigate={view=>go({destination:view==="evaluate"?"trades":"transactions"})}
-      openSimulation={()=>navigate("simulation")}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="playoffs"?<PlayoffRace key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun} openSimulation={()=>navigate("simulation")}/>:destination==="league"?<LeagueOverview snapshot={selected} projection={projection} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} forecastRequests={forecastRequests} modePreference={{choice:forecastMode?.snapshotKey===forecastSnapshotKey?forecastMode.mode:undefined,select:mode=>setForecastMode({snapshotKey:forecastSnapshotKey,mode})}} openPlayoffRace={()=>navigate("playoffs")} openSimulation={()=>navigate("simulation")} openCompatibleSimulation={()=>{navigate("simulation");setMatchProjectionInitially(true)}} openArchive={year=>{setPreferredRun(null);go({destination:"history",year},true)}}/>:destination==="simulation"?<SimulationCenter matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:<FutureWorkspace activeRuns={runListStatus==="loaded"?activeRuns:undefined}/>}</main>
+      openSimulation={()=>{setMatchProjectionInitially(false);go({destination:"simulation",actionSearch:true});}}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="playoffs"?<PlayoffRace key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun} openSimulation={()=>navigate("simulation")}/>:destination==="league"?<LeagueOverview snapshot={selected} projection={projection} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} forecastRequests={forecastRequests} modePreference={{choice:forecastMode?.snapshotKey===forecastSnapshotKey?forecastMode.mode:undefined,select:mode=>setForecastMode({snapshotKey:forecastSnapshotKey,mode})}} openPlayoffRace={()=>navigate("playoffs")} openSimulation={()=>navigate("simulation")} openCompatibleSimulation={()=>{navigate("simulation");setMatchProjectionInitially(true)}} openArchive={year=>{setPreferredRun(null);go({destination:"history",year},true)}}/>:destination==="simulation"?actionSearch&&managerState.loading?<p role="status" className="runtime-caveat">Loading action search context...</p>:<SimulationCenter key={String(actionSearch)} actionSearchInitially={actionSearch} initialRequestingTeam={actionSearch?managerState.team?.team_id:undefined} returnToDiscover={actionSearch?()=>go({destination:"transactions"}):undefined} matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:<FutureWorkspace activeRuns={runListStatus==="loaded"?activeRuns:undefined}/>}</main>
       </div>
     </div>
     {(menuOpen||contextOpen)&&<div className="scrim" aria-hidden="true" onClick={()=>{setMenuOpen(false);setContextOpen(false);}}/>}

@@ -189,8 +189,10 @@ and compatible retained results are displayed in Playoff Race.
 1. Open **Transactions → Evaluate** on the selected snapshot. Choose teams and rostered players,
    then add the exchange as a committed draft step. Pins protect players
    against structural completion drops. They do not grant ESPN permissions.
-2. Choose **Evaluate Trade**. Review the effective timing, the two teams'
-   projected results, and any automatic changes that follow the exchange.
+2. Review the committed exchanges and their timing, then choose **Evaluate
+   Trade**. The participant summary compares projected ranks, seeds, placements,
+   and points against the unchanged season. Expand the roster editor to edit an
+   imported exchange, or open the result details for league-wide and weekly effects.
 3. If you need probability estimates, choose **Explore probabilities**.
    Review the matched baseline, path coverage, precision and limitations.
    League Overview does not need a separate simulation for this comparison.
@@ -212,8 +214,10 @@ When an evaluated candidate supplies a reproducible exchange, choose **Open in
 Evaluate**, review the players and timing, and choose **Load exchange**. Loading
 replaces the current draft. You can keep the current draft instead. Switching
 views alone preserves work in both.
-The Monte Carlo search below is available for larger scopes and
-probability estimates. Its retained results are unchanged.
+Choose **Find more types of moves** to open the existing action-search setup for
+the active snapshot and manager. Select a supported scope and submit explicitly.
+Use **Open results** on a completed run to return to Discover with that search
+selected. Larger searches can return incomplete coverage or unresolved rankings.
 
 Use a snapshot with a supported full-week simulation start. Opportunity Explorer
 cannot apply completed search actions as initial roster edits in a partial-week

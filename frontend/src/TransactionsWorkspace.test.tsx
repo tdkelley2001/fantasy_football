@@ -2,11 +2,12 @@ import {act, render, screen, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {App} from "./App";
 import {discoveryDraft} from "./ProjectedOpportunities";
-import {health, snapshot} from "./test/fixtures";
+import {activeRun, health, snapshot} from "./test/fixtures";
 import type {ProjectedOpportunityResult, SnapshotSummary} from "./types/api";
 
 const live: SnapshotSummary = {...snapshot, players: [...snapshot.players,
-  {...snapshot.players[0], player_id:201, display_name:"Harbor Receiver"}],
+  {...snapshot.players[0], player_id:201, display_name:"Harbor Receiver"},
+  {...snapshot.players[0], player_id:401, display_name:"Available Receiver",acquisition_status:"FREEAGENT"}],
   roster_assignments:[...snapshot.roster_assignments,{player_id:201,team_id:2,lineup_slot_id:2}],
   live_scoring:{current_scoring_period:8,last_fully_completed_period:7,earliest_unresolved_period:null,
     next_fully_unplayed_period:9,supported_simulation_week:null,partial_week_simulation_required:true,
@@ -23,9 +24,12 @@ const candidate:ProjectedOpportunityResult["candidates"][number]={
   candidate_id:"trade-1", actions:[action], timeline, explicit_changes:transfers,
   forced_drops:[], automatic_additions:[], caveats:[], evaluation_index:0, limitation:null,
 };
-const base={snapshot_id:live.snapshot_id,canonical_sha256:live.canonical_sha256,status:"complete",teams:[],
+const base={snapshot_id:live.snapshot_id,canonical_sha256:live.canonical_sha256,status:"complete",
+  teams:live.teams.map((team,index)=>({team_id:team.team_id,final_regular_rank:index+1,
+    postseason_seed:index<2?index+1:null,final_placement:index+1,final_regular_standing:team})),
   weeks:[],postseason:[],transactions:[],unresolved_capabilities:[],champion_team_id:1};
-const hypothetical={...base,champion_team_id:2};
+const hypothetical={...base,champion_team_id:2,teams:base.teams.map(team=>team.team_id===1?
+  {...team,final_regular_rank:2,final_regular_standing:{...team.final_regular_standing,points_for:812.75}}:team)};
 const compare={baseline:base,hypothetical,timeline,explicit_changes:transfers,
   baseline_final_roster:[],hypothetical_final_roster:[],forced_drops:[],automatic_additions:[]};
 const refreshed={...live,snapshot_id:"new-snapshot",canonical_sha256:"b".repeat(64)};
@@ -71,15 +75,29 @@ test("legacy Discover route hands off the exact timed exchange, preserves the dr
   expect(window.location.pathname).toBe("/transactions/evaluate");
   const nav=within(screen.getByRole("navigation",{name:"Transactions views"}));
   expect(nav.getByRole("button",{name:"Evaluate"})).toHaveFocus();
+  const offer=within(screen.getByRole("region",{name:"Discovered exchange"}));
+  expect(offer.getByText("North Harbor to Sunday Union")).toBeVisible();
+  expect(offer.getByText("Harbor Receiver")).toBeVisible();
   await user.click(screen.getByRole("button",{name:"Load exchange"}));
   expect(screen.getByRole("heading",{name:"Build the exchange"})).toHaveFocus();
   expect(screen.getByText("Effective week 9")).toBeVisible();
+  expect(screen.queryByRole("region",{name:"Two-team trade builder"})).not.toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Open roster editor"})).toHaveAttribute("aria-expanded","false");
+  await user.click(screen.getByRole("button",{name:"Remove step 1"}));
+  expect(screen.getByRole("region",{name:"Two-team trade builder"})).toBeVisible();
+  await user.click(nav.getByRole("button",{name:"Discover"}));
+  await user.click(screen.getByRole("button",{name:"Open in Evaluate"}));
+  await user.click(screen.getByRole("button",{name:"Load exchange"}));
   await user.click(nav.getByRole("button",{name:"Discover"}));
   expect(screen.getByRole("button",{name:"Open in Evaluate"})).toHaveFocus();
   await act(async()=>window.history.back());
   await user.click(await screen.findByRole("button",{name:"Evaluate Trade"}));
   const evaluation=within(screen.getByRole("region",{name:"Projected season comparison"}));
   expect(await evaluation.findByText(/Champion in each projection/)).toHaveTextContent(/North Harbor.*Sunday Union/);
+  const participants=within(evaluation.getByRole("region",{name:"Participating team projections"}));
+  expect(participants.getByRole("heading",{name:"North Harbor"})).toBeVisible();
+  expect(participants.getByRole("heading",{name:"Sunday Union"})).toBeVisible();
+  expect(participants.getByText("811.40 → 812.75")).toBeVisible();
   const request=fetch.mock.calls.find(([url])=>String(url).endsWith("/projected-scenario"));
   expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
     canonical_sha256:live.canonical_sha256,
@@ -96,6 +114,45 @@ test("legacy Discover route hands off the exact timed exchange, preserves the dr
   await user.keyboard("{Escape}");
   expect(await screen.findByText("No transaction steps yet")).toBeVisible();
   expect(screen.queryByText(/Champion in each projection/)).not.toBeInTheDocument();
+});
+
+test("advanced discovery opens the existing form with manager context and returns to a retained search",async()=>{
+  const fetch=mockServer(),fallback=fetch.getMockImplementation()!;
+  const run={...activeRun,run_type:"action_search",status:"completed",result_available:true};
+  let submitted=false;
+  fetch.mockImplementation((input,init)=>{
+    const path=String(input);
+    if(path.endsWith("/managers"))return reply({snapshot_id:live.snapshot_id,default_team_id:2,
+      choices:[{manager_id:"manager",display_name:"Manager",team_id:2,is_primary:true}]});
+    if(path.endsWith("/runs/action-search")) {
+      submitted=true;
+      return reply(run);
+    }
+    if(path.endsWith("/result"))return reply({api_schema_version:"1.0",run,result:{
+      api_schema_version:"1.0",provenance:{snapshot_id:live.snapshot_id,canonical_sha256:live.canonical_sha256},
+      stop_reason:"candidate_limit",coverage:{retained_candidates:0,unique_completed_states:0,
+        candidate_coverage_complete:false,evaluation_coverage_complete:false,statistical_precision_complete:false,ranking_resolved:false},
+    }});
+    if(path.includes("/candidates?"))return reply({run_id:run.run_id,candidates:[],total:0});
+    if(path.includes("/runs"))return reply(submitted?[run]:[]);
+    return fallback(input,init);
+  });
+  window.history.replaceState(null,"","/transactions");
+  const user=userEvent.setup();
+  render(<App/>);
+  await user.click(await screen.findByRole("button",{name:"Find more types of moves"}));
+  expect(window.location.pathname).toBe("/tools/simulation/action-search");
+  expect(screen.getByRole("main")).toHaveFocus();
+  expect(screen.getByLabelText("Requesting team")).toHaveValue("2");
+  expect(submitted).toBe(false);
+  await user.click(screen.getByRole("button",{name:"Submit action search"}));
+  const request=fetch.mock.calls.find(([url])=>String(url).endsWith("/runs/action-search"));
+  expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
+    snapshot:{snapshot_id:live.snapshot_id},candidate_search:{requesting_team_id:2},
+  });
+  await user.click((await screen.findAllByRole("button",{name:"Open results"}))[0]);
+  expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
+  expect(screen.getByRole("main")).toHaveFocus();
 });
 
 test.each([

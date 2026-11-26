@@ -48,9 +48,16 @@ export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runL
       <button type="button" ref={reviewLink} aria-current={view==="evaluate"?"page":undefined} onClick={()=>navigate("evaluate")}>
         <ArrowLeftRight aria-hidden="true"/>Evaluate
       </button>
-      <button type="button" className="transaction-configure" onClick={openSimulation}>Configure simulations and searches</button>
     </nav>
     <div hidden={view!=="discover"}>
+      <section className="advanced-discovery" aria-labelledby="advanced-discovery-title">
+        <div>
+          <h2 id="advanced-discovery-title">Explore beyond one-for-one trades</h2>
+          <p>Quick projected trades compare two teams. Advanced search evaluates selected trade chains, acquisitions, and supported combinations.</p>
+          <p>Advanced search requires a supported full-week start. Search limits can leave candidates unevaluated and rankings unresolved.</p>
+        </div>
+        <button type="button" className="workspace-action" onClick={openSimulation}>Find more types of moves</button>
+      </section>
       <OpportunityExplorer snapshot={snapshot} runs={runs} runListStatus={runListStatus} embedded
         preferredRunId={retained?.run_type==="action_search"?preferredRunId:undefined} managerTeamId={managerTeamId} onHandoff={handoff}/>
     </div>

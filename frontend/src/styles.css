@@ -546,3 +546,22 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
   .transaction-views .transaction-configure { margin-inline-start: 0; }
   .transaction-search label { flex: 1 1 9rem; }
 }
+
+.advanced-discovery { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.75rem 1.25rem; border-block-end:1px solid var(--line); margin-block-end:1rem; padding-block:0 1rem; }
+.advanced-discovery h2,.advanced-discovery p { margin:.25rem 0; }
+.advanced-discovery p,.advanced-search-context p { color:var(--muted); max-width:66ch; }
+.decision-flow { display:grid; gap:1rem; }
+.decision-flow .trade-timeline { margin:0; }
+.decision-evaluation { display:grid; gap:.65rem; }
+.decision-editor > button { margin-block-end:.65rem; }
+.exchange-directions { display:grid; gap:.35rem; overflow-wrap:anywhere; }
+.exchange-directions p { margin:0; }
+.exchange-directions span { display:block; }
+.exchange-directions strong { font-size:.8rem; }
+.participant-comparisons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem 1.5rem; }
+.participant-comparisons article { border-block-start:2px solid var(--warm); padding-block:.5rem; min-width:0; }
+.participant-comparisons dl { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.25rem .75rem; margin:.4rem 0; }
+.participant-comparisons dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+@media(max-width:620px) {
+  .participant-comparisons { grid-template-columns:1fr; }
+}
