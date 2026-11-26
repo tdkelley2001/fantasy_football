@@ -1,4 +1,4 @@
-import {act, render, screen, within} from "@testing-library/react";
+import {act, render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {App} from "./App";
 import {discoveryDraft} from "./ProjectedOpportunities";
@@ -151,8 +151,8 @@ test("advanced discovery opens the existing form with manager context and return
   expect(await screen.findByText(/Search running/i)).toBeVisible();
   finished=true;
   const selector=await screen.findByRole("combobox",{name:"Completed action search"},{timeout:4000});
+  await waitFor(()=>expect(selector).toHaveValue(run.run_id));
   expect(await screen.findByText("Ranking unresolved",{exact:true},{timeout:4000})).toBeVisible();
-  expect(selector).toHaveValue(run.run_id);
   await user.selectOptions(selector,older.run_id);
   expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
   expect(selector).toHaveValue(older.run_id);
