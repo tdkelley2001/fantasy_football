@@ -71,8 +71,8 @@ The frontend formats supplied results; it does not recompute probabilities, inte
 | Value/status | Presentation |
 |---|---|
 | Absolute probability and interval | API decimals in [0,1] become displayed percentages; use supplied interval endpoints. |
-| Paired `*_probability_points` fields | Display signed supplied values/paired intervals as `pp`, with no extra multiplication by 100. Preserve the existing public contract; [application contracts](TECHNICAL_REFERENCE.md#validation-nulls-and-compatibility) documents its engine/service units. Do not subtract standalone interval endpoints to construct paired bounds. |
-| Precision controls | Baseline submits `target_half_width_probability` as probability, then converts for probability-point display. Action search submits/displays `target_paired_half_width_probability_points` directly. |
+| Paired `*_probability_points` fields | Multiply the supplied fractions by 100 once for signed `pp` values, intervals, and accessible descriptions. Charts retain fractional coordinates. Use the supplied paired interval bounds. [Application contracts](TECHNICAL_REFERENCE.md#validation-nulls-and-compatibility) |
+| Precision controls | Baseline submits `target_half_width_probability` as a fraction. Action search accepts a target between 0 and 100 pp and divides by 100 for submission. The Quick, Balanced, and Detailed targets are 50, 25, and 10 pp. |
 | Null estimate/interval | **Unavailable** / **Interval unavailable**, never zero. An estimate can remain without a whisker; no invented zero-width marker. Explicit zero is a real value. |
 | Completion/confidence | Execution, completed paths/capabilities, candidate generation, state evaluation, individual/league precision and ranking resolution are independent facts. |
 
