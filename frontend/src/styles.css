@@ -618,3 +618,10 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
   .home-bracket-views > [data-inactive=true] { display:none; }
   .home-bracket-views .consolation-bracket { border:0; margin-block-start:.55rem; padding-block-start:0; }
 }
+
+.transaction-search-disclosure, .transaction-prior { border-block-start:1px solid var(--line); padding-block:.9rem; }
+.transaction-search-disclosure > summary, .discover-search summary { font-weight:650; cursor:pointer; padding-block:.45rem; }
+.discover-search { display:grid; gap:.7rem; min-width:0; }
+.transaction-prior ul { list-style:none; padding:0; }
+.transaction-prior li { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.4rem; padding:.7rem 0; border-block-end:1px solid var(--line); }
+.transaction-prior li p { margin:0; color:var(--muted); font-size:.85rem; }

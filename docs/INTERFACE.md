@@ -46,9 +46,9 @@ contextual entry control when it is still available.
 | Task | Workspace |
 |---|---|
 | Understand league outlook | Open Home for the projected season. Configure a matching Monte Carlo forecast or inspect retained forecast evidence from the Command Center. |
-| Explore hypothetical actions | Configure a finite universe in Simulation Center; inspect retained paths/effects in Opportunity Explorer. |
+| Explore hypothetical actions | Configure a finite universe in Transactions Discover and inspect retained paths there. |
 | Test a specific exchange | Commit a Trade Lab draft, review pins/settings and intentionally evaluate aggregate final ownership. |
-| Follow or reopen work | Monitor/cancel/select retained runs in Simulation Center and navigate to their matching result workspace. |
+| Follow or reopen work | Reopen transaction decisions in Prior analyses. Monitor and cancel runs through run operations. |
 
 Opening a viewer or selecting a player does not start Monte Carlo or a search. Refresh is read-only and intentional, with startup retrieval explicitly enabled by local configuration. The normal panel uses the ESPN current period without a week override; advanced details retain technical identities. Startup selects the latest configured-league snapshot and presents its actual name and retrieval time. Successful publication appends/selects an immutable snapshot. Closing preserves background observation and work; reopening can rediscover the process-local refresh. Credentials stay server-side. [application contracts](TECHNICAL_REFERENCE.md#commit-and-cancellation-boundaries) owns commit/error semantics; after a late failure, publication metadata can still identify a committed snapshot.
 
@@ -227,9 +227,11 @@ The League Matchups scoreboard groups the active snapshot's schedule and verifie
 
 ## Opportunity Explorer
 
-Discover links directly to Simulation Center's action-search configuration with
-the active snapshot and manager team selected. Submission is explicit.
-Opening a completed action-search run returns to Discover's retained results.
+Discover includes the action-search configuration, using the active snapshot
+and manager where available. Submission is explicit. Search status appears
+beside the form and completed evidence opens in Discover. Detailed monitoring
+and cancellation remain in run operations. The older action-search URL opens
+this configuration within Transactions.
 Quick projections and broader searches show their own scope and coverage.
 
 Discover presents bounded projected exchanges first, with retained action
@@ -237,11 +239,10 @@ searches in a disclosure. An evaluated exchange can open in Evaluate when its
 single ordered trade, explicit ownership changes and effective timeline agree
 with the active snapshot. Live trades retain the exact resolved week. A
 structural candidate opens as a starting-roster edit only in the absence of
-live context. The user reviews and explicitly loads the exchange before it
-replaces a draft. Retained search paths remain inspectable because their
+live context. A supported exchange loads into an empty draft. Existing work requires explicit replacement confirmation. Retained search paths remain inspectable because their
 result contract does not establish a reproducible editable timeline.
 
-Read-only discovery defaults to the newest usable completed action-search result for the snapshot, with explicit/preferred-run selection. Create/monitor searches in Simulation Center; Explorer does not launch, resume, cancel or alter them.
+Discover defaults to the newest usable completed search for the snapshot. Prior analyses lists completed trade comparisons and searches scoped to the active snapshot, from the available run-list page, with explicit availability states. Reopening evidence does not resubmit work.
 
 Discovery uses **25-row server pages**, with global backend filtering/sorting before pagination. UI filters expose ordering, transaction authorization, acquisition condition and evaluated status. Sorts expose requester impact high/low, most paths and candidate ID. Backend allowlists own supported query semantics; the browser does not download/re-rank a partial universe as exhaustive. Summary exposes coverage/evaluation/precision/ranking, stop reason, retained paths and unique completed states independently.
 

@@ -213,26 +213,29 @@ Review [interpretation](#interpret-and-compare-results) before acting outside Wa
 
 In **Transactions → Discover**, choose a requesting team and counterparty, then
 select **Find projected trades** for a bounded one-for-one preview. Expand
-a candidate to inspect both projected seasons using the same lineup,
-standings and postseason display as Trade Lab. On live snapshots, including
-fully unplayed weeks, trade timing requires verified platform evidence, and
-an eligible trade may start in a later week. Unsupported timing is shown
-on its candidate. Generation and evaluation coverage are reported separately.
-When an evaluated candidate supplies a reproducible exchange, choose **Open in
-Evaluate**, review the players and timing, and choose **Load exchange**. Loading
-replaces the current draft. You can keep the current draft instead. Switching
-views alone preserves work in both.
-Choose **Find more types of moves** to open the existing action-search setup for
-the active snapshot and manager. Select a supported scope and submit explicitly.
-Use **Open results** on a completed run to return to Discover with that search
-selected. Larger searches can return incomplete coverage or unresolved rankings.
+a candidate to inspect the exchange, timing and participating teams' projected
+ranks. Live trade timing requires verified platform evidence. Candidate and
+evaluation coverage are reported separately, and unevaluated candidates are
+labeled.
+
+**Open in Evaluate** loads a supported exchange into an empty draft. When
+there is existing work, choose **Replace draft** or **Keep current draft**.
+Evaluate contains the full weekly comparison. Candidates without a supported
+handoff retain their available evidence in Discover.
+
+Choose **Find more types of moves** in Discover to configure and submit a
+broader search. Follow progress there, or use the header run-status control
+for detailed monitoring and cancellation. Completed results open in Discover.
+Use **Prior analyses** to reopen a completed opportunity search or trade
+comparison for the current snapshot. Reopening a comparison preserves its
+original evidence without reconstructing its editable draft.
 
 Use a snapshot with a supported full-week simulation start. Opportunity Explorer
 cannot apply completed search actions as initial roster edits in a partial-week
 simulation. For a specific trade during the current week, use **Trade Lab** and
 review the verified effective week.
 
-1. In **Simulation Center**, choose **Action search** and the requesting team. Select supported action families, counterparties and outgoing/incoming/acquisition pools. Begin with a small explicit universe and bounds; acquisition pools are unowned players, not outgoing roster players.
+1. In **Transactions ? Discover**, expand **Find more types of moves** and choose the requesting team. Select supported action families, counterparties and outgoing/incoming/acquisition pools. Begin with a small explicit universe and bounds; acquisition pools are unowned players, not outgoing roster players.
 2. Review the **Candidate universe preview** and effective request. Expand individual player pools to inspect or adjust them. Counts and preflight errors remain visible when the pools are collapsed. **Include only selected** with no selections is invalid, not “all players.” Preview pool counts are not proof all feasible paths will be generated or evaluated. Advanced path/state/candidate/time/worker limits can cap work; response-page size does not cap the computation.
 3. Choose **Submit action search**, then monitor it. Open a completed run in
    **Transactions → Discover**, under **Retained action searches**. The

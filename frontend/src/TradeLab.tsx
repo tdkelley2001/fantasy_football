@@ -69,7 +69,7 @@ function TradeWorkspace({snapshot,preferredRunId,embedded,managerTeamId,discover
   const [projecting,setProjecting]=useState(false),[projectionError,setProjectionError]=useState<string|null>(null);
   const projectionController=useRef<AbortController|null>(null);
   useEffect(()=>()=>{controller.current?.abort();projectionController.current?.abort()},[]);
-  useEffect(()=>{const request=++retainedRequest.current;if(!preferredRunId)return;const abort=new AbortController();controller.current?.abort();controller.current=abort;setBusy(true);setError(null);setStatus("Loading retained manual-scenario result");api.manualScenarioResult(preferredRunId,abort.signal).then(value=>{if(request!==retainedRequest.current)return;const issue=validateResult(value,snapshot,preferredRunId);if(issue)throw new Error(issue);setResult(value);setStale(false);setStatus("Retained evaluation loaded")}).catch(reason=>{if(request===retainedRequest.current&&!aborted(reason)){setError(message(reason));setStatus("Retained evaluation unavailable")}}).finally(()=>{if(request===retainedRequest.current)setBusy(false)});return()=>abort.abort()},[preferredRunId,snapshot]);
+  useEffect(()=>{const request=++retainedRequest.current;if(!preferredRunId)return;const abort=new AbortController();controller.current?.abort();controller.current=abort;setBusy(true);setError(null);setResult(null);setStatus("Loading retained manual-scenario result");api.manualScenarioResult(preferredRunId,abort.signal).then(value=>{if(request!==retainedRequest.current)return;const issue=validateResult(value,snapshot,preferredRunId);if(issue)throw new Error(issue);setResult(value);setStale(false);setStatus("Retained evaluation loaded")}).catch(reason=>{if(request===retainedRequest.current&&!aborted(reason)){setError(message(reason));setStatus("Retained evaluation unavailable")}}).finally(()=>{if(request===retainedRequest.current)setBusy(false)});return()=>abort.abort()},[preferredRunId,snapshot]);
   const editIndex=editingId===null?-1:steps.findIndex(step=>step.step_id===editingId),displaySteps=editIndex<0?steps:steps.slice(0,editIndex),ownership=useMemo(()=>replayDraft(snapshot,displaySteps).ownership,[snapshot,displaySteps]),players=new Map(snapshot.players.map(item=>[item.player_id,item])),names=new Map(snapshot.teams.map(item=>[item.team_id,item.display_name]));
   const commit=(fn:()=>void)=>{revision.current++;projectionController.current?.abort();setProjected(null);setProjecting(false);setProjectionError(null);if(busy){controller.current?.abort();setObservationNotice("Local observation stopped because the committed scenario changed. The accepted backend job may continue independently.")}setStale(Boolean(result));setError(null);setBusy(false);fn()};
   const applySteps=(next:readonly DraftStep[])=>{try{replayDraft(snapshot,next)}catch(reason){setError(message(reason));return false}commit(()=>{setSteps(next);if(!next.length)setEditorCollapsed(false)});return true};
@@ -158,6 +158,14 @@ function TradeWorkspace({snapshot,preferredRunId,embedded,managerTeamId,discover
     clearDiscoveryDraft?.();
     draftHeading.current?.focus();
   };
+  const seenOffer = useRef<DiscoveryDraft | undefined>(undefined);
+  const hasDraftWork = steps.length>0 || selectedA.length>0 || selectedB.length>0 ||
+    protectedPlayers.length>0 || Boolean(result || projected) || settings!==defaults || busy || projecting;
+  useEffect(()=>{
+    if (!discoveryDraft || seenOffer.current===discoveryDraft) return;
+    seenOffer.current=discoveryDraft;
+    if (!hasDraftWork) acceptDiscoveredExchange(discoveryDraft);
+  },[discoveryDraft,hasDraftWork]);
   const editor = <div className="decision-editor">
       {steps.length>0 && <button type="button" className="workspace-action" aria-expanded={!editorCollapsed}
         aria-controls="trade-roster-editor" onClick={()=>setEditorCollapsed(value=>!value)}>
@@ -174,12 +182,12 @@ function TradeWorkspace({snapshot,preferredRunId,embedded,managerTeamId,discover
       </header>}
     {discoveryDraft && <section className="transaction-offer" aria-label="Discovered exchange">
       <h3>Discovered exchange</h3>
-      <p>Preview only. Load this exchange to evaluate or edit it.</p>
+      <p>Review the proposed replacement before loading this exchange.</p>
       {exchange(discoveryDraft.step)}
       <p>{discoveryDraft.step.selectedWeek===undefined?"Structural starting-roster edit":`Effective week ${discoveryDraft.step.selectedWeek}`}</p>
-      {(steps.length>0 || selectedA.length>0 || selectedB.length>0 || protectedPlayers.length>0 || result) &&
+      {hasDraftWork &&
         <p>Loading this exchange replaces the current draft, clears its evaluation, and resets its settings.</p>}
-      <button type="button" className="primary-button" onClick={()=>acceptDiscoveredExchange(discoveryDraft)}>Load exchange</button>
+      <button type="button" className="primary-button" onClick={()=>acceptDiscoveredExchange(discoveryDraft)}>{hasDraftWork?"Replace draft":"Load exchange"}</button>
       <button type="button" onClick={()=>{clearDiscoveryDraft?.();draftHeading.current?.focus();}}>Keep current draft</button>
     </section>}
 

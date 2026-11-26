@@ -6,10 +6,10 @@ import {AlertTriangle,ArrowDown,ArrowRight,GitCompare,RefreshCw,Search,ShieldAle
 import {api,ApiError} from "./lib/api";
 import type {ActionOrdering,BackgroundActionSearchResultSummary,BackgroundRunRecord,CandidateDetail,CandidateQueryPage,CandidateSummary,CompletedStateDetail,SnapshotSummary} from "./types/api";
 
-type Props={readonly snapshot:SnapshotSummary;readonly runs:readonly BackgroundRunRecord[];readonly runListStatus?:"loading"|"loaded"|"unavailable";readonly preferredRunId?:string|null;readonly embedded?:boolean;readonly managerTeamId?:number;readonly onHandoff?:(draft:DiscoveryDraft,trigger:HTMLButtonElement)=>void};
+type Props={readonly advancedSearch?:React.ReactNode;readonly snapshot:SnapshotSummary;readonly runs:readonly BackgroundRunRecord[];readonly runListStatus?:"loading"|"loaded"|"unavailable";readonly preferredRunId?:string|null;readonly embedded?:boolean;readonly managerTeamId?:number;readonly onHandoff?:(draft:DiscoveryDraft,trigger:HTMLButtonElement)=>void};
 const PAGE_SIZE=25;
 
-export function OpportunityExplorer({snapshot,runs,preferredRunId,runListStatus="loaded",embedded,managerTeamId,onHandoff}:Props){
+export function OpportunityExplorer({snapshot,runs,preferredRunId,runListStatus="loaded",embedded,managerTeamId,onHandoff,advancedSearch}:Props){
   const usable=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="action_search"&&run.status==="completed"&&run.result_available).sort((a,b)=>(b.finished_at_utc??b.created_at_utc).localeCompare(a.finished_at_utc??a.created_at_utc)||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
   const [runId,setRunId]=useState<string|null>(usable[0]?.run_id??null),[summary,setSummary]=useState<BackgroundActionSearchResultSummary|null>(null),[summaryError,setSummaryError]=useState<string|null>(null);const summaryRequest=useRef(0);
   useEffect(()=>setRunId(current=>usable.some(run=>run.run_id===current)?current:usable[0]?.run_id??null),[usable]);
@@ -23,10 +23,11 @@ export function OpportunityExplorer({snapshot,runs,preferredRunId,runListStatus=
       <p>Explore projected exchanges or inspect a retained probability search.</p></div>{chooser}</header>}
     <ProjectedOpportunities key={`${snapshot.snapshot_id}:${snapshot.canonical_sha256}`} snapshot={snapshot}
       managerTeamId={managerTeamId} onHandoff={onHandoff}/>
+    {advancedSearch}
     {embedded ? <details className="transaction-retained" open={preferredRunId?true:undefined}>
       <summary>Retained action searches</summary>
       <p>Inspect trade chains, waivers, and other saved search paths with their original coverage and evidence.</p>
-      {chooser}{retained}
+      {retained}
     </details> : retained}
   </div>;
 }

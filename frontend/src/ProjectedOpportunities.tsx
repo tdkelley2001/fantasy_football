@@ -116,14 +116,15 @@ export function ProjectedOpportunities({snapshot, managerTeamId, onHandoff}: {
         return <details className="transaction-candidate" key={candidate.candidate_id}>
           <summary>{candidate.explicit_changes.map(move => player(move.player_id)).join(" / ")}
             {candidate.timeline.map(trade => ` / Week ${trade.scoring_week}`)}
-            {result.baseline && season && <small>Requester rank {rank(result.baseline,team)} to {rank(season,team)}</small>}
+            {result.baseline && season && <small>Requester rank {rank(result.baseline,team)} to {rank(season,team)} / Counterparty rank {rank(result.baseline,counterparty)} to {rank(season,counterparty)}</small>}
+            {!season && <small>Unevaluated</small>}
           </summary>
           {candidate.limitation && <p>{candidate.limitation}</p>}
           {candidate.caveats.length > 0 && <ul>{candidate.caveats.map(text =>
             <li key={text}>{text.replaceAll("_", " ")}</li>)}</ul>}
           {onHandoff && (typeof draft==="string" ? <p>Editable evaluation unavailable. {draft}</p> :
             <button type="button" className="primary-button" onClick={event=>onHandoff(draft,event.currentTarget)}>Open in Evaluate</button>)}
-          {result.baseline && season && <ProjectedTradeResult snapshot={snapshot} result={{
+          {(!onHandoff || typeof draft==="string") && result.baseline && season && <ProjectedTradeResult snapshot={snapshot} result={{
             ...candidate, scenario_id: candidate.candidate_id,
             baseline: result.baseline.season, hypothetical: season.season,
             baseline_final_roster: result.baseline.final_roster, hypothetical_final_roster: season.final_roster,
