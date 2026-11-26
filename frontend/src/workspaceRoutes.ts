@@ -14,11 +14,13 @@ const paths = {
 
 export type Destination = keyof typeof paths;
 export type WorkspaceRoute =
-  | { destination: Exclude<Destination, "history"> }
+  | { destination: Exclude<Destination, "history" | "simulation"> }
+  | { destination: "simulation"; actionSearch?: true }
   | { destination: "history"; year?: number };
 
 export function readWorkspaceRoute(pathname: string): WorkspaceRoute {
   const path = pathname.replace(/\/$/, "");
+  if (path === "/tools/simulation/action-search") return {destination:"simulation",actionSearch:true};
   if (path === "/players-moves/opportunities") return {destination:"opportunities"};
   if (path === "/players-moves/trade-lab") return {destination:"trades"};
   const archive = /^\/history\/seasons\/(\d{4})$/.exec(path);
@@ -30,6 +32,7 @@ export function readWorkspaceRoute(pathname: string): WorkspaceRoute {
 }
 
 export function workspacePath(route: WorkspaceRoute): string {
+  if (route.destination === "simulation" && route.actionSearch) return "/tools/simulation/action-search";
   return route.destination === "history" && route.year !== undefined
     ? `${paths.history}/${route.year}` : paths[route.destination];
 }

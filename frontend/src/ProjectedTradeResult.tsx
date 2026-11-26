@@ -1,8 +1,9 @@
 import type {ProjectedScenarioResult, SnapshotSummary} from "./types/api";
 
-export function ProjectedTradeResult({snapshot, result}: {
+export function ProjectedTradeResult({snapshot, result, decisionFirst}: {
   snapshot: SnapshotSummary;
   result: ProjectedScenarioResult;
+  decisionFirst?: boolean;
 }) {
   const team = (id: number | null) => id === null ? "Unavailable" :
     snapshot.teams.find(row => row.team_id === id)?.display_name ?? String(id);
@@ -15,6 +16,7 @@ export function ProjectedTradeResult({snapshot, result}: {
   const parties = new Set([...result.explicit_changes, ...result.timeline.flatMap(trade => trade.transfers)]
     .flatMap(move => [move.from_team_id, move.to_team_id]));
   const limits = [...new Set([...result.baseline.unresolved_capabilities,...result.hypothetical.unresolved_capabilities])];
+  const participants = result.hypothetical.teams.filter(row => parties.has(row.team_id));
   const table = (caption: string, rows: ProjectedScenarioResult["hypothetical"]["teams"]) =>
     <div className="transaction-result-table" role="group" aria-label={`${caption} comparison table`} tabIndex={0}>
     <table><caption>{caption}, baseline → hypothetical</caption>
@@ -33,13 +35,31 @@ export function ProjectedTradeResult({snapshot, result}: {
     </table>
     </div>;
   return <>
+    {limits.length > 0 && <p className="runtime-caveat">Incomplete capabilities · {limits.join(", ")}</p>}
+    {decisionFirst && participants.length>0 && <section aria-label="Participating team projections">
+      <h3>Participating teams</h3>
+      <p>Unchanged season → Scenario. Each side is one projected outcome.</p>
+      <div className="participant-comparisons">
+        {participants.map(after=>{
+          const before=result.baseline.teams.find(row=>row.team_id===after.team_id);
+          return <article key={after.team_id}>
+            <h4>{team(after.team_id)}</h4>
+            {before ? <dl>
+              <dt>Projected regular-season rank</dt><dd>{label(before.final_regular_rank)} → {label(after.final_regular_rank)}</dd>
+              <dt>Projected playoff seed</dt><dd>{label(before.postseason_seed)} → {label(after.postseason_seed)}</dd>
+              <dt>Projected final placement</dt><dd>{label(before.final_placement)} → {label(after.final_placement)}</dd>
+              <dt>Projected points for</dt><dd>{before.final_regular_standing.points_for.toFixed(2)} → {after.final_regular_standing.points_for.toFixed(2)}</dd>
+            </dl> : <p>Baseline team result unavailable.</p>}
+          </article>;
+        })}
+      </div>
+    </section>}
     <p>Champion in each projection · {team(result.baseline.champion_team_id)} → {team(result.hypothetical.champion_team_id)}</p>
-    {limits.length > 0 && <p>Incomplete capabilities · {limits.join(", ")}</p>}
     {result.timeline.length === 0 && <p>Timing · Starting-roster edit</p>}
     {result.timeline.length > 0 && <ul>{result.timeline.map((trade,i)=>
       <li key={i}>Week {trade.scoring_week} · {trade.transfers.map(move => player(move.player_id)).join(", ")}</li>
     )}</ul>}
-    {table("Trade participants", result.hypothetical.teams.filter(row => parties.has(row.team_id)))}
+    {!decisionFirst && table("Trade participants", participants)}
     <details><summary>League-wide standings and placements</summary>
       {table("League", result.hypothetical.teams)}
     </details>
