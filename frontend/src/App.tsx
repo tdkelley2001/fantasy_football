@@ -198,7 +198,7 @@ export function App() {
     <header className="app-header" aria-label="War Room">
       <div className="brand"><div className="brand-mark"><Trophy/></div><div><strong>War Room</strong><span>Fantasy intelligence</span></div></div>
       <div className="header-tools">
-        <div className="snapshot-control"><strong>{selected?.league_name??"Current league"}</strong>{selected&&<small>Retrieved {formatDate(selected.retrieval_finished_at_utc)}</small>}</div>
+        <div className="snapshot-control header-snapshot-stamp"><strong>{selected?.league_name??"Current league"}</strong>{selected&&<small>Retrieved {formatDate(selected.retrieval_finished_at_utc)}</small>}</div>
         <button className="icon-button" aria-label="Refresh ESPN league" onClick={()=>setRefreshOpen(true)}><RefreshCw/></button>
         <div className="connection-state" title={health?"Local analytical service connected":loading?"Connecting to local analytical service":"Local analytical service offline"}><span className={`status-dot ${health?"online":""}`}/><span>{health?"Connected":loading?"Connecting":"Offline"}</span></div>
         <button id="run-operations" type="button" className="run-indicator" aria-label="Open run operations" onClick={()=>navigate("simulation")}><Activity aria-hidden="true"/><span aria-live="polite"><span>{runListStatus==="loading"?"Loading run list":runListStatus==="unavailable"?"Run list unavailable":activeRuns.length?`${activeRuns.length} active`:"No active runs"}</span></span></button>

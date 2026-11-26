@@ -564,7 +564,7 @@ main { min-width:0; }.surface{padding:42px clamp(20px,4vw,64px) 72px;max-width:1
 .app-header button.run-indicator { display:flex; cursor:pointer; min-width:34px; min-height:34px; justify-content:center; }
 
 /* Home season edition */
-.home-route .app-header .snapshot-control { display:none; }
+.home-route .header-snapshot-stamp { display:none; }
 .home-season-lead {
   display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:clamp(1rem,4vw,3.5rem);
   align-items:center; border-block-end:1px solid var(--line); padding-block:clamp(.8rem,3vw,2.6rem);

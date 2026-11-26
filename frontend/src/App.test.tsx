@@ -544,3 +544,24 @@ test("opens with observed and projected league evidence independently of a manag
   expect(screen.getAllByRole("group",{name:"Forecast mode"})).toHaveLength(1);
   expect(screen.queryByRole("button",{name:"Configure matching Monte Carlo"})).not.toBeInTheDocument();
 });
+
+test.each(["/home", "/league/overview", "/league/playoff-race"])(
+  "supports changing perspective without a default at %s", async path => {
+    window.history.replaceState(null, "", path);
+    mockApi({managers:{snapshot_id:snapshot.snapshot_id, default_team_id:null, unresolved_owner_count:0,
+      choices:[
+        {manager_id:"avery",display_name:"Avery",team_id:1,is_primary:true},
+        {manager_id:"blair",display_name:"Blair",team_id:2,is_primary:true},
+      ]}});
+    const user = userEvent.setup();
+    render(<App/>);
+    const header = screen.getByRole("banner",{name:"War Room"});
+    const selector = await within(header).findByRole("combobox",{name:"Manager perspective"});
+    expect(selector).toHaveValue("");
+    await user.selectOptions(selector, JSON.stringify(["avery",1]));
+    expect(screen.getByText("Your team / North Harbor",{selector:"summary"})).toBeVisible();
+    await user.selectOptions(selector, JSON.stringify(["blair",2]));
+    expect(selector).toHaveValue(JSON.stringify(["blair",2]));
+    expect(screen.queryByText("Your team / North Harbor",{selector:"summary"})).not.toBeInTheDocument();
+  },
+);
