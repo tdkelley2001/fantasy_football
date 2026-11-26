@@ -13,7 +13,8 @@ export function OpportunityExplorer({snapshot,runs,preferredRunId,runListStatus=
   const usable=useMemo(()=>runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="action_search"&&run.status==="completed"&&run.result_available).sort((a,b)=>(b.finished_at_utc??b.created_at_utc).localeCompare(a.finished_at_utc??a.created_at_utc)||a.run_id.localeCompare(b.run_id)),[runs,snapshot.snapshot_id]);
   const [runId,setRunId]=useState<string|null>(usable[0]?.run_id??null),[summary,setSummary]=useState<BackgroundActionSearchResultSummary|null>(null),[summaryError,setSummaryError]=useState<string|null>(null);const summaryRequest=useRef(0);
   useEffect(()=>setRunId(current=>usable.some(run=>run.run_id===current)?current:usable[0]?.run_id??null),[usable]);
-  useEffect(()=>{if(preferredRunId&&usable.some(run=>run.run_id===preferredRunId))setRunId(preferredRunId)},[preferredRunId,usable]);
+  const preferred = usable.some(run=>run.run_id===preferredRunId) ? preferredRunId : undefined;
+  useEffect(()=>{if(preferred)setRunId(preferred)},[preferred]);
   useEffect(()=>{const version=++summaryRequest.current,controller=new AbortController();setSummary(null);setSummaryError(null);if(runListStatus!=="loaded"||!runId||!usable.some(run=>run.run_id===runId))return()=>controller.abort();api.actionResult(runId,controller.signal).then(value=>{if(controller.signal.aborted||version!==summaryRequest.current)return;const issue=validateSummary(value,snapshot,runId);issue?setSummaryError(issue):setSummary(value)}).catch(reason=>{if(!controller.signal.aborted&&version===summaryRequest.current&&!aborted(reason))setSummaryError(message(reason,"Search result unavailable."))});return()=>controller.abort()},[runId,snapshot,usable,runListStatus]);
   const matching=runs.filter(run=>run.snapshot_id===snapshot.snapshot_id&&run.run_type==="action_search");
   const chooser=<div className="retained-search-control">{runListStatus==="loaded"&&usable.length>0&&<label><span>Completed search</span><select aria-label="Completed action search" value={runId??""} onChange={event=>setRunId(event.target.value)}>{usable.map(run=><option key={run.run_id} value={run.run_id}>{formatDate(run.finished_at_utc??run.created_at_utc)} · {short(run.run_id)}</option>)}</select></label>}</div>;
@@ -27,7 +28,7 @@ export function OpportunityExplorer({snapshot,runs,preferredRunId,runListStatus=
     {embedded ? <details className="transaction-retained" open={preferredRunId?true:undefined}>
       <summary>Retained action searches</summary>
       <p>Inspect trade chains, waivers, and other saved search paths with their original coverage and evidence.</p>
-      {retained}
+      {usable.length>1 && chooser}{retained}
     </details> : retained}
   </div>;
 }

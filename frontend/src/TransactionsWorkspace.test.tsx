@@ -114,6 +114,7 @@ test("legacy Discover route hands off the exact timed exchange, preserves the dr
 test("advanced discovery opens the existing form with manager context and returns to a retained search",async()=>{
   const fetch=mockServer(),fallback=fetch.getMockImplementation()!;
   const run={...activeRun,run_type:"action_search",status:"completed",result_available:true};
+  const older={...run,run_id:"older-search",finished_at_utc:"2020-01-01T00:00:00Z"};
   let submitted=false;
   let finished=false;
   fetch.mockImplementation((input,init)=>{
@@ -124,14 +125,14 @@ test("advanced discovery opens the existing form with manager context and return
       submitted=true;
       return reply(run);
     }
-    if(path.endsWith("/result"))return reply({api_schema_version:"1.0",run,result:{
+    if(path.endsWith("/result"))return reply({api_schema_version:"1.0",run:path.includes(older.run_id)?older:run,result:{
       api_schema_version:"1.0",provenance:{snapshot_id:live.snapshot_id,canonical_sha256:live.canonical_sha256},
       stop_reason:"candidate_limit",coverage:{retained_candidates:0,unique_completed_states:0,
         candidate_coverage_complete:false,evaluation_coverage_complete:false,statistical_precision_complete:false,ranking_resolved:false},
     }});
     if(path.includes("/candidates?"))return reply({run_id:run.run_id,candidates:[],total:0});
     if(path.endsWith("/progress"))return reply({run_id:run.run_id,stage:"evaluating"});
-    if(path.includes("/runs"))return reply(submitted?[finished?run:{...run,status:"running",result_available:false}]:[]);
+    if(path.includes("/runs"))return reply(submitted?[finished?run:{...run,status:"running",result_available:false},older]:[]);
     return fallback(input,init);
   });
   window.history.replaceState(null,"","/transactions");
@@ -149,9 +150,14 @@ test("advanced discovery opens the existing form with manager context and return
   });
   expect(await screen.findByText(/Search running/i)).toBeVisible();
   finished=true;
+  const selector=await screen.findByRole("combobox",{name:"Completed action search"},{timeout:4000});
   expect(await screen.findByText("Ranking unresolved",{exact:true},{timeout:4000})).toBeVisible();
+  expect(selector).toHaveValue(run.run_id);
+  await user.selectOptions(selector,older.run_id);
+  expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
+  expect(selector).toHaveValue(older.run_id);
   await user.click(screen.getByRole("button",{name:"Prior analyses"}));
-  await user.click(await screen.findByRole("button",{name:"Open opportunity search"}));
+  await user.click(await screen.findAllByRole("button",{name:"Open opportunity search"}).then(buttons=>buttons[0]));
   expect(await screen.findByText("Ranking unresolved",{exact:true})).toBeVisible();
 });
 

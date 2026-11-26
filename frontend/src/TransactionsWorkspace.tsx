@@ -4,7 +4,7 @@ import {SimulationCenter} from "./SimulationCenter";
 import type {api} from "./lib/api";
 import {OpportunityExplorer} from "./OpportunityExplorer";
 import {TradeLab, type DiscoveryDraft} from "./TradeLab";
-import type {BackgroundRunRecord, SnapshotSummary} from "./types/api";
+import type {BackgroundRunRecord, BackgroundManualScenarioResultSummary, SnapshotSummary} from "./types/api";
 
 export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runListStatus, preferredRunId, navigate, advancedInitially, loadRuns, openResult}: {
   snapshot: SnapshotSummary;
@@ -18,6 +18,9 @@ export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runL
   loadRuns: typeof api.runs;
   openResult: (run: BackgroundRunRecord) => void;
 }) {
+  const [tradeTeams, setTradeTeams] = useState<ReadonlyMap<string, readonly number[]>>(()=>new Map());
+  const rememberTrade = ({run,result}: BackgroundManualScenarioResultSummary) =>
+    setTradeTeams(current=>new Map(current).set(run.run_id,result.affected_team_ids));
   const [offer, setOffer] = useState<DiscoveryDraft>();
   const advanced = useRef<HTMLDetailsElement>(null);
   const reviewLink = useRef<HTMLButtonElement>(null);
@@ -84,15 +87,20 @@ export function TransactionsWorkspace({snapshot, view, managerTeamId, runs, runL
         prior.length===0 ? <p>No completed transaction analyses in the available history for this snapshot.</p> :
         <ul>{prior.map(run=>{
           const title=run.run_type==="manual_scenario"?"Trade comparison":"Opportunity search";
+          const teams = tradeTeams.get(run.run_id)?.flatMap(id=>{
+            const team = snapshot.teams.find(item=>item.team_id===id);
+            return team ? [team.display_name] : [];
+          });
           return <li key={run.run_id}>
-            <div><strong>{title}</strong><p>{new Date(run.finished_at_utc??run.created_at_utc).toLocaleString()}</p></div>
+            <div><strong>{title}</strong><p>{new Date(run.finished_at_utc??run.created_at_utc).toLocaleString()} / {run.run_id.slice(0,8)}</p>
+              {Boolean(teams?.length) && <p>Affected teams: {teams!.join(", ")}</p>}</div>
             {run.result_available ? <button type="button" className="workspace-action"
               onClick={()=>openResult(run)}>Open {title.toLowerCase()}</button> : <span>Result unavailable</span>}
           </li>;
         })}</ul>}
     </section>}
     <div hidden={view!=="evaluate"}>
-      <TradeLab snapshot={snapshot} embedded managerTeamId={managerTeamId}
+      <TradeLab onValidatedResult={rememberTrade} snapshot={snapshot} embedded managerTeamId={managerTeamId}
         preferredRunId={retained?.run_type==="manual_scenario"?preferredRunId:undefined} discoveryDraft={offer}
         clearDiscoveryDraft={()=>setOffer(undefined)}/>
     </div>

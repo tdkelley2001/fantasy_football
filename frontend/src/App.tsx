@@ -233,7 +233,7 @@ export function App() {
       key={`${forecastSnapshotKey}:${managerState.selected}`} snapshot={selected}
       managerTeamId={managerState.team?.team_id} view={destination==="trades"?"evaluate":destination==="priorAnalyses"?"prior":"discover"} advancedInitially={actionSearch}
       runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}
-      navigate={view=>go({destination:view==="evaluate"?"trades":view==="prior"?"priorAnalyses":"transactions"})}
+      navigate={view=>{if(view==="prior")setPreferredRun(null);go({destination:view==="evaluate"?"trades":view==="prior"?"priorAnalyses":"transactions"});}}
       loadRuns={readRuns} openResult={openRun}/>:destination==="matchups"?<LeagueMatchups key={selected.snapshot_id} snapshot={selected}/>:destination==="team"?<TeamOverview managerState={managerState} key={selected.snapshot_id} snapshot={selected}/>:destination==="baselineEvidence"?<PlayoffRace contextual key={selected.snapshot_id} snapshot={selected} runs={runs} runListStatus={runListStatus} preferredRunId={preferredRun}/>:destination==="simulation"?<SimulationCenter matchProjectionInitially={matchProjectionInitially} snapshot={selected} runs={runs} runListStatus={runListStatus} loadRuns={readRuns} submitBaseline={submitForecastBaseline} openResult={openRun}/>:null}</main>
       </div>
     </div>
