@@ -225,7 +225,7 @@ simulation. For a specific trade during the current week, use **Trade Lab** and
 review the verified effective week.
 
 1. In **Simulation Center**, choose **Action search** and the requesting team. Select supported action families, counterparties and outgoing/incoming/acquisition pools. Begin with a small explicit universe and bounds; acquisition pools are unowned players, not outgoing roster players.
-2. Review the **Candidate universe preview** and effective request. **Include only selected** with no selections is invalid, not “all players.” Preview pool counts are not proof all feasible paths will be generated or evaluated. Advanced path/state/candidate/time/worker limits can cap work; response-page size does not cap the computation.
+2. Review the **Candidate universe preview** and effective request. Expand individual player pools to inspect or adjust them. Counts and preflight errors remain visible when the pools are collapsed. **Include only selected** with no selections is invalid, not “all players.” Preview pool counts are not proof all feasible paths will be generated or evaluated. Advanced path/state/candidate/time/worker limits can cap work; response-page size does not cap the computation.
 3. Choose **Submit action search**, then monitor it. Open a completed run in
    **Transactions → Discover**, under **Retained action searches**. The
    retained paths remain inspectable with their original coverage and results.
@@ -241,7 +241,7 @@ An authorized action, a structural hypothesis and a conditional waiver are diffe
 
 A championship probability is an estimated frequency under the chosen model and snapshot. **Illustration only:** a change from 10% to 12% is an increase of **2 probability points**, not a 2% relative increase. Those numbers are not an observed War Room result.
 
-There is an important current **unit-compatibility limitation**: the browser labels paired changes/intervals `pp` using values supplied by the API without extra scaling, while legacy paired fields pass through engine fraction values. For example, a supplied difference of `0.02` can be displayed as `0.02 pp` although the mathematical change is 2 probability points. Do not assume the printed paired `pp` scale has already been reconciled with displayed percentage probabilities or precision targets. Check the supplied baseline/scenario context and the [current unit contract](TECHNICAL_REFERENCE.md#validation-nulls-and-compatibility); its correction is separately gated under [Interface and Action UX](TECHNICAL_REFERENCE.md#existing-exports-and-deferred-parity-requirements). This guide changes neither units nor inputs.
+Paired comparisons show the change and its sampling interval in percentage points (pp). An advanced search target of 25 pp submits a probability fraction of 0.25. The effective request review shows both units. [Application unit contract](TECHNICAL_REFERENCE.md#validation-nulls-and-compatibility)
 
 Use the supplied **paired** interval for a hypothetical comparison. Do not subtract endpoints from two standalone probability intervals to construct one. Different seeds/models/paths or snapshots are not a matched comparison simply because you selected the same manager. Current supported comparisons are the engine's within-analysis paired outputs and Explorer's same-search path tray, not a general saved-scenario comparison library.
 
